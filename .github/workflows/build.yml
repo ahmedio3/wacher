@@ -15,6 +15,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "9.3.1"
+      - name: Generate Debug Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
       - run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
