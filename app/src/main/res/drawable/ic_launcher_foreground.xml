@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Stylized Elegant 'W' Ribbon in background of foreground -->
+    <path
+        android:pathData="M 30,38 L 41,70 M 78,38 L 67,70"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeColor="#AC8B6A" />
+
+    <!-- Center Premium Cinematic Play Diamond / Triangle with gradient -->
+    <path android:pathData="M46,38 L68,54 L46,70 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="46"
+                android:startY="38"
+                android:endX="68"
+                android:endY="70">
+                <item android:offset="0" android:color="#FDFBF7"/>
+                <item android:offset="1" android:color="#D6A45C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Sleek premium circular accent -->
+    <path
+        android:pathData="M54,22 A32,32 0 0,1 86,54"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeColor="#D6A45C" />
+</vector>

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "289243493446",
+    "firebase_url": "https://wacherapp-default-rtdb.firebaseio.com",
+    "project_id": "wacherapp",
+    "storage_bucket": "wacherapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:289243493446:android:53c63c7b1f2b393a8c4647",
+        "android_client_info": {
+          "package_name": "com.aistudio.cinemios.fxtyr"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "289243493446-1ka4puqdt6trbvcbv6eh52h1nvaqor8f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.cinemios.fxtyr",
+            "certificate_hash": "4d8e827f7b444d7dba371f8e8ceb217e290845c1"
+          }
+        },
+        {
+          "client_id": "289243493446-4luunbk2iou67b0klublipfv4skv7cie.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5YGz5K5Cu5ecRQMnwXUpxlaTj3nwx9-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "289243493446-4luunbk2iou67b0klublipfv4skv7cie.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

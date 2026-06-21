@@ -1,0 +1,857 @@
+package com.example.ui.screens
+
+import android.app.Application
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.data.local.DownloadEntity
+import com.example.ui.viewmodel.MovieViewModel
+import com.example.ui.viewmodel.RequestState
+import java.io.File
+
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun DownloadsScreen(
+    viewModel: MovieViewModel,
+    onNavigateToPlayer: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val downloads by viewModel.downloads.collectAsState(initial = emptyList())
+    
+    // Active segment tab: 0 for Series, 1 for Movies. 
+    // In RTL, 0 is on the right side (Series) and is active by default.
+    var activeSegmentTab by remember { mutableIntStateOf(0) }
+
+    // Grouping series downloads by family name/id
+    val tvShowDownloads = downloads.filter { it.mediaType == "tv" }
+    val playlistGroups = tvShowDownloads.groupBy { it.mediaId }
+    val seriesPlaylists = playlistGroups.filter { it.value.isNotEmpty() }
+
+    // Movies are kept individual
+    val individualDownloads = downloads.filter { it.mediaType == "movie" }
+
+    // Active bottom sheet series tracking
+    var selectedSeriesIdForSheet by remember { mutableStateOf<String?>(null) }
+
+    // Force Arabic Layout Direction RTL Globally on pages
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(bottom = 80.dp)
+            ) {
+                // iOS Styled Custom Premium Header with RTL alignment
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "التحميلات غير المتصلة",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowCircleDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                // Elegant iOS Segment Bar layout with custom touch feedback ripples
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val tabs = listOf(
+                        "المسلسلات (${seriesPlaylists.size})",
+                        "الأفلام (${individualDownloads.size})"
+                    )
+                    tabs.forEachIndexed { index, title ->
+                        val isSelected = activeSegmentTab == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                .clickable { activeSegmentTab = index }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // RENDER SELECTED SECTION
+                if (activeSegmentTab == 1) {
+                    // MOVIE FILES
+                    if (individualDownloads.isEmpty()) {
+                        EmptyDownloadsView(message = "لا توجد أفلام أو تنزيلات فردية")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            items(individualDownloads, key = { it.id }) { item ->
+                                DownloadItemRow(
+                                    item = item,
+                                    viewModel = viewModel,
+                                    onPlayClick = { path ->
+                                        if (path != null) {
+                                            onNavigateToPlayer(item.id, item.title, path)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // SERIES PLAYLISTS
+                    if (seriesPlaylists.isEmpty()) {
+                        EmptyDownloadsView(message = "لا تملك مسلسلات منزلة بعد. قم بتحميل حلقات مسلسل لتنظيمها وعرضها هنا.")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            items(seriesPlaylists.keys.toList()) { mediaId ->
+                                val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
+                                val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
+                                val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
+                                
+                                PlaylistFolderCard(
+                                    seriesTitle = parentTitle,
+                                    posterPath = posterPath,
+                                    episodesCount = playlistEpisodes.size,
+                                    onClick = {
+                                        selectedSeriesIdForSheet = mediaId
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Files Storage Directory Location Notice Card at the bottom of the column (Arabic)
+                val exactPath = remember(context) {
+                    File(context.filesDir, "downloads").absolutePath
+                }
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "مسار حفظ الملفات على الجهاز:",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = exactPath,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 100% HEIGHT MODAL BOTTOM SHEET FOR SERIES EPISODES LIST & SEASONS SWITCHER
+            if (!selectedSeriesIdForSheet.isNullOrEmpty()) {
+                val mediaId = selectedSeriesIdForSheet!!
+                val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
+                val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
+                val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
+
+                SeriesDetailBottomSheet(
+                    seriesId = mediaId,
+                    seriesTitle = parentTitle,
+                    posterPath = posterPath,
+                    downloadedEpisodes = playlistEpisodes,
+                    viewModel = viewModel,
+                    onDismiss = { selectedSeriesIdForSheet = null },
+                    onNavigateToPlayer = onNavigateToPlayer
+                )
+            }
+        }
+    }
+}
+
+// FULL SCREEN EPISODES SELECTOR MODAL BOTTOM SHEET (100% Height)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SeriesDetailBottomSheet(
+    seriesId: String,
+    seriesTitle: String,
+    posterPath: String,
+    downloadedEpisodes: List<DownloadEntity>,
+    viewModel: MovieViewModel,
+    onDismiss: () -> Unit,
+    onNavigateToPlayer: (String, String, String) -> Unit
+) {
+    var selectedSeasonNumber by remember { mutableIntStateOf(1) }
+    var showDownloadNewSheet by remember { mutableStateOf(false) }
+
+    // Load TMDB Series Details to fetch seasons list and correct total episodes count from server
+    LaunchedEffect(seriesId) {
+        val parsedId = seriesId.toIntOrNull() ?: 0
+        if (parsedId > 0) {
+            viewModel.fetchTvDetails(parsedId)
+        }
+    }
+
+    val tvDetailsMap by viewModel.tvDetails.collectAsState()
+    val parsedSeriesIntId = seriesId.toIntOrNull() ?: 0
+    val tvDetailsState = tvDetailsMap[parsedSeriesIntId]
+
+    // Extracted seasons list
+    val seasons = remember(tvDetailsState) {
+        if (tvDetailsState is RequestState.Success) {
+            tvDetailsState.data.seasons?.filter { it.seasonNumber > 0 } ?: emptyList()
+        } else {
+            // Fallback using downloaded episodes content
+            val downloadedSeasons = downloadedEpisodes.map { it.season }.distinct().sorted()
+            downloadedSeasons.map { sNo ->
+                com.example.data.remote.TmdbSeason(
+                    id = sNo,
+                    seasonNumber = sNo,
+                    episodeCount = downloadedEpisodes.filter { it.season == sNo }.size,
+                    name = "الموسم $sNo",
+                    posterPath = null
+                )
+            }
+        }
+    }
+
+    // Keep selected season number constrained
+    LaunchedEffect(seasons) {
+        if (seasons.isNotEmpty() && seasons.none { it.seasonNumber == selectedSeasonNumber }) {
+            selectedSeasonNumber = seasons.first().seasonNumber
+        }
+    }
+
+    // Run season loader from TMDB to dynamically retrieve remaining episodes checklist
+    LaunchedEffect(seriesId, selectedSeasonNumber) {
+        val tvId = seriesId.toIntOrNull() ?: 0
+        if (tvId > 0) {
+            viewModel.fetchSeasonDetails(tvId, selectedSeasonNumber)
+        }
+    }
+
+    val seasonDetailsStateMap by viewModel.seasonDetails.collectAsState()
+    val seasonDetailState = seasonDetailsStateMap["$seriesId-$selectedSeasonNumber"]
+
+    // Sub-calculated downloaded vs total in current season
+    val currentSeasonEpisodesList = downloadedEpisodes.filter { it.season == selectedSeasonNumber }
+
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = bottomSheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxHeight(1.0f) // 100% full screen height limit
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+        ) {
+            // Header Info
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "إغلاق")
+                }
+                Text(
+                    text = seriesTitle,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(48.dp))
+            }
+
+            Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+
+            // Active Tab bar seasons list with statistics: e.g. "الموسم 1 (1/7)"
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(seasons) { s ->
+                    val isSelected = selectedSeasonNumber == s.seasonNumber
+                    val downloadedCount = downloadedEpisodes.count { it.season == s.seasonNumber }
+                    
+                    // Total count mapping
+                    var totalCountText = s.episodeCount?.toString() ?: "0"
+                    if (isSelected && seasonDetailState is RequestState.Success) {
+                        totalCountText = (seasonDetailState.data.episodes?.size ?: s.episodeCount ?: 0).toString()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { selectedSeasonNumber = s.seasonNumber }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "الموسم ${s.seasonNumber}",
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "($downloadedCount/$totalCountText)",
+                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Listing current downloaded or downloading episodes in season
+            if (currentSeasonEpisodesList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(imageVector = Icons.Default.CloudQueue, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = "لا توجد حلقات منزلة في هذا الموسم حالياً", color = Color.Gray, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(currentSeasonEpisodesList, key = { it.id }) { item ->
+                        DownloadItemRow(
+                            item = item,
+                            viewModel = viewModel,
+                            onPlayClick = { path ->
+                                if (path != null) {
+                                    onNavigateToPlayer(item.id, item.title, path)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Button to trigger download new episodes sheet at the bottom block
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Button(
+                    onClick = { showDownloadNewSheet = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Text(
+                            text = "تحميل وتنزيل حلقات جديدة للوضع الأوفلاين",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // Secondary bottom sheet (70% Height)
+        if (showDownloadNewSheet) {
+            val context = LocalContext.current.applicationContext as android.app.Application
+            val movieBoxViewModel: com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.example.ui.viewmodel.ViewModelFactory(context))
+
+            com.example.ui.components.moviebox.MovieBoxDownloadSheet(
+                movieTitle = seriesTitle,
+                movieYear = null,
+                mediaType = "tv",
+                viewModel = movieBoxViewModel,
+                onDismissRequest = { showDownloadNewSheet = false },
+                onTryOtherMethod = { showDownloadNewSheet = false },
+                onDownloadClick = { url, quality, s, ep ->
+                    viewModel.requestDownload(
+                        mediaId = seriesId,
+                        title = seriesTitle,
+                        posterPath = posterPath,
+                        mediaType = "tv",
+                        season = s,
+                        episode = ep,
+                        quality = quality,
+                        customUrl = url
+                    )
+                    showDownloadNewSheet = false
+                }
+            )
+        }
+    }
+}
+
+
+
+// FOLDER CARD REPRESENTATION FOR EPISODES
+@Composable
+fun PlaylistFolderCard(
+    seriesTitle: String,
+    posterPath: String,
+    episodesCount: Int,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 80.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = "https://image.tmdb.org/t/p/w185$posterPath",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = seriesTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$episodesCount حلقات مخزنة على الهاتف",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ArrowForwardIos,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyDownloadsView(message: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "المجلد فارغ",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DownloadItemRow(
+    item: DownloadEntity,
+    viewModel: MovieViewModel,
+    onPlayClick: (String?) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isCompleted = item.status == "completed"
+    val isPaused = item.status == "paused"
+    val posterUrl = "https://image.tmdb.org/t/p/w185${item.posterPath}"
+    var showMenuSheet by remember { mutableStateOf(false) }
+
+    val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable {
+                if (isCompleted) {
+                    onPlayClick(item.localFilePath)
+                } else if (isPaused) {
+                    viewModel.resumeDownload(item.id)
+                } else {
+                    viewModel.pauseDownload(item.id)
+                }
+            }
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Mini Poster
+        Box(
+            modifier = Modifier
+                .size(width = 60.dp, height = 86.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // Details Block
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = if (item.mediaType == "tv") "حلقة المسلسل" else "الفيلم السينمائي",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                    fontSize = 11.sp
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = item.quality,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            if (!isCompleted) {
+                val formattedDownloaded = formatBytes(item.downloadedBytes)
+                val formattedTotal = formatBytes(item.totalBytes)
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val progressText = if (item.mediaType == "tv" || item.totalBytes == item.downloadedBytes) {
+                        formattedDownloaded
+                    } else {
+                        "$formattedDownloaded / $formattedTotal"
+                    }
+                    Text(
+                        text = progressText,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = item.downloadSpeed,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    LinearProgressIndicator(
+                        progress = { item.progress / 100f },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    Text(
+                        text = "${item.progress}%",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    val fileSizeText = try {
+                        formatBytes(File(item.localFilePath).length())
+                    } catch (e: Exception) {
+                        "..."
+                    }
+                    Text(
+                        text = "جاهز للمشاهدة بدون اتصال ($fileSizeText)",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Action Buttons pause or delete
+        IconButton(
+            onClick = { showMenuSheet = true },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "خيارات",
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+    
+    if (showMenuSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showMenuSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("خيارات التحميل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.deleteDownload(item.id)
+                            showMenuSheet = false
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
+                    Text("حذف الملف", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
+
+                if (isCompleted) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                try {
+                                    val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                                    if (!destDir.exists()) destDir.mkdirs()
+                                    val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                                    val destFile = java.io.File(destDir, "$safeTitle.mp4")
+                                    java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
+                                    android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                showMenuSheet = false
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(Icons.Default.Share, "حفظ للمعرض", tint = MaterialTheme.colorScheme.primary)
+                        Text("حفظ الفيديو (في المعرض)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (java.io.File(partialFilePath).exists()) {
+                                    onPlayClick(partialFilePath)
+                                } else {
+                                    android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                showMenuSheet = false
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, "تشغيل ما تم تحميله", tint = MaterialTheme.colorScheme.secondary)
+                        Text("مشاهدة الفيديو المكتمل (${item.progress}%)", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0.0 MB"
+    val mb = bytes.toDouble() / (1024.0 * 1024.0)
+    return String.format(java.util.Locale.US, "%.1f MB", mb)
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Remix: Watcher..v1",
+  "description": "Watch movies and TV shows instantly using IMDB/TMDB integration with support for custom subtitles, autoplay, and latest releases.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
