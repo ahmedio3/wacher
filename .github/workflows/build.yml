@@ -14,7 +14,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: "8.4"
+          gradle-version: "9.3.1"
       - run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
