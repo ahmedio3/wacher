@@ -36,17 +36,17 @@ class MovieBoxApiImpl : MovieBoxApi {
 
                 val request = Request.Builder().url(urlBuilder.build()).get().build()
                 val response = httpClient.newCall(request).execute()
-                
+
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
                 }
-                
+
                 val bodyStr = response.body?.string() ?: ""
                 val rootJson = JSONObject(bodyStr)
                 if (rootJson.optString("status") != "success") {
                     return@withContext Result.failure(Exception("API returned error: $bodyStr"))
                 }
-                
+
                 val resultsArray = rootJson.optJSONArray("results")
                 val list = mutableListOf<SearchResult>()
                 if (resultsArray != null) {
@@ -59,8 +59,14 @@ class MovieBoxApiImpl : MovieBoxApi {
                                 type = item.optString("type"),
                                 posterUrl = item.optString("poster"),
                                 year = item.optString("year"),
-                                hasResource = item.optBoolean("has_resource", false)
-                            )
+                                hasResource = item.optBoolean("has_resource", false),
+                                rating = item.optDouble("rating", 0.0),
+                                seasons = item.optInt("seasons", 0),
+                                country = item.optString("country"),
+                                description = item.optString("description"),
+                                durationSeconds = item.optInt("duration_seconds", 0)
+                            ).withParsedLanguages(item.optJSONArray("languages"))
+                             .withParsedGenre(item.optJSONArray("genre"))
                         )
                     }
                 }
@@ -98,7 +104,7 @@ class MovieBoxApiImpl : MovieBoxApi {
                 val list = mutableListOf<VideoFile>()
                 for (i in 0 until jsonArray.length()) {
                     val item = jsonArray.optJSONObject(i) ?: continue
-                    
+
                     val allSubtitlesArray = item.optJSONArray("all_subtitles")
                     val subtitlesList = mutableListOf<Subtitle>()
                     if (allSubtitlesArray != null) {
@@ -108,24 +114,33 @@ class MovieBoxApiImpl : MovieBoxApi {
                                 Subtitle(
                                     languageCode = subItem.optString("language_code"),
                                     languageName = subItem.optString("language_name"),
-                                    url = subItem.optString("url")
+                                    url = subItem.optString("url"),
+                                    size = subItem.optInt("size", 0),
+                                    delay = subItem.optInt("delay", 0)
                                 )
                             )
                         }
                     }
 
+                    val sizeStr = item.optString("size", "")
+                    val sizeBytes = parseSizeString(sizeStr)
+
                     list.add(
                         VideoFile(
                             url = item.optString("url"),
-                            resolution = item.optInt("resolution"),
-                            size = item.optLong("size", 0L),
+                            resolution = item.optInt("resolution", 0),
+                            size = sizeBytes,
+                            sizeString = sizeStr,
                             season = item.optInt("season", 0),
                             episode = item.optInt("episode", 0),
                             resourceId = item.optString("resource_id", ""),
                             subtitlesAvailable = item.optBoolean("subtitles_available", false),
                             hasArabicSubtitle = item.optBoolean("has_arabic_subtitle", false),
                             arabicSubtitleUrl = if (item.isNull("arabic_subtitle_url")) null else item.optString("arabic_subtitle_url"),
-                            allSubtitles = subtitlesList
+                            allSubtitles = subtitlesList,
+                            codec = item.optString("codec").takeIf { it.isNotEmpty() }?.let { null },
+                            duration = item.optInt("duration", 0),
+                            sourceUrl = item.optString("source_url").takeIf { it.isNotEmpty() }
                         )
                     )
                 }
@@ -133,10 +148,6 @@ class MovieBoxApiImpl : MovieBoxApi {
                 Result.success(list)
 
             } catch (e: Exception) {
-                // Return failure if the response is not a JSONArray, maybe it's an err obj
-                try {
-                    // Fallback parse error
-                } catch (e2: Exception) {}
                 Result.failure(e)
             }
         }
@@ -169,7 +180,9 @@ class MovieBoxApiImpl : MovieBoxApi {
                             Subtitle(
                                 languageCode = subItem.optString("language_code"),
                                 languageName = subItem.optString("language_name"),
-                                url = subItem.optString("url")
+                                url = subItem.optString("url"),
+                                size = subItem.optInt("size", 0),
+                                delay = subItem.optInt("delay", 0)
                             )
                         )
                     }
@@ -180,7 +193,9 @@ class MovieBoxApiImpl : MovieBoxApi {
                     Subtitle(
                         languageCode = arabicSubObj.optString("language_code"),
                         languageName = arabicSubObj.optString("language_name"),
-                        url = arabicSubObj.optString("url")
+                        url = arabicSubObj.optString("url"),
+                        size = arabicSubObj.optInt("size", 0),
+                        delay = arabicSubObj.optInt("delay", 0)
                     )
                 } else null
 
@@ -198,5 +213,44 @@ class MovieBoxApiImpl : MovieBoxApi {
             }
         }
     }
+
+    /**
+     * Parses size strings like "1.2GB", "850MB", "1.5KB" into bytes.
+     * Returns 0 on failure.
+     */
+    private fun parseSizeString(sizeStr: String): Long {
+        if (sizeStr.isBlank()) return 0L
+        return try {
+            val regex = Regex("""([\d.]+)\s*([KMGT]?B)""", RegexOption.IGNORE_CASE)
+            val match = regex.find(sizeStr) ?: return 0L
+            val number = match.groupValues[1].toDoubleOrNull() ?: return 0L
+            val unit = match.groupValues[2].uppercase()
+            val multiplier = when (unit) {
+                "B" -> 1L
+                "KB" -> 1024L
+                "MB" -> 1024L * 1024
+                "GB" -> 1024L * 1024 * 1024
+                "TB" -> 1024L * 1024 * 1024 * 1024
+                else -> 1L
+            }
+            (number * multiplier).toLong()
+        } catch (_: Exception) {
+            0L
+        }
+    }
 }
 
+/**
+ * Helper to copy a SearchResult with parsed languages array from JSON.
+ */
+private fun SearchResult.withParsedLanguages(arr: org.json.JSONArray?): SearchResult {
+    if (arr == null) return this
+    val list = (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }
+    return this.copy(languages = list)
+}
+
+private fun SearchResult.withParsedGenre(arr: org.json.JSONArray?): SearchResult {
+    if (arr == null) return this
+    val list = (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }
+    return this.copy(genre = list)
+}
