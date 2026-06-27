@@ -311,8 +311,10 @@ fun SeriesDetailBottomSheet(
     val seasonDetailsStateMap by viewModel.seasonDetails.collectAsState()
     val seasonDetailState = seasonDetailsStateMap["$seriesId-$selectedSeasonNumber"]
 
-    // Sub-calculated downloaded vs total in current season
-    val currentSeasonEpisodesList = downloadedEpisodes.filter { it.season == selectedSeasonNumber }
+    // Sub-calculated downloaded vs total in current season (sorted by episode ascending)
+    val currentSeasonEpisodesList = downloadedEpisodes
+        .filter { it.season == selectedSeasonNumber }
+        .sortedBy { it.episode }
 
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -647,36 +649,79 @@ fun DownloadItemRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = if (item.mediaType == "tv") "حلقة المسلسل" else "الفيلم السينمائي",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                    fontSize = 11.sp
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+            if (item.mediaType == "tv" && item.episode > 0) {
+                // For TV episodes: show episode number, not series name (already in header)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = item.quality,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        text = "الحلقة ${item.episode}",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1
                     )
+                    if (item.season > 0) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f))
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "الموسم ${item.season}",
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = item.quality,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            } else {
+                // For movies: show the movie title
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "الفيلم السينمائي",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                        fontSize = 11.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = item.quality,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                 }
             }
 
