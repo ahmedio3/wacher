@@ -53,15 +53,28 @@ fun MovieBoxDetailScreen(
     val displayPoster = posterParams
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(subjectId) {
+    LaunchedEffect(subjectId, retryTrigger) {
         isLoading = true
-        coroutineScope.launch {
-            val res = viewModel.movieBoxRepository.getDownloadLinks(subjectId, null)
+        errorMessage = null
+        try {
+            // Use withTimeout to prevent infinite loading
+            val res = kotlinx.coroutines.withTimeout(30_000L) {
+                viewModel.movieBoxRepository.getDownloadLinks(subjectId, null)
+            }
             if (res.isSuccess) {
                 videoLinks = res.getOrNull() ?: emptyList()
+                if (videoLinks.isEmpty()) {
+                    errorMessage = "لا توجد روابط تحميل متاحة لهذا المحتوى."
+                }
             } else {
-                errorMessage = "خطأ في تحميل الحلقات أو الفيلم. (${res.exceptionOrNull()?.message})"
+                val cause = res.exceptionOrNull()?.message ?: "خطأ غير معروف"
+                errorMessage = "فشل تحميل الروابط: $cause"
             }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            errorMessage = "انتهت مهلة الاتصال. تحقق من شبكتك وحاول مرة أخرى."
+        } catch (e: Exception) {
+            errorMessage = "حدث خطأ: ${e.localizedMessage ?: e.message ?: "خطأ غير معروف"}"
+        } finally {
             isLoading = false
         }
     }
@@ -149,13 +162,25 @@ fun MovieBoxDetailScreen(
                     }
                 } else if (errorMessage != null) {
                     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                    var retryTrigger by remember { mutableIntStateOf(0) }
                     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(errorMessage!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
-                        OutlinedButton(onClick = {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(errorMessage!!))
-                            Toast.makeText(context, "تم النسخ", Toast.LENGTH_SHORT).show()
-                        }) {
-                            Text("نسخ الخطأ")
+                        Text(errorMessage!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp), textAlign = TextAlign.Center)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(onClick = {
+                                // Retry: reset state and re-trigger LaunchedEffect
+                                isLoading = true
+                                errorMessage = null
+                                videoLinks = emptyList()
+                                retryTrigger++
+                            }) {
+                                Text("إعادة المحاولة")
+                            }
+                            OutlinedButton(onClick = {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(errorMessage!!))
+                                Toast.makeText(context, "تم النسخ", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Text("نسخ الخطأ")
+                            }
                         }
                     }
                 } else if (videoLinks.isEmpty()) {

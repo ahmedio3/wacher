@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+import kotlinx.coroutines.withTimeout
+
 sealed class MovieBoxState<out T> {
     object Idle : MovieBoxState<Nothing>()
     object Loading : MovieBoxState<Nothing>()
@@ -26,26 +28,36 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
     fun search(keyword: String, language: String? = null) {
         viewModelScope.launch {
             _searchResults.value = MovieBoxState.Loading
-            repository.search(keyword, language)
-                .onSuccess {
-                    _searchResults.value = MovieBoxState.Success(it)
+            try {
+                val result = withTimeout(30_000L) {
+                    repository.search(keyword, language)
                 }
-                .onFailure {
-                    _searchResults.value = MovieBoxState.Error(it.message ?: "Unknown error")
-                }
+                result
+                    .onSuccess { _searchResults.value = MovieBoxState.Success(it) }
+                    .onFailure { _searchResults.value = MovieBoxState.Error(it.message ?: "Unknown error") }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _searchResults.value = MovieBoxState.Error("انتهت مهلة البحث. تحقق من شبكتك.")
+            } catch (e: Exception) {
+                _searchResults.value = MovieBoxState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
+            }
         }
     }
 
     fun getDownloadLinks(subjectId: String, resolution: Int? = null) {
         viewModelScope.launch {
             _downloadLinks.value = MovieBoxState.Loading
-            repository.getDownloadLinks(subjectId, resolution)
-                .onSuccess {
-                    _downloadLinks.value = MovieBoxState.Success(it)
+            try {
+                val result = withTimeout(30_000L) {
+                    repository.getDownloadLinks(subjectId, resolution)
                 }
-                .onFailure {
-                    _downloadLinks.value = MovieBoxState.Error(it.message ?: "Unknown error")
-                }
+                result
+                    .onSuccess { _downloadLinks.value = MovieBoxState.Success(it) }
+                    .onFailure { _downloadLinks.value = MovieBoxState.Error(it.message ?: "Unknown error") }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _downloadLinks.value = MovieBoxState.Error("انتهت مهلة تحميل الروابط. تحقق من شبكتك.")
+            } catch (e: Exception) {
+                _downloadLinks.value = MovieBoxState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
+            }
         }
     }
 }

@@ -127,7 +127,7 @@ class MovieBoxApiImpl : MovieBoxApi {
 
                     list.add(
                         VideoFile(
-                            url = item.optString("url"),
+                            url = item.optString("url") ?: "",
                             resolution = item.optInt("resolution", 0),
                             size = sizeBytes,
                             sizeString = sizeStr,
@@ -138,9 +138,9 @@ class MovieBoxApiImpl : MovieBoxApi {
                             hasArabicSubtitle = item.optBoolean("has_arabic_subtitle", false),
                             arabicSubtitleUrl = if (item.isNull("arabic_subtitle_url")) null else item.optString("arabic_subtitle_url"),
                             allSubtitles = subtitlesList,
-                            codec = item.optString("codec").takeIf { it.isNotEmpty() }?.let { null },
+                            codec = item.optString("codec").takeIf { it.isNotEmpty() },
                             duration = item.optInt("duration", 0),
-                            sourceUrl = item.optString("source_url").takeIf { it.isNotEmpty() }
+                            sourceUrl = if (item.isNull("source_url")) null else item.optString("source_url").takeIf { it.isNotEmpty() }
                         )
                     )
                 }
@@ -216,24 +216,31 @@ class MovieBoxApiImpl : MovieBoxApi {
 
     /**
      * Parses size strings like "1.2GB", "850MB", "1.5KB" into bytes.
+     * Also handles plain number strings like "2414667149" (bytes).
      * Returns 0 on failure.
      */
     private fun parseSizeString(sizeStr: String): Long {
         if (sizeStr.isBlank()) return 0L
         return try {
+            // Try format with unit suffix first: "1.2GB", "850MB"
             val regex = Regex("""([\d.]+)\s*([KMGT]?B)""", RegexOption.IGNORE_CASE)
-            val match = regex.find(sizeStr) ?: return 0L
-            val number = match.groupValues[1].toDoubleOrNull() ?: return 0L
-            val unit = match.groupValues[2].uppercase()
-            val multiplier = when (unit) {
-                "B" -> 1L
-                "KB" -> 1024L
-                "MB" -> 1024L * 1024
-                "GB" -> 1024L * 1024 * 1024
-                "TB" -> 1024L * 1024 * 1024 * 1024
-                else -> 1L
+            val match = regex.find(sizeStr)
+            if (match != null) {
+                val number = match.groupValues[1].toDoubleOrNull() ?: return 0L
+                val unit = match.groupValues[2].uppercase()
+                val multiplier = when (unit) {
+                    "B" -> 1L
+                    "KB" -> 1024L
+                    "MB" -> 1024L * 1024
+                    "GB" -> 1024L * 1024 * 1024
+                    "TB" -> 1024L * 1024 * 1024 * 1024
+                    else -> 1L
+                }
+                return (number * multiplier).toLong()
             }
-            (number * multiplier).toLong()
+            // Fallback: try parsing as a plain number (bytes)
+            // e.g. "2414667149" from the MovieBox API
+            sizeStr.trim().toLongOrNull() ?: 0L
         } catch (_: Exception) {
             0L
         }

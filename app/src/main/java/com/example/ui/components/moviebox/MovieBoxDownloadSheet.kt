@@ -102,10 +102,18 @@ fun MovieBoxDownloadSheet(
             )
 
             when {
-                searchState is MovieBoxState.Loading || (searchState is MovieBoxState.Success && downloadLinksState is MovieBoxState.Loading) -> {
+                searchState is MovieBoxState.Loading || (searchState is MovieBoxState.Success && (downloadLinksState is MovieBoxState.Loading || downloadLinksState is MovieBoxState.Idle)) -> {
                     CircularProgressIndicator(modifier = Modifier.padding(32.dp))
                     Text(
                         text = "جاري البحث عن الروابط...",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                searchState is MovieBoxState.Idle -> {
+                    CircularProgressIndicator(modifier = Modifier.padding(32.dp))
+                    Text(
+                        text = "جاري البحث...",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

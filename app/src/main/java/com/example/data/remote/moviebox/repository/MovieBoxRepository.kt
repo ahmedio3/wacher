@@ -24,6 +24,16 @@ class MovieBoxRepositoryImpl(
     private val prefs = context.getSharedPreferences("moviebox_link_cache", Context.MODE_PRIVATE)
     private val tag = "MovieBoxRepo"
 
+    init {
+        // Invalidate stale cache from older versions (before subtitle enrichment fix)
+        val currentVersion = prefs.getInt("cache_version", 0)
+        if (currentVersion < 2) {
+            prefs.edit().clear().putInt("cache_version", 2).apply()
+            linkCache.clear()
+            Log.i(tag, "Cache invalidated (version upgrade)")
+        }
+    }
+
     override suspend fun search(query: String, originalLanguage: String?, limit: Int): Result<List<SearchResult>> {
         val cacheKey = "${query}_${originalLanguage}_$limit"
         searchCache[cacheKey]?.let { return Result.success(it) }
@@ -52,28 +62,14 @@ class MovieBoxRepositoryImpl(
 
         val result = api.getDownloadLinks(subjectId, resolution)
         result.onSuccess { files ->
-            // For any file that doesn't have subtitles, attempt the
-            // get_subtitles fallback so the player can show Arabic
-            // subs even when the API didn't include them inline.
-            val enriched = files.map { vf ->
-                if (!vf.subtitlesAvailable && vf.resourceId.isNotEmpty()) {
-                    val fallback = api.getSubtitles(subjectId, vf.resourceId).getOrNull()
-                    if (fallback != null && fallback.allSubtitles.isNotEmpty()) {
-                        val arSub = fallback.arabicSubtitle
-                            ?: fallback.allSubtitles.firstOrNull { it.languageCode.equals("ar", true) }
-                        vf.copy(
-                            subtitlesAvailable = true,
-                            allSubtitles = fallback.allSubtitles,
-                            hasArabicSubtitle = arSub != null,
-                            arabicSubtitleUrl = arSub?.url
-                        )
-                    } else vf
-                } else vf
-            }
-
-            linkCache[cacheKey] = enriched
+            // Cache the links as-is from the API.
+            // Subtitle enrichment is done on-demand when the user
+            // actually plays a video, NOT on every getDownloadLinks call.
+            // (Making N sequential getSubtitles calls here was causing
+            // infinite loading for series with many episodes.)
+            linkCache[cacheKey] = files
             try {
-                prefs.edit().putString(cacheKey, serializeDownloadLinks(enriched).toString()).apply()
+                prefs.edit().putString(cacheKey, serializeDownloadLinks(files).toString()).apply()
             } catch (e: Exception) {
                 Log.w(tag, "Failed to cache links: ${e.message}")
             }
