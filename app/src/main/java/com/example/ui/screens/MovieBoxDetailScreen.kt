@@ -287,7 +287,7 @@ fun MovieBoxDetailScreen(
                                                 onClick = {
                                                     val tmdbIdFake = subjectId
                                                     viewModel.requestDownload(
-                                                        mediaId = "${tmdbIdFake}-s${selectedSeason}-e${episodeId}",
+                                                        mediaId = tmdbIdFake,
                                                         title = displayTitle,
                                                         posterPath = displayPoster,
                                                         mediaType = "tv",

@@ -21,11 +21,54 @@ object SubtitleHelper {
         val langCode: String
     )
     
-    suspend fun fetchSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, searchTitle: String? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
+
+        // First try: use tmdbId directly as subject_id (works for MovieBox IDs)
+        val resourceId = findResourceId(tmdbId, isTv, season, episode)
+        if (resourceId != null) {
+            fetchSubtitlesByResource(tmdbId, resourceId, list)
+        }
+
+        // If no results and we have a title, try searching MovieBox to find the subject_id
+        if (list.isEmpty() && !searchTitle.isNullOrBlank()) {
+            try {
+                val searchUrl = "https://moviebox-fastapi.vercel.app/search?query=${java.net.URLEncoder.encode(searchTitle, "UTF-8")}&limit=5"
+                val searchConn = URL(searchUrl).openConnection() as HttpURLConnection
+                searchConn.requestMethod = "GET"
+                searchConn.connect()
+                if (searchConn.responseCode == 200) {
+                    val searchResponse = searchConn.inputStream.bufferedReader().readText()
+                    val searchJson = JSONObject(searchResponse)
+                    if (searchJson.optString("status") == "success") {
+                        val results = searchJson.optJSONArray("results")
+                        if (results != null) {
+                            for (i in 0 until results.length()) {
+                                val item = results.getJSONObject(i)
+                                val subjectId = item.optString("subject_id", "")
+                                if (subjectId.isNotEmpty()) {
+                                    val rid = findResourceId(subjectId, isTv, season, episode)
+                                    if (rid != null) {
+                                        fetchSubtitlesByResource(subjectId, rid, list)
+                                        if (list.isNotEmpty()) break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                searchConn.disconnect()
+            } catch (_: Exception) { }
+        }
+
+        // Sort by 'AR' first, then others
+        list.distinctBy { it.url }.sortedByDescending { it.langCode.lowercase() == "ar" }
+    }
+
+    private suspend fun findResourceId(subjectId: String, isTv: Boolean, season: Int, episode: Int): String? = withContext(Dispatchers.IO) {
         try {
-            val urlStr = StringBuilder("https://moviebox-fastapi.vercel.app/get_download_links?subject_id=$tmdbId")
-            val conn = URL(urlStr.toString()).openConnection() as HttpURLConnection
+            val urlStr = "https://moviebox-fastapi.vercel.app/get_download_links?subject_id=$subjectId"
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connect()
             var resourceId: String? = null
@@ -39,7 +82,7 @@ object SubtitleHelper {
                             val linkObj = links.getJSONObject(i)
                             val rSeason = linkObj.optInt("season", 0)
                             val rEpisode = linkObj.optInt("episode", 0)
-                            
+
                             if (isTv) {
                                 if (rSeason == season && rEpisode == episode) {
                                     resourceId = linkObj.optString("resource_id")
@@ -54,49 +97,47 @@ object SubtitleHelper {
                 }
             }
             conn.disconnect()
-            
-            if (resourceId != null && resourceId.isNotEmpty()) {
-                val subUrlStr = "https://moviebox-fastapi.vercel.app/get_subtitles?subject_id=$tmdbId&resource_id=$resourceId"
-                val subConn = URL(subUrlStr).openConnection() as HttpURLConnection
-                subConn.requestMethod = "GET"
-                subConn.connect()
-                if (subConn.responseCode == 200) {
-                    val subResponse = subConn.inputStream.bufferedReader().readText()
-                    val subJson = JSONObject(subResponse)
-                    if (subJson.optString("status") == "success") {
-                        val hasArabic = subJson.optBoolean("has_arabic", false)
-                        if (hasArabic) {
-                            val arSub = subJson.optJSONObject("arabic_subtitle")
-                            if (arSub != null) {
-                                val url = arSub.optString("url", "")
-                                val langName = arSub.optString("language_name", "العربية")
-                                if (url.isNotEmpty()) {
-                                    list.add(SubtitleItem(langName, "Arabic", url, "ar"))
-                                }
+            resourceId
+        } catch (_: Exception) { null }
+    }
+
+    private suspend fun fetchSubtitlesByResource(subjectId: String, resourceId: String, list: MutableList<SubtitleItem>) = withContext(Dispatchers.IO) {
+        try {
+            val subUrlStr = "https://moviebox-fastapi.vercel.app/get_subtitles?subject_id=$subjectId&resource_id=$resourceId"
+            val subConn = URL(subUrlStr).openConnection() as HttpURLConnection
+            subConn.requestMethod = "GET"
+            subConn.connect()
+            if (subConn.responseCode == 200) {
+                val subResponse = subConn.inputStream.bufferedReader().readText()
+                val subJson = JSONObject(subResponse)
+                if (subJson.optString("status") == "success") {
+                    val hasArabic = subJson.optBoolean("has_arabic", false)
+                    if (hasArabic) {
+                        val arSub = subJson.optJSONObject("arabic_subtitle")
+                        if (arSub != null) {
+                            val url = arSub.optString("url", "")
+                            val langName = arSub.optString("language_name", "العربية")
+                            if (url.isNotEmpty()) {
+                                list.add(SubtitleItem(langName, "Arabic", url, "ar"))
                             }
                         }
-                        val allSubs = subJson.optJSONArray("all_subtitles")
-                        if (allSubs != null) {
-                            for (i in 0 until allSubs.length()) {
-                                val s = allSubs.getJSONObject(i)
-                                val url = s.optString("url", "")
-                                val langName = s.optString("language_name", "")
-                                val langCode = s.optString("language_code", "")
-                                if (url.isNotEmpty()) {
-                                    list.add(SubtitleItem(langName, langName, url, langCode))
-                                }
+                    }
+                    val allSubs = subJson.optJSONArray("all_subtitles")
+                    if (allSubs != null) {
+                        for (i in 0 until allSubs.length()) {
+                            val s = allSubs.getJSONObject(i)
+                            val url = s.optString("url", "")
+                            val langName = s.optString("language_name", "")
+                            val langCode = s.optString("language_code", "")
+                            if (url.isNotEmpty()) {
+                                list.add(SubtitleItem(langName, langName, url, langCode))
                             }
                         }
                     }
                 }
-                subConn.disconnect()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
-        // Sort by 'AR' first, then others
-        list.distinctBy { it.url }.sortedByDescending { it.langCode.lowercase() == "ar" }
+            subConn.disconnect()
+        } catch (_: Exception) { }
     }
 
     // Downloads and extracts to local storage, returns the local extracted File (.srt or .vtt)
@@ -130,7 +171,11 @@ object SubtitleHelper {
                 var zipEntry = zis.nextEntry
                 
                 val isTv = mediaId.contains("-s") && mediaId.contains("-e")
-                val epStr = if (isTv) mediaId.substringAfter("-e") else ""
+                // Extract episode number — handles both "12345-s1-e3" (TMDB) and "abc123-s1-e3-s1-e3" (MovieBox double-wrapped)
+                val epStr = if (isTv) {
+                    val afterE = mediaId.substringAfter("-e")
+                    afterE.substringBefore("-s").takeIf { it != afterE } ?: afterE
+                } else ""
                 val epNum = epStr.toIntOrNull() ?: -1
 
                 val extractedFiles = mutableListOf<File>()

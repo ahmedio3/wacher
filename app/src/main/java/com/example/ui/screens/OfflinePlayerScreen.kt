@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -60,11 +61,12 @@ fun OfflinePlayerScreen(
     val context = LocalContext.current
     val activity = context as? MainActivity
 
-    // Manage Fullscreen & Landscape
+    // Manage Fullscreen & Landscape & Keep Screen On
     DisposableEffect(Unit) {
         activity?.let {
             it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = it.window
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
@@ -74,6 +76,7 @@ fun OfflinePlayerScreen(
             activity?.let {
                 it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 val window = it.window
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
@@ -92,6 +95,8 @@ fun OfflinePlayerScreen(
     var totalDuration by remember { mutableLongStateOf(0L) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var isSpeedUp by remember { mutableStateOf(false) }
+
+    var wasLongPress by remember { mutableStateOf(false) }
 
     // Overlays
     var showEpisodesDrawer by remember { mutableStateOf(false) }
@@ -200,9 +205,15 @@ fun OfflinePlayerScreen(
             .background(Color.Black)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { showControls = !showControls },
+                    onTap = {
+                        if (!wasLongPress) {
+                            showControls = !showControls
+                        }
+                        wasLongPress = false
+                    },
                     onDoubleTap = { offset ->
                         // Double tap to seek
+                        wasLongPress = false
                         val width = this.size.width
                         if (offset.x > width / 2) {
                             exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
@@ -211,10 +222,12 @@ fun OfflinePlayerScreen(
                         }
                     },
                     onPress = { offset ->
+                        wasLongPress = false
                         // Long press to 2x speed
                         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
                         val pressJob = scope.launch {
                             kotlinx.coroutines.delay(500) // wait for 500ms to consider it a long press
+                            wasLongPress = true
                             exoPlayer.setPlaybackSpeed(2f)
                             isSpeedUp = true
                             showControls = false
@@ -535,7 +548,7 @@ fun OfflinePlayerScreen(
                                         isDownloadingSub = true
                                         val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
                                         val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                        searchSubsList = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode)
+                                        searchSubsList = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
                                         isDownloadingSub = false
                                     }
                                 },
