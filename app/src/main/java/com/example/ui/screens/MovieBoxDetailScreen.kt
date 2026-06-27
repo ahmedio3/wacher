@@ -46,6 +46,7 @@ fun MovieBoxDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryTrigger by remember { mutableIntStateOf(0) }
     
     var videoLinks by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
     
@@ -162,7 +163,6 @@ fun MovieBoxDetailScreen(
                     }
                 } else if (errorMessage != null) {
                     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-                    var retryTrigger by remember { mutableIntStateOf(0) }
                     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(errorMessage!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp), textAlign = TextAlign.Center)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
