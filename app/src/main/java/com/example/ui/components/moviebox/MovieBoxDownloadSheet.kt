@@ -87,7 +87,7 @@ fun MovieBoxDownloadSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.75f)
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -256,7 +256,7 @@ fun MovieBoxDownloadSheet(
                                 }
 
                                 LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     episodesMap.forEach { (episodeId, files) ->
@@ -272,64 +272,55 @@ fun MovieBoxDownloadSheet(
                                                 Column(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .clip(RoundedCornerShape(8.dp))
                                                         .background(
                                                             if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                                                             else if (isExact) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
                                                         )
-                                                        .padding(16.dp)
+                                                        .padding(10.dp)
                                                 ) {
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
+                                                        Checkbox(
+                                                            checked = isSelected,
+                                                            onCheckedChange = { toggleEpisode(episodeId) },
+                                                            modifier = Modifier.padding(end = 4.dp)
+                                                        )
+                                                        Text(
+                                                            text = "الحلقة $episodeId",
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            fontSize = 14.sp,
                                                             modifier = Modifier.weight(1f)
-                                                        ) {
-                                                            Checkbox(
-                                                                checked = isSelected,
-                                                                onCheckedChange = { toggleEpisode(episodeId) },
-                                                                modifier = Modifier.padding(end = 8.dp)
-                                                            )
-                                                            Text(
-                                                                text = "الحلقة $episodeId",
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = MaterialTheme.colorScheme.onSurface,
-                                                                fontSize = 18.sp
-                                                            )
-                                                        }
+                                                        )
                                                         Text(
                                                             text = mbSize,
-                                                            fontSize = 14.sp,
+                                                            fontSize = 11.sp,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        IconButton(
+                                                            onClick = {
+                                                                if (isExact || exactFile.size > 0) {
+                                                                    onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId) 
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(32.dp)
+                                                        ) {
+                                                            Icon(Icons.Default.Download, "تحميل", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                                        }
                                                     }
                                                     
                                                     if (!isExact) {
-                                                        Spacer(modifier = Modifier.height(4.dp))
                                                         Text(
                                                             text = "يتوفر ${exactFile.resolution}p متاح فقط",
-                                                            fontSize = 12.sp,
-                                                            color = MaterialTheme.colorScheme.error
+                                                            fontSize = 10.sp,
+                                                            color = MaterialTheme.colorScheme.error,
+                                                            modifier = Modifier.padding(start = 8.dp)
                                                         )
-                                                    }
-                                                    
-                                                    Spacer(modifier = Modifier.height(12.dp))
-                                                    
-                                                    Button(
-                                                        onClick = {
-                                                            if (isExact || exactFile.size > 0) {
-                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId) 
-                                                            }
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                    ) {
-                                                        Icon(Icons.Default.Download, contentDescription = "تحميل", modifier = Modifier.padding(end = 8.dp))
-                                                        Text("تحميل الحلقة")
                                                     }
                                                 }
                                             }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -152,8 +155,12 @@ fun MainAppContainer(startWithChat: Boolean = false) {
     }
 
     val downloads by movieViewModel.downloads.collectAsState()
-    val activeDownloads = downloads.filter { it.status == "downloading" || it.status == "paused" }
+    val activeDownloads = downloads.filter { it.status == "downloading" || it.status == "paused" || it.status == "queued" }
     var showActiveDownloadsSheet by remember { mutableStateOf(false) }
+
+    // Draggable FAB position
+    var fabOffsetX by remember { mutableFloatStateOf(0f) }
+    var fabOffsetY by remember { mutableFloatStateOf(0f) }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         if (showActiveDownloadsSheet) {
@@ -170,8 +177,10 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     if (activeDownloads.isEmpty()) {
                         Text("لا يوجد تحميلات نشطة حالياً", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(bottom = 16.dp))
                     } else {
+                        // Descending order by addedAt
+                        val sortedDls = remember(activeDownloads) { activeDownloads.sortedByDescending { it.addedAt } }
                         LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                            items(activeDownloads) { item ->
+                            items(sortedDls) { item ->
                                 com.example.ui.screens.DownloadItemRow(
                                     item = item,
                                     viewModel = movieViewModel,
@@ -200,20 +209,45 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 }
             },
             floatingActionButton = {
-                if (activeDownloads.isNotEmpty() && currentRoute != "splash") {
+                // Hide FAB on offline_player, player, splash routes
+                val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
+                                    || currentRoute?.startsWith("player") == true
+                                    || currentRoute == "splash"
+                if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
+                    val avgProgress = remember(activeDownloads) {
+                        activeDownloads.mapNotNull { 
+                            if (it.status == "downloading") it.progress else null 
+                        }.let { if (it.isEmpty()) 0f else it.average().toFloat() / 100f }
+                    }
                     FloatingActionButton(
                         onClick = { showActiveDownloadsSheet = true },
                         containerColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = if (shouldShowBottomBar) 0.dp else 16.dp)
+                        modifier = Modifier
+                            .padding(bottom = if (shouldShowBottomBar) 0.dp else 16.dp)
+                            .offset(x = fabOffsetX.dp, y = fabOffsetY.dp)
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX += dragAmount.x
+                                    fabOffsetY += dragAmount.y
+                                }
+                            }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.ArrowCircleDown, contentDescription = "التحميلات", tint = MaterialTheme.colorScheme.onPrimary)
-                            CircularProgressIndicator(
-                                progress = { activeDownloads.map { it.progress }.average().toFloat() / 100f },
-                                modifier = Modifier.size(48.dp),
-                                color = MaterialTheme.colorScheme.tertiary,
-                                strokeWidth = 2.dp
+                            Icon(
+                                Icons.Default.ArrowCircleDown, 
+                                contentDescription = "التحميلات", 
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(24.dp)
                             )
+                            if (avgProgress > 0f) {
+                                CircularProgressIndicator(
+                                    progress = { avgProgress },
+                                    modifier = Modifier.size(52.dp),
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    strokeWidth = 3.dp
+                                )
+                            }
                         }
                     }
                 }

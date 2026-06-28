@@ -546,7 +546,7 @@ fun PlaylistFolderCard(
             }
 
             Icon(
-                imageVector = Icons.Default.ArrowForwardIos,
+                imageVector = Icons.Default.ArrowBack,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)
@@ -775,6 +775,35 @@ fun DownloadItemRow(
                     )
                 }
             } else {
+                // Listened progress bar (different style from download progress)
+                val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
+                val lastPos = prefs.getLong("pos_${item.id}", 0L)
+                val hasProgress = lastPos > 0
+                
+                if (hasProgress) {
+                    val totalSecs = lastPos / 1000
+                    val mins = totalSecs / 60
+                    val secs = totalSecs % 60
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { 0.3f }, // placeholder until we have duration - shows partial listen
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "⏱ $mins:${String.format("%02d", secs)} تم الاستماع",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
