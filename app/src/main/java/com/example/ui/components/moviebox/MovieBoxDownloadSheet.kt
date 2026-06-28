@@ -295,8 +295,8 @@ fun MovieBoxDownloadSheet(
                                                             onCheckedChange = { toggleEpisode(episodeId) },
                                                             modifier = Modifier.padding(end = 4.dp),
                                                             colors = CheckboxDefaults.colors(
-                                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                                                checkedBoxColor = MaterialTheme.colorScheme.primary,
+                                                                checkedColor = MaterialTheme.colorScheme.primary,
+                                                                uncheckedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
                                                                 checkmarkColor = MaterialTheme.colorScheme.onPrimary
                                                             )
                                                         )
