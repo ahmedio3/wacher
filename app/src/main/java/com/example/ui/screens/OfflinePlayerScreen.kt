@@ -349,7 +349,7 @@ fun OfflinePlayerScreen(
                 .pointerInput(Unit) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount.y / 300f
+                        val delta = -dragAmount / 300f
                         val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
                         if (newVol != currentVolume) {
                             currentVolume = newVol
@@ -367,7 +367,7 @@ fun OfflinePlayerScreen(
                 .pointerInput(Unit) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount.y / 600f
+                        val delta = -dragAmount / 600f
                         val newBrightness = (currentBrightness + delta).coerceIn(0.05f, 1f)
                         if (newBrightness != currentBrightness) {
                             currentBrightness = newBrightness
