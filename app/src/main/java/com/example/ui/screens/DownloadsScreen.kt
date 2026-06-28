@@ -775,31 +775,56 @@ fun DownloadItemRow(
                     )
                 }
             } else {
-                // Listened progress bar (different style from download progress)
+                // Last watched time (real from SharedPreferences)
                 val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
                 val lastPos = prefs.getLong("pos_${item.id}", 0L)
                 val hasProgress = lastPos > 0
                 
-                if (hasProgress) {
-                    val totalSecs = lastPos / 1000
-                    val mins = totalSecs / 60
-                    val secs = totalSecs % 60
+                // Get video duration from MediaMetadataRetriever (cached via File length estimate)
+                val durationSecs = try {
+                    val file = File(item.localFilePath)
+                    if (file.exists()) {
+                        val retriever = android.media.MediaMetadataRetriever()
+                        retriever.setDataSource(file.absolutePath)
+                        val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        retriever.release()
+                        durStr?.toLongOrNull()?.let { it / 1000 } ?: 0L
+                    } else 0L
+                } catch (_: Exception) { 0L }
+                
+                if (hasProgress && durationSecs > 0) {
+                    val posSecs = lastPos / 1000
+                    val progress = (posSecs.toFloat() / durationSecs.toFloat()).coerceIn(0f, 1f)
+                    val posMins = posSecs / 60
+                    val posSecsRem = posSecs % 60
+                    val durMins = durationSecs / 60
                     
                     Spacer(modifier = Modifier.height(4.dp))
+                    // Different style from the download progress bar (secondary color, thinner)
                     LinearProgressIndicator(
-                        progress = { 0.3f }, // placeholder until we have duration - shows partial listen
+                        progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.tertiary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "⏱ $mins:${String.format("%02d", secs)} تم الاستماع",
+                        text = "$posMins:${String.format("%02d", posSecsRem)} / $durMins دقيقة",
                         fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                } else if (hasProgress) {
+                    val posSecs = lastPos / 1000
+                    val posMins = posSecs / 60
+                    val posSecsRem = posSecs % 60
+                    Text(
+                        text = "آخر مشاهدة: $posMins:${String.format("%02d", posSecsRem)}",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         fontWeight = FontWeight.Medium
                     )
                 }

@@ -5,6 +5,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -220,11 +223,15 @@ fun MovieBoxDownloadSheet(
                                     selectedEpisodeIds = if (allSelected) emptySet() else episodeIds.toSet()
                                 }
                                 
-                                // Batch download button (shown when items selected)
-                                if (selectedEpisodeIds.isNotEmpty()) {
+                                // Batch download button (shown when items selected) — animated
+                                AnimatedVisibility(
+                                    visible = selectedEpisodeIds.isNotEmpty(),
+                                    enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Top, animationSpec = tween(200)),
+                                    exit = fadeOut(tween(150)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(150))
+                                ) {
                                     Button(
                                         onClick = {
-                                            episodeIds.forEach { epId ->
+                                            selectedEpisodeIds.forEach { epId ->
                                                 val file = seasonLinks.find { it.episode == epId && it.resolution == selectedQuality }
                                                     ?: seasonLinks.filter { it.episode == epId }.minByOrNull { Math.abs(it.resolution - selectedQuality) }
                                                 if (file != null) {
@@ -262,64 +269,67 @@ fun MovieBoxDownloadSheet(
                                     episodesMap.forEach { (episodeId, files) ->
                                         item {
                                             val exactFile = files.find { it.resolution == selectedQuality }
-                                                ?: files.minByOrNull { Math.abs(it.resolution - selectedQuality) }
-                                                
-                                            if (exactFile != null) {
-                                            val mbSize = formatSize(exactFile.size)
-                                                val isExact = exactFile.resolution == selectedQuality
-                                                val isSelected = episodeId in selectedEpisodeIds
-                                                
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .background(
-                                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                                            else if (isExact) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                                                        )
-                                                        .padding(10.dp)
+                                            val nearestFile = files.minByOrNull { Math.abs(it.resolution - selectedQuality) }
+                                            val isExact = exactFile != null
+                                            val isSelected = episodeId in selectedEpisodeIds
+                                            val alpha = if (isExact) 1f else 0.5f
+                                            
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(
+                                                        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f * alpha)
+                                                    )
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                                    .graphicsLayer(alpha = alpha)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
+                                                    if (isExact) {
                                                         Checkbox(
                                                             checked = isSelected,
                                                             onCheckedChange = { toggleEpisode(episodeId) },
-                                                            modifier = Modifier.padding(end = 4.dp)
+                                                            modifier = Modifier.padding(end = 4.dp),
+                                                            colors = CheckboxDefaults.colors(
+                                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                                                checkedBoxColor = MaterialTheme.colorScheme.primary,
+                                                                checkmarkColor = MaterialTheme.colorScheme.onPrimary
+                                                            )
                                                         )
+                                                    } else {
+                                                        Spacer(modifier = Modifier.width(44.dp))
+                                                    }
+                                                    Text(
+                                                        text = "الحلقة $episodeId",
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        fontSize = 14.sp,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    if (isExact) {
                                                         Text(
-                                                            text = "الحلقة $episodeId",
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                            fontSize = 14.sp,
-                                                            modifier = Modifier.weight(1f)
-                                                        )
-                                                        Text(
-                                                            text = mbSize,
+                                                            text = formatSize(exactFile.size),
                                                             fontSize = 11.sp,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
                                                         Spacer(modifier = Modifier.width(8.dp))
                                                         IconButton(
                                                             onClick = {
-                                                                if (isExact || exactFile.size > 0) {
-                                                                    onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId) 
-                                                                }
+                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId) 
                                                             },
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
                                                             Icon(Icons.Default.Download, "تحميل", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                                         }
-                                                    }
-                                                    
-                                                    if (!isExact) {
+                                                    } else {
                                                         Text(
-                                                            text = "يتوفر ${exactFile.resolution}p متاح فقط",
-                                                            fontSize = 10.sp,
-                                                            color = MaterialTheme.colorScheme.error,
-                                                            modifier = Modifier.padding(start = 8.dp)
+                                                            text = "غير متوفر",
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                                         )
                                                     }
                                                 }

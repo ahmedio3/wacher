@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -214,11 +215,18 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                                     || currentRoute?.startsWith("player") == true
                                     || currentRoute == "splash"
                 if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
-                    val avgProgress = remember(activeDownloads) {
-                        activeDownloads.mapNotNull { 
-                            if (it.status == "downloading") it.progress else null 
-                        }.let { if (it.isEmpty()) 0f else it.average().toFloat() / 100f }
+                    val config = LocalConfiguration.current
+                    val screenWidthDp = config.screenWidthDp.toFloat()
+                    val screenHeightDp = config.screenHeightDp.toFloat()
+                    val fabHalfSize = 28f // half of FAB size (56dp/2)
+                    
+                    // Always show progress circle when active downloads exist
+                    val overallProgress = remember(activeDownloads) {
+                        val progresses = activeDownloads.map { it.progress }
+                        if (progresses.isEmpty()) 0f 
+                        else progresses.average().toFloat() / 100f
                     }
+                    
                     FloatingActionButton(
                         onClick = { showActiveDownloadsSheet = true },
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -228,8 +236,18 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
-                                    fabOffsetX += dragAmount.x
+                                    // RTL fix: negate horizontal drag
+                                    fabOffsetX -= dragAmount.x
                                     fabOffsetY += dragAmount.y
+                                    // Clamp: allow only half the FAB to go off-screen
+                                    fabOffsetX = fabOffsetX.coerceIn(
+                                        -(screenWidthDp / 2 - fabHalfSize),
+                                        (screenWidthDp / 2 - fabHalfSize)
+                                    )
+                                    fabOffsetY = fabOffsetY.coerceIn(
+                                        -(screenHeightDp / 2 - fabHalfSize),
+                                        (screenHeightDp / 2 - fabHalfSize)
+                                    )
                                 }
                             }
                     ) {
@@ -240,14 +258,12 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                                 tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(24.dp)
                             )
-                            if (avgProgress > 0f) {
-                                CircularProgressIndicator(
-                                    progress = { avgProgress },
-                                    modifier = Modifier.size(52.dp),
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    strokeWidth = 3.dp
-                                )
-                            }
+                            CircularProgressIndicator(
+                                progress = { overallProgress },
+                                modifier = Modifier.size(52.dp),
+                                color = MaterialTheme.colorScheme.tertiary,
+                                strokeWidth = 3.dp
+                            )
                         }
                     }
                 }
