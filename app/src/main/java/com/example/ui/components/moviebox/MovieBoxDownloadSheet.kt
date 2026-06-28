@@ -49,6 +49,7 @@ fun MovieBoxDownloadSheet(
     val context = LocalContext.current
     val searchState by viewModel.searchResults.collectAsState()
     val downloadLinksState by viewModel.downloadLinks.collectAsState()
+    val qualityPrefs = context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE)
 
     var subjectId by remember { mutableStateOf<String?>(null) }
     var searchInitiated by remember { mutableStateOf(false) }
@@ -152,7 +153,8 @@ fun MovieBoxDownloadSheet(
                             var selectedSeason by remember { mutableIntStateOf(seasonInfo ?: availableSeasons.firstOrNull() ?: 1) }
                             
                             val standardQualities = listOf(1080, 720, 480, 360)
-                            var selectedQuality by remember { mutableIntStateOf(1080) }
+                            val savedQuality = qualityPrefs.getInt("q_${movieTitle.replace(" ", "_")}", 1080)
+                            var selectedQuality by remember { mutableIntStateOf(if (savedQuality in standardQualities) savedQuality else 1080) }
                             
                             val seasonLinks = filteredLinks.filter { it.season == selectedSeason }
 
@@ -181,6 +183,11 @@ fun MovieBoxDownloadSheet(
                                             }
                                         }
                                     }
+                                }
+
+                                // Save quality preference when changed
+                                LaunchedEffect(selectedQuality) {
+                                    qualityPrefs.edit().putInt("q_${movieTitle.replace(" ", "_")}", selectedQuality).apply()
                                 }
 
                                 // Quality selector

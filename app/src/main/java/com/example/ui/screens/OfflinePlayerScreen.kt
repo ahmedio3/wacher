@@ -147,6 +147,14 @@ fun OfflinePlayerScreen(
         activeSubtitleText = currentSub?.text ?: ""
     }
 
+    // Save subtitle position & size when changed
+    LaunchedEffect(subtitleYOffset) {
+        prefs.edit().putFloat("sub_y", subtitleYOffset).apply()
+    }
+    LaunchedEffect(subtitleSize) {
+        prefs.edit().putFloat("sub_size", subtitleSize).apply()
+    }
+
     // Auto-hide controls
     LaunchedEffect(showControls, isPlaying, showEpisodesDrawer, showSubtitleDrawer) {
         if (showControls && isPlaying && !showEpisodesDrawer && !showSubtitleDrawer) {
