@@ -299,8 +299,7 @@ fun OfflinePlayerScreen(
                         .fillMaxWidth()
                         .fillMaxHeight(volFraction.coerceIn(0f, 1f))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
+                        .background(MaterialTheme.colorScheme.primary)
                 )
                 Text(
                     text = "${(volFraction * 100).toInt()}%",
@@ -327,8 +326,7 @@ fun OfflinePlayerScreen(
                         .fillMaxWidth()
                         .fillMaxHeight(currentBrightness.coerceIn(0f, 1f))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(Color.White.copy(alpha = 0.8f)),
-                    contentAlignment = Alignment.Center
+                        .background(Color.White.copy(alpha = 0.8f))
                 )
                 Text(
                     text = "${(currentBrightness * 100).toInt()}%",
