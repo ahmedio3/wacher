@@ -314,8 +314,8 @@ class MovieViewModel(
         return repository.isItemInWatchlistFlow(id).map { it != null }
     }
 
-    // DOWNLOAD OPERATIONS
-    private val activeJobs = ConcurrentHashMap<String, Job>()
+    // DOWNLOAD OPERATIONS - Single queue (one at a time, FIFO)
+    private var currentDownloadId: String? = null
 
     fun requestDownload(
         mediaId: String,
@@ -332,7 +332,11 @@ class MovieViewModel(
         viewModelScope.launch {
             val existing = repository.getDownload(downloadId)
             if (existing != null && existing.status == "completed") {
-                // Toast.makeText(getApplication(), "تم تنزيل هذا المحتوى مسبقاً!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(getApplication(), "هذا المحتوى تم تنزيله مسبقاً", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (existing != null && (existing.status == "queued" || existing.status == "downloading")) {
+                Toast.makeText(getApplication(), "هذا المحتوى موجود بالفعل في قائمة التحميل", Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
@@ -348,42 +352,46 @@ class MovieViewModel(
                 season = season,
                 episode = episode,
                 progress = 0,
-                status = "downloading",
+                status = "queued",
                 quality = quality,
                 downloadedBytes = 0L,
                 totalBytes = 0L,
-                downloadSpeed = "0 KB/s",
+                downloadSpeed = "في الانتظار",
                 sourceUrl = customUrl ?: ""
             )
             repository.addDownload(entity)
-            triggerNetworkDownload(downloadId, quality, customUrl, customHeaders)
-            // Toast.makeText(getApplication(), "جرى بدء التحميل: $fullTitle ($quality)", Toast.LENGTH_LONG).show()
+            processQueue()
         }
     }
 
     fun pauseDownload(downloadId: String) {
         viewModelScope.launch {
             com.example.utils.MultiThreadDownloader.pauseDownload(downloadId)
+            if (currentDownloadId == downloadId) {
+                currentDownloadId = null
+            }
             val entity = repository.getDownload(downloadId) ?: return@launch
             val updated = entity.copy(status = "paused", downloadSpeed = "متوقف مؤقتاً")
             repository.addDownload(updated)
-            // Toast.makeText(getApplication(), "تم الإيقاف مؤقتاً: ${entity.title}", Toast.LENGTH_SHORT).show()
+            processQueue()
         }
     }
 
     fun resumeDownload(downloadId: String) {
         viewModelScope.launch {
             val entity = repository.getDownload(downloadId) ?: return@launch
-            val updated = entity.copy(status = "downloading", downloadSpeed = "0 KB/s")
+            val updated = entity.copy(status = "queued", downloadSpeed = "في الانتظار")
             repository.addDownload(updated)
-            triggerNetworkDownload(downloadId, entity.quality, entity.sourceUrl.takeIf { it.isNotEmpty() })
-            // Toast.makeText(getApplication(), "استئناف تحميل: ${entity.title}", Toast.LENGTH_SHORT).show()
+            processQueue()
         }
     }
 
     fun deleteDownload(downloadId: String) {
         viewModelScope.launch {
             com.example.utils.MultiThreadDownloader.pauseDownload(downloadId)
+            if (currentDownloadId == downloadId) {
+                currentDownloadId = null
+            }
             val file = File(getApplication<Application>().filesDir, "downloads/$downloadId.mp4")
             if (file.exists()) {
                 file.delete()
@@ -397,7 +405,35 @@ class MovieViewModel(
                 vttFile.delete()
             }
             repository.removeDownload(downloadId)
-            // Toast.makeText(getApplication(), "تم حذف التحميل بالكامل", Toast.LENGTH_SHORT).show()
+            processQueue()
+        }
+    }
+
+    // Process the queue: start the oldest queued download if nothing is running
+    private fun processQueue() {
+        viewModelScope.launch {
+            // If something is already downloading, return
+            if (currentDownloadId != null) {
+                val cur = currentDownloadId?.let { repository.getDownload(it) }
+                if (cur != null && cur.status == "downloading") {
+                    return@launch
+                }
+                // Current download might have finished/failed, clear it
+                currentDownloadId = null
+            }
+
+            // Find the oldest queued item
+            val all = repository.downloads.first()
+            val next = all
+                .filter { it.status == "queued" }
+                .minByOrNull { it.addedAt }
+
+            if (next != null) {
+                val updated = next.copy(status = "downloading", downloadSpeed = "0 KB/s")
+                repository.addDownload(updated)
+                currentDownloadId = next.id
+                triggerNetworkDownload(next.id, next.quality, next.sourceUrl.takeIf { it.isNotEmpty() })
+            }
         }
     }
 
@@ -435,6 +471,9 @@ class MovieViewModel(
             },
             onComplete = { success ->
                 viewModelScope.launch(Dispatchers.Main) {
+                    if (currentDownloadId == downloadId) {
+                        currentDownloadId = null
+                    }
                     val current = repository.getDownload(downloadId)
                     if (current != null) {
                          if (success) {
@@ -453,7 +492,7 @@ class MovieViewModel(
                                      val season = if (isTv) current.mediaId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
                                      val episode = if (isTv) current.mediaId.substringAfter("-e").toIntOrNull() ?: 1 else 0
                                      
-                                     val subs = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(tmdbIdString, isTv, season, episode)
+                                     val subs = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(tmdbIdString, isTv, season, episode, current.title.substringBefore(" - "))
                                      val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
                                      if (arSub != null) {
                                          val ctx = getApplication<Application>().applicationContext
@@ -468,6 +507,8 @@ class MovieViewModel(
                              ))
                          }
                     }
+                    // Process next item in queue
+                    processQueue()
                 }
             }
         )
@@ -477,11 +518,13 @@ class MovieViewModel(
     fun resumePendingDownloads() {
         viewModelScope.launch {
             val all = repository.downloads.first()
-            all.forEach { item ->
-                if (item.status == "downloading") {
-                    triggerNetworkDownload(item.id, item.quality, item.sourceUrl.takeIf { it.isNotEmpty() })
-                }
+            val hasRunning = all.any { it.status == "downloading" }
+            // Reset any stuck "downloading" items back to "queued"
+            all.filter { it.status == "downloading" }.forEach {
+                repository.addDownload(it.copy(status = "queued", downloadSpeed = "في الانتظار"))
             }
+            currentDownloadId = null
+            processQueue()
         }
     }
 }

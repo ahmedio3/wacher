@@ -204,9 +204,57 @@ fun MovieBoxDownloadSheet(
                                     }
                                 }
 
-                                // Episodes list
+                                // Episodes list with batch selection
                                 val episodesMap = seasonLinks.groupBy { it.episode }.toSortedMap(compareBy { it })
+                                val episodeIds = episodesMap.keys.toList()
                                 
+                                // Track selected episodes for batch download
+                                var selectedEpisodeIds by remember { mutableStateOf(setOf<Int>()) }
+                                fun toggleEpisode(id: Int) {
+                                    selectedEpisodeIds = if (id in selectedEpisodeIds) selectedEpisodeIds - id else selectedEpisodeIds + id
+                                }
+                                
+                                // Select All / Deselect All
+                                val allSelected = episodeIds.isNotEmpty() && selectedEpisodeIds.size == episodeIds.size
+                                fun toggleSelectAll() {
+                                    selectedEpisodeIds = if (allSelected) emptySet() else episodeIds.toSet()
+                                }
+                                
+                                // Batch download button (shown when items selected)
+                                if (selectedEpisodeIds.isNotEmpty()) {
+                                    Button(
+                                        onClick = {
+                                            episodeIds.forEach { epId ->
+                                                val file = seasonLinks.find { it.episode == epId && it.resolution == selectedQuality }
+                                                    ?: seasonLinks.filter { it.episode == epId }.minByOrNull { Math.abs(it.resolution - selectedQuality) }
+                                                if (file != null) {
+                                                    onDownloadClick(file.url, "${file.resolution}p", selectedSeason, epId)
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                        Text("تحميل المحدد (${selectedEpisodeIds.size} / ${episodeIds.size})")
+                                    }
+                                }
+                                
+                                // Select / Deselect All row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Checkbox(checked = allSelected, onCheckedChange = { toggleSelectAll() })
+                                    Text(
+                                        text = if (allSelected) "إلغاء تحديد الكل" else "تحديد الكل",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
                                 LazyColumn(
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                     modifier = Modifier.fillMaxWidth()
@@ -219,12 +267,17 @@ fun MovieBoxDownloadSheet(
                                             if (exactFile != null) {
                                             val mbSize = formatSize(exactFile.size)
                                                 val isExact = exactFile.resolution == selectedQuality
+                                                val isSelected = episodeId in selectedEpisodeIds
                                                 
                                                 Column(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clip(RoundedCornerShape(12.dp))
-                                                        .background(if (isExact) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                                        .background(
+                                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                                            else if (isExact) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                                        )
                                                         .padding(16.dp)
                                                 ) {
                                                     Row(
@@ -232,12 +285,22 @@ fun MovieBoxDownloadSheet(
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Text(
-                                                            text = "الحلقة $episodeId",
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                            fontSize = 18.sp
-                                                        )
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Checkbox(
+                                                                checked = isSelected,
+                                                                onCheckedChange = { toggleEpisode(episodeId) },
+                                                                modifier = Modifier.padding(end = 8.dp)
+                                                            )
+                                                            Text(
+                                                                text = "الحلقة $episodeId",
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.onSurface,
+                                                                fontSize = 18.sp
+                                                            )
+                                                        }
                                                         Text(
                                                             text = mbSize,
                                                             fontSize = 14.sp,
@@ -254,7 +317,7 @@ fun MovieBoxDownloadSheet(
                                                         )
                                                     }
                                                     
-                                                    Spacer(modifier = Modifier.height(16.dp))
+                                                    Spacer(modifier = Modifier.height(12.dp))
                                                     
                                                     Button(
                                                         onClick = {

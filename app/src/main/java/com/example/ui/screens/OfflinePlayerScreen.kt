@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.net.Uri
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -11,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -97,6 +100,25 @@ fun OfflinePlayerScreen(
     var isSpeedUp by remember { mutableStateOf(false) }
 
     var wasLongPress by remember { mutableStateOf(false) }
+
+    // Volume & Brightness Controls
+    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+    var currentVolume by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
+    var currentBrightness by remember { mutableFloatStateOf(0.5f) }
+    var showVolumeOverlay by remember { mutableStateOf(false) }
+    var showBrightnessOverlay by remember { mutableStateOf(false) }
+    var volumeOverlayTimer by remember { mutableStateOf(0L) }
+    var brightnessOverlayTimer by remember { mutableStateOf(0L) }
+
+    // Auto-hide volume/brightness overlay
+    LaunchedEffect(showVolumeOverlay, showBrightnessOverlay) {
+        if (showVolumeOverlay || showBrightnessOverlay) {
+            delay(1500)
+            showVolumeOverlay = false
+            showBrightnessOverlay = false
+        }
+    }
 
     // Overlays
     var showEpisodesDrawer by remember { mutableStateOf(false) }
@@ -257,6 +279,107 @@ fun OfflinePlayerScreen(
                 }
             },
             modifier = Modifier.fillMaxSize()
+        )
+
+        // Volume & Brightness Overlay Indicators
+        if (showVolumeOverlay) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 20.dp)
+                    .width(48.dp)
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                val volFraction = currentVolume.toFloat() / maxVolume.toFloat()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(volFraction.coerceIn(0f, 1f))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                )
+                Text(
+                    text = "${(volFraction * 100).toInt()}%",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
+        if (showBrightnessOverlay) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 20.dp)
+                    .width(48.dp)
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(currentBrightness.coerceIn(0f, 1f))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.White.copy(alpha = 0.8f)),
+                    contentAlignment = Alignment.Center
+                )
+                Text(
+                    text = "${(currentBrightness * 100).toInt()}%",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
+
+        // Gesture zones for Volume (right) & Brightness (left)
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(80.dp)
+                .align(Alignment.CenterEnd)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        val delta = -dragAmount.y / 300f
+                        val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
+                        if (newVol != currentVolume) {
+                            currentVolume = newVol
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                            showVolumeOverlay = true
+                        }
+                    }
+                }
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(80.dp)
+                .align(Alignment.CenterStart)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        val delta = -dragAmount.y / 600f
+                        val newBrightness = (currentBrightness + delta).coerceIn(0.05f, 1f)
+                        if (newBrightness != currentBrightness) {
+                            currentBrightness = newBrightness
+                            activity?.window?.let { win ->
+                                val lp = win.attributes
+                                lp.screenBrightness = newBrightness
+                                win.attributes = lp
+                            }
+                            showBrightnessOverlay = true
+                        }
+                    }
+                }
         )
 
         // 2x Speed Badge
