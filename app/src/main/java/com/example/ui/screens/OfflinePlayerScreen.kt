@@ -54,6 +54,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.layout.onSizeChanged
 import com.example.data.local.DownloadEntity
 
+@OptIn(ExperimentalMaterial3Api::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun OfflinePlayerScreen(
