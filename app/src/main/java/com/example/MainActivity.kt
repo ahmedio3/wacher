@@ -318,7 +318,46 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     onNavigateToAdultContent = { queries ->
                         val encQueries = java.net.URLEncoder.encode(queries, "UTF-8")
                         navController.navigate("adult_content?queries=$encQueries")
+                    },
+                    onNavigateToGlobalChat = {
+                        navController.navigate("chat/global")
+                    },
+                    onNavigateToAiChat = {
+                        val hasProvider = com.example.data.ai.AiProviderManager.hasProvider(context)
+                        navController.navigate("ai_chat/${hasProvider}")
                     }
+                )
+            }
+
+            // AI Chat
+            composable(
+                route = "ai_chat/{hasProvider}",
+                arguments = listOf(
+                    navArgument("hasProvider") { type = NavType.BoolType; defaultValue = false }
+                )
+            ) { backStackEntry ->
+                val hasProvider = backStackEntry.arguments?.getBoolean("hasProvider") ?: false
+                val aiViewModel: com.example.data.ai.AiChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    factory = com.example.data.ai.AiViewModelFactory(context)
+                )
+                com.example.ui.screens.AiChatScreen(
+                    viewModel = aiViewModel,
+                    hasProvider = hasProvider,
+                    onBack = { navController.popBackStack() },
+                    onConfigureProvider = {
+                        navController.navigate("ai_provider_config")
+                    }
+                )
+            }
+
+            // AI Provider Config
+            composable("ai_provider_config") {
+                val aiViewModel: com.example.data.ai.AiChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    factory = com.example.data.ai.AiViewModelFactory(context)
+                )
+                com.example.ui.screens.AiProviderConfigScreen(
+                    viewModel = aiViewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
 

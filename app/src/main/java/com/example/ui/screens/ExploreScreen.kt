@@ -10,10 +10,11 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,6 +53,8 @@ fun ExploreScreen(
     viewModel: MovieBoxViewModel,
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     onNavigateToAdultContent: (String) -> Unit = {},
+    onNavigateToGlobalChat: () -> Unit = {},
+    onNavigateToAiChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeOptions = listOf("الكل", "أفلام", "مسلسلات")
@@ -122,6 +125,48 @@ fun ExploreScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
+            // 0. Chat section (AI + Global)
+            item(span = { GridItemSpan(this.maxLineSpan) }) {
+                Column {
+                    Text(
+                        text = "المحادثات",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                    )
+
+                    // AI Chat
+                    ExploreChatItemRow(
+                        title = "الذكاء الاصطناعي",
+                        subtitle = "اسأل عن الأفلام، اقتراحات، بحث في التحميلات والمفضلة",
+                        icon = {
+                            Box(
+                                modifier = Modifier.size(54.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White)
+                            }
+                        },
+                        onClick = onNavigateToAiChat
+                    )
+
+                    // Global Chat
+                    ExploreChatItemRow(
+                        title = "الدردشة العامة",
+                        subtitle = "موقع التجمع لكل المشاهدين. شارك رأيك في الأفلام!",
+                        icon = {
+                            Box(
+                                modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF32A852)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.People, contentDescription = null, tint = Color.White)
+                            }
+                        },
+                        onClick = onNavigateToGlobalChat
+                    )
+                }
+            }
+
             // 1. Trending section
             item(span = { GridItemSpan(this.maxLineSpan) }) {
                 Column {
@@ -609,6 +654,41 @@ fun ExploreScreen(
                 }
                 else -> {}
             }
+        }
+    }
+}
+
+@Composable
+fun ExploreChatItemRow(
+    title: String,
+    subtitle: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        icon()
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
