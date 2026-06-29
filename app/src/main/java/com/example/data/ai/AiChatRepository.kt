@@ -18,13 +18,13 @@ class AiChatRepository {
         val error: String? = null
     )
 
-    // Accumulated tool calls from the stream
+    // Accumulated tool calls from the stream (var for reassembly from SSE deltas)
     private data class AccumulatedToolCall(
         val index: Int,
-        val id: String,
-        val type: String,
-        val functionName: String,
-        val arguments: StringBuilder
+        var id: String = "",
+        var type: String = "function",
+        var functionName: String = "",
+        var arguments: StringBuilder = StringBuilder()
     )
 
     /**

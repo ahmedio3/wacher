@@ -303,9 +303,6 @@ fun PlayerScreen(
                         player = exoPlayer
                         useController = true
                         controllerAutoShow = true
-                        setControllerShowSubtitleButton(false) // Hide subtitle button in controller
-                        setControllerFastForwardIncrementMs(10000L) // 10s skip
-                        setControllerRewindIncrementMs(10000L)
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -442,9 +439,6 @@ fun PlayerScreen(
                                     player = exoPlayer
                                     useController = true
                                     controllerAutoShow = true
-                                    setControllerShowSubtitleButton(false)
-                                    setControllerFastForwardIncrementMs(10000L)
-                                    setControllerRewindIncrementMs(10000L)
                                     layoutParams = ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT

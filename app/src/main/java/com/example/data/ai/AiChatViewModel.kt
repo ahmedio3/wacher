@@ -190,10 +190,10 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
         // Add downloads context
         try {
             val db = MovieDatabase.getDatabase(context)
-            val downloads = db.movieDao().getDownloads().first()
-            if (downloads.isNotEmpty()) {
+            val downloadsList = db.movieDao.getDownloads().first()
+            if (downloadsList.isNotEmpty()) {
                 sb.append("\n\nالتحميلات الحالية للمستخدم:")
-                downloads.forEach { d ->
+                downloadsList.forEach { d ->
                     sb.append("\n- ${d.title}")
                     if (d.mediaType == "tv") {
                         sb.append(" (مسلسل)")
@@ -217,10 +217,10 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
             }
 
             // Add watchlist/favorites context
-            val watchlist = db.movieDao().getWatchlist().first()
-            if (watchlist.isNotEmpty()) {
+            val watchlistList = db.movieDao.getWatchlist().first()
+            if (watchlistList.isNotEmpty()) {
                 sb.append("\n\nالمفضلة/قائمة المشاهدة للمستخدم:")
-                watchlist.forEach { w ->
+                watchlistList.forEach { w ->
                     sb.append("\n- ${w.title} (${if (w.mediaType == "tv") "مسلسل" else "فيلم"})")
                     if (w.rating > 0) {
                         sb.append(" - التقييم: %.1f".format(w.rating))
