@@ -286,20 +286,24 @@ fun OfflinePlayerScreen(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
-                    val longPressJob = launch {
-                        delay(500)
-                        wasLongPress = true
-                        exoPlayer.setPlaybackSpeed(2f)
-                        isSpeedUp = true
-                        showControls = false
-                    }
+                    var longPressActivated = false
+                    val pressStart = System.nanoTime()
                     try {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
                             if (event.changes.all { !it.pressed }) break
+                            if (!longPressActivated) {
+                                val elapsed = (System.nanoTime() - pressStart) / 1_000_000
+                                if (elapsed >= 500) {
+                                    longPressActivated = true
+                                    wasLongPress = true
+                                    exoPlayer.setPlaybackSpeed(2f)
+                                    isSpeedUp = true
+                                    showControls = false
+                                }
+                            }
                         }
                     } finally {
-                        longPressJob.cancel()
                         if (wasLongPress || isSpeedUp) {
                             exoPlayer.setPlaybackSpeed(1f)
                             isSpeedUp = false
@@ -986,6 +990,8 @@ fun OfflinePlayerScreen(
             }
         }
     }
+}
+
 }
 
 private fun formatTimeRange(millis: Long): String {
