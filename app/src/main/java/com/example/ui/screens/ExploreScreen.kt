@@ -120,7 +120,7 @@ fun ExploreScreen(
                                 )
                             } else {
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(state.data, key = { it.subjectId }) { item ->
+                                    items(state.data, key = { it.subjectId.ifEmpty { it.title.ifEmpty { it.hashCode().toString() } } }) { item ->
                                         val w = 110.dp
                                         Column(
                                             modifier = Modifier
@@ -320,7 +320,7 @@ fun ExploreScreen(
                                     )
                                 } else {
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        items(state.data, key = { it.subjectId }) { item ->
+                                        items(state.data, key = { it.subjectId.ifEmpty { it.title.ifEmpty { it.hashCode().toString() } } }) { item ->
                                             val w = 110.dp
                                             Column(
                                                 modifier = Modifier
@@ -422,7 +422,7 @@ fun ExploreScreen(
                             }
                         }
                     } else {
-                        items(data, key = { it.subjectId }) { item ->
+                        items(data, key = { it.subjectId.ifEmpty { it.title.ifEmpty { it.hashCode().toString() } } }) { item ->
                             MovieBoxSearchGridCard(
                                 item = item,
                                 onClick = {
