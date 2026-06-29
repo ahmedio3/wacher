@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.ai.AiChatState
 import com.example.data.ai.AiChatViewModel
 import com.example.data.ai.ChatMessage
+import com.example.ui.theme.IBMPlexSansArabicFontFamily
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,20 +52,18 @@ fun AiChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Show provider config if no providers
-    LaunchedEffect(hasProvider, providers) {
-        if (!hasProvider && providers.isEmpty()) {
-            // Auto-navigate to config
-        }
-    }
-
-    // Auto-scroll to bottom
+    // Auto-scroll (snap, no animation) when new content arrives
+    val previousItemCount = remember { mutableIntStateOf(0) }
     LaunchedEffect(messages.size, streamingContent) {
-        if (messages.isNotEmpty() || streamingContent.isNotEmpty()) {
-            scope.launch {
-                listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+        val itemCount = listState.layoutInfo.totalItemsCount
+        if (itemCount > previousItemCount.intValue && itemCount > 0) {
+            // Only scroll if user isn't manually scrolled far up
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            if (lastVisible >= itemCount - 3) {
+                listState.scrollToItem(itemCount - 1)
             }
         }
+        previousItemCount.intValue = itemCount
     }
 
     Scaffold(
@@ -193,40 +195,58 @@ fun AiChatScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
-                    items(messages) { msg ->
+                    // Stable key using timestamp + content
+                    items(messages, key = { it.timestamp.toString() + it.content.take(20) }) { msg ->
                         ChatBubble(message = msg)
                     }
 
-                    // Streaming response
-                    if (streamingContent.isNotEmpty()) {
-                        item {
-                            ChatBubble(
-                                message = ChatMessage(role = "assistant", content = streamingContent),
-                                isStreaming = true
-                            )
-                        }
-                    }
-
-                    // Loading indicator
-                    if (chatState is AiChatState.Loading && streamingContent.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
+                    // Streaming response item (always present when loading or streaming)
+                    if (chatState is AiChatState.Loading || streamingContent.isNotEmpty()) {
+                        item(key = "__streaming__") {
+                            if (streamingContent.isNotEmpty()) {
+                                ChatBubble(
+                                    message = ChatMessage(role = "assistant", content = streamingContent),
+                                    isStreaming = true
                                 )
+                            } else {
+                                // Subtle "thinking" indicator — no spinner to avoid flicker
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "يفكر",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                        )
+                                        // Simple animated dots
+                                        var dotCount by remember { mutableIntStateOf(0) }
+                                        LaunchedEffect(Unit) {
+                                            while (true) {
+                                                kotlinx.coroutines.delay(400)
+                                                dotCount = (dotCount + 1) % 4
+                                            }
+                                        }
+                                        Text(
+                                            text = ".".repeat(dotCount),
+                                            fontSize = 18.sp,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
                     // Error
                     if (chatState is AiChatState.Error) {
-                        item {
+                        item(key = "__error__") {
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.errorContainer
@@ -263,7 +283,7 @@ fun AiChatScreen(
                             placeholder = {
                                 Text(
                                     "اسأل عن فيلم أو مسلسل...",
-                                    fontFamily = FontFamily.Default
+                                    fontFamily = IBMPlexSansArabicFontFamily
                                 )
                             },
                             modifier = Modifier.weight(1f),
@@ -281,9 +301,7 @@ fun AiChatScreen(
                                     }
                                 }
                             ),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Default  // Default is IBM Plex via MaterialTheme
-                            ),
+                            textStyle = MaterialTheme.typography.bodyMedium,
                             maxLines = 4,
                             minLines = 1
                         )
@@ -297,7 +315,7 @@ fun AiChatScreen(
                             },
                             enabled = inputText.isNotBlank() && chatState !is AiChatState.Loading,
                             modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(24.dp)
+                            shape = CircleShape
                         ) {
                             Icon(Icons.Default.Send, contentDescription = "إرسال", tint = Color.White)
                         }
@@ -314,7 +332,6 @@ fun ChatBubble(
     isStreaming: Boolean = false
 ) {
     val isUser = message.role == "user"
-    val alignment = if (isUser) Alignment.End else Alignment.Start
     val bgColor = if (isUser)
         MaterialTheme.colorScheme.primary
     else
@@ -346,7 +363,7 @@ fun ChatBubble(
                 text = message.content,
                 color = textColor,
                 fontSize = 15.sp,
-                fontFamily = FontFamily.Default, // IBM Plex from theme
+                fontFamily = IBMPlexSansArabicFontFamily,
                 lineHeight = 22.sp
             )
         }

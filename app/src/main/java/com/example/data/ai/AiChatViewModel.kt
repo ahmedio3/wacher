@@ -3,9 +3,13 @@ package com.example.data.ai
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.DownloadEntity
+import com.example.data.local.MovieDatabase
+import com.example.data.local.WatchlistEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed class AiChatState {
@@ -83,11 +87,11 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
         _chatState.value = AiChatState.Loading
         _streamingContent.value = ""
 
-        // Build system message for context
-        val systemContext = buildSystemContext()
-        val fullMessages = listOf(ChatMessage(role = "system", content = systemContext)) + updatedMessages
-
         viewModelScope.launch {
+            // Build system context with real data (suspend function)
+            val systemContext = buildSystemContext()
+            val fullMessages = listOf(ChatMessage(role = "system", content = systemContext)) + updatedMessages
+
             repository.chatCompletion(
                 provider = provider,
                 model = model,
@@ -167,8 +171,10 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    private fun buildSystemContext(): String {
-        return """أنت مساعد ذكاء اصطناعي متخصص في الأفلام والمسلسلات. 
+    private suspend fun buildSystemContext(): String {
+        val sb = StringBuilder()
+        sb.append(
+            """أنت مساعد ذكاء اصطناعي متخصص في الأفلام والمسلسلات. 
 اسمك "واتشيرا" (Watchera).
 أنت تعمل ضمن تطبيق لمشاهدة وتحميل الأفلام والمسلسلات.
 
@@ -177,8 +183,55 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
 - كن مفيداً ودقيقاً في معلوماتك.
 - إذا سألك المستخدم عن فيلم أو مسلسل معين، قدم معلومات عنه إن كنت تعرفه.
 - يمكنك اقتراح أفلام ومسلسلات بناءً على تفضيلات المستخدم.
-- إذا طلب منك المستخدم البحث في التحميلات أو المفضلة، أخبره أن هذه الميزة قيد التطوير.
 - كن ودوداً ومحترماً.
 - لا تقدم محتوى غير لائق أو مسيء."""
+        )
+
+        // Add downloads context
+        try {
+            val db = MovieDatabase.getDatabase(context)
+            val downloads = db.movieDao().getDownloads().first()
+            if (downloads.isNotEmpty()) {
+                sb.append("\n\nالتحميلات الحالية للمستخدم:")
+                downloads.forEach { d ->
+                    sb.append("\n- ${d.title}")
+                    if (d.mediaType == "tv") {
+                        sb.append(" (مسلسل)")
+                        if (d.season > 0 && d.episode > 0) {
+                            sb.append(" الموسم ${d.season} الحلقة ${d.episode}")
+                        }
+                    } else {
+                        sb.append(" (فيلم)")
+                    }
+                    sb.append(" - الحالة: ")
+                    sb.append(
+                        when (d.status) {
+                            "completed" -> "مكتمل"
+                            "downloading" -> "قيد التحميل (${d.progress}%)"
+                            "paused" -> "متوقف"
+                            else -> d.status
+                        }
+                    )
+                }
+                sb.append("\nيمكنك اقتراح محتوى مشابه أو نصائح بناءً على هذه التحميلات.")
+            }
+
+            // Add watchlist/favorites context
+            val watchlist = db.movieDao().getWatchlist().first()
+            if (watchlist.isNotEmpty()) {
+                sb.append("\n\nالمفضلة/قائمة المشاهدة للمستخدم:")
+                watchlist.forEach { w ->
+                    sb.append("\n- ${w.title} (${if (w.mediaType == "tv") "مسلسل" else "فيلم"})")
+                    if (w.rating > 0) {
+                        sb.append(" - التقييم: %.1f".format(w.rating))
+                    }
+                }
+                sb.append("\nيمكنك اقتراح محتوى جديد بناءً على هذه القائمة.")
+            }
+        } catch (e: Exception) {
+            // Silently fail — context without downloads is still fine
+        }
+
+        return sb.toString()
     }
 }
