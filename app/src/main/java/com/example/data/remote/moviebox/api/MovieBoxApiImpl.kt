@@ -16,7 +16,7 @@ interface MovieBoxApi {
     suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
     suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
-    suspend fun adultContent(type: String? = null, limit: Int = 20, sort: String? = null): Result<List<SearchResult>>
+    suspend fun adultContent(type: String? = null, queries: String? = null, limit: Int = 10, sort: String? = null): Result<List<SearchResult>>
 }
 
 class MovieBoxApiImpl : MovieBoxApi {
@@ -430,12 +430,13 @@ class MovieBoxApiImpl : MovieBoxApi {
         }
     }
 
-    override suspend fun adultContent(type: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
+    override suspend fun adultContent(type: String?, queries: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
         return withContext(Dispatchers.IO) {
             try {
                 val urlBuilder = "$baseUrl/adult".toHttpUrlOrNull()?.newBuilder()?.apply {
                     addQueryParameter("limit", limit.toString())
                     if (type != null) addQueryParameter("type", type)
+                    if (queries != null) addQueryParameter("queries", queries)
                     if (sort != null) addQueryParameter("sort", sort)
                 } ?: return@withContext Result.failure(Exception("Invalid URL"))
 

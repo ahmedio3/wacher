@@ -130,12 +130,12 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
         }
     }
 
-    fun fetchAdultContent(type: String? = null, limit: Int = 20, sort: String? = null) {
+    fun fetchAdultContent(type: String? = null, queries: String? = null, limit: Int = 10, sort: String? = null) {
         viewModelScope.launch {
             _adultContent.value = MovieBoxState.Loading
             try {
                 val result = withTimeout(30_000L) {
-                    repository.adultContent(type, limit, sort)
+                    repository.adultContent(type, queries, limit, sort)
                 }
                 result
                     .onSuccess { _adultContent.value = MovieBoxState.Success(it) }

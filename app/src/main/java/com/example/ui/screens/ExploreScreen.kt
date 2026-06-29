@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -30,11 +32,26 @@ import com.example.data.remote.moviebox.models.SearchResult
 import com.example.data.remote.moviebox.viewmodel.MovieBoxState
 import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 
+// Adult keywords available for +18 search (synced with backend)
+private val ADULT_KEYWORDS = listOf(
+    "hentai", "ecchi", "yaoi", "yuri",
+    "xxx", "adult movie", "erotic film", "nsfw",
+    "mature", "porn", "sex scene", "nude",
+    "hardcore", "softcore", "milf", "teen",
+    "erotic", "sexy", "bondage", "lesbian",
+    "bdsm", "fetish", "taboo", "anal",
+    "gangbang", "orgy", "threesome",
+)
+
+private const val MAX_ADULT_KEYWORDS = 5
+private const val ADULT_INITIAL_LIMIT = 10
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ExploreScreen(
     viewModel: MovieBoxViewModel,
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
+    onNavigateToAdultContent: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeOptions = listOf("الكل", "أفلام", "مسلسلات")
@@ -42,6 +59,8 @@ fun ExploreScreen(
     var selectedType by remember { mutableStateOf(0) }
     var selectedSort by remember { mutableStateOf(0) }
     var safeMode by remember { mutableStateOf(true) }
+    var adultLimit by remember { mutableIntStateOf(ADULT_INITIAL_LIMIT) }
+    var selectedKeywords by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val browseState by viewModel.browseResults.collectAsState()
     val trendingState by viewModel.trendingResults.collectAsState()
@@ -49,12 +68,6 @@ fun ExploreScreen(
 
     LaunchedEffect(Unit) {
         viewModel.trending()
-    }
-
-    LaunchedEffect(safeMode) {
-        if (!safeMode) {
-            viewModel.fetchAdultContent()
-        }
     }
 
     fun onBrowse() {
@@ -70,9 +83,17 @@ fun ExploreScreen(
             else -> "rating"
         }
         viewModel.browse(genre = null, type = typeValue, sort = sortValue, safeMode = safeMode, limit = 30)
-        if (!safeMode) {
-            viewModel.fetchAdultContent()
-        }
+    }
+
+    fun onAdultSearch() {
+        if (selectedKeywords.isEmpty()) return
+        val queries = selectedKeywords.joinToString(",")
+        viewModel.fetchAdultContent(queries = queries, limit = adultLimit)
+    }
+
+    fun onShowMore() {
+        adultLimit += 10
+        onAdultSearch()
     }
 
     Scaffold(
@@ -256,6 +277,7 @@ fun ExploreScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        // Safe mode toggle
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -293,13 +315,14 @@ fun ExploreScreen(
                 }
             }
 
-            // 3. +18 Section
+            // 3. +18 Section (visible when safe mode is OFF)
             if (!safeMode) {
                 item(span = { GridItemSpan(this.maxLineSpan) }) {
                     Column {
+                        // Header + full page button
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "قسم +18",
@@ -308,19 +331,128 @@ fun ExploreScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(text = "🔞", fontSize = 18.sp)
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            // Full page button
+                            TextButton(onClick = {
+                                val q = if (selectedKeywords.isNotEmpty()) selectedKeywords.joinToString(",") else ""
+                                onNavigateToAdultContent(q)
+                            }) {
+                                Text("صفحة كاملة", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                            }
                         }
 
+                        // Keyword picker chips (scrollable, max 5)
+                        Text(
+                            text = "اختر الكلمات المفتاحية (حد أقصى $MAX_ADULT_KEYWORDS):",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            items(ADULT_KEYWORDS) { kw ->
+                                val isSelected = kw in selectedKeywords
+                                val canSelect = selectedKeywords.size < MAX_ADULT_KEYWORDS
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedKeywords = if (isSelected) {
+                                            selectedKeywords - kw
+                                        } else if (canSelect) {
+                                            selectedKeywords + kw
+                                        } else {
+                                            selectedKeywords // max reached
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            kw,
+                                            fontSize = if (isSelected) 12.sp else 11.sp,
+                                            maxLines = 1
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFFFF4444).copy(alpha = 0.2f),
+                                        selectedLabelColor = Color(0xFFFF4444),
+                                    )
+                                )
+                            }
+                        }
+
+                        // Search +18 button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    adultLimit = ADULT_INITIAL_LIMIT
+                                    onAdultSearch()
+                                },
+                                enabled = selectedKeywords.isNotEmpty(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFF4444),
+                                    disabledContainerColor = Color(0xFFFF4444).copy(alpha = 0.3f)
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("بحث +18", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Adult results
                         when (val state = adultContentState) {
+                            is MovieBoxState.Idle -> {
+                                Text(
+                                    text = "اختر كلمات مفتاحية واضغط بحث",
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
+                            is MovieBoxState.Loading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = Color(0xFFFF4444),
+                                        strokeWidth = 3.dp
+                                    )
+                                }
+                            }
                             is MovieBoxState.Success -> {
                                 if (state.data.isEmpty()) {
                                     Text(
-                                        text = "لا توجد نتائج",
+                                        text = "لا توجد نتائج لهذه الكلمات",
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                         modifier = Modifier.padding(horizontal = 4.dp)
                                     )
                                 } else {
+                                    // Show results in a LazyRow
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        items(state.data, key = { it.subjectId.ifEmpty { it.title.ifEmpty { it.hashCode().toString() } } }) { item ->
+                                        items(
+                                            state.data.take(adultLimit.coerceAtMost(state.data.size)),
+                                            key = { it.subjectId.ifEmpty { it.title.ifEmpty { it.hashCode().toString() } } }
+                                        ) { item ->
                                             val w = 110.dp
                                             Column(
                                                 modifier = Modifier
@@ -370,20 +502,26 @@ fun ExploreScreen(
                                                 )
                                             }
                                         }
-                                    }
-                                }
-                            }
-                            is MovieBoxState.Loading -> {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), userScrollEnabled = false) {
-                                    items(5) {
-                                        Column(modifier = Modifier.width(110.dp)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(110.dp)
-                                                    .height(157.dp)
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                            )
+
+                                        // "عرض المزيد" item
+                                        if (state.data.size > adultLimit) {
+                                            item {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(80.dp)
+                                                        .height(157.dp)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(Color(0xFFFF4444).copy(alpha = 0.1f))
+                                                        .clickable { onShowMore() },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("+", fontSize = 24.sp, color = Color(0xFFFF4444), fontWeight = FontWeight.Bold)
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text("عرض المزيد", fontSize = 10.sp, color = Color(0xFFFF4444))
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -396,7 +534,6 @@ fun ExploreScreen(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            else -> {}
                         }
                     }
                 }
@@ -473,5 +610,72 @@ fun ExploreScreen(
                 else -> {}
             }
         }
+    }
+}
+
+@Composable
+fun MovieBoxSearchGridCard(
+    item: SearchResult,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.7f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
+        ) {
+            AsyncImage(
+                model = item.posterUrl,
+                contentDescription = item.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            if (item.rating > 0) {
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .align(Alignment.BottomEnd)
+                ) {
+                    Text(
+                        text = String.format("%.1f", item.rating),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            if (item.type == "series") {
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = "مسلسل",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

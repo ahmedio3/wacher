@@ -16,7 +16,7 @@ interface MovieBoxRepository {
     suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
     suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
-    suspend fun adultContent(type: String? = null, limit: Int = 20, sort: String? = null): Result<List<SearchResult>>
+    suspend fun adultContent(type: String? = null, queries: String? = null, limit: Int = 10, sort: String? = null): Result<List<SearchResult>>
 }
 
 class MovieBoxRepositoryImpl(
@@ -117,11 +117,11 @@ class MovieBoxRepositoryImpl(
         return api.itemDetails(subjectId)
     }
 
-    override suspend fun adultContent(type: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
-        val cacheKey = "adult_${type}_${limit}_${sort}"
+    override suspend fun adultContent(type: String?, queries: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
+        val cacheKey = "adult_${type}_${queries}_${limit}_${sort}"
         searchCache[cacheKey]?.let { return Result.success(it) }
 
-        return api.adultContent(type, limit, sort).onSuccess {
+        return api.adultContent(type, queries, limit, sort).onSuccess {
             searchCache[cacheKey] = it
         }
     }

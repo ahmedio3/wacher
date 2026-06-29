@@ -141,7 +141,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
         )
     )
 
-    // Hide Bottom bar on Detail, Settings, Player, and Splash views
+    // Hide Bottom bar on Detail, Settings, Player, Splash, and Adult views
     val shouldShowBottomBar = currentRoute in listOf("home", "explore", "downloads", "settings")
 
     LaunchedEffect(currentRoute) {
@@ -211,10 +211,12 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 }
             },
             floatingActionButton = {
-                // Hide FAB on offline_player, player, splash routes
+                // Hide FAB on player, adult content, splash routes
                 val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
                                     || currentRoute?.startsWith("player") == true
                                     || currentRoute == "splash"
+                                    || currentRoute == "adult_content"
+                                    || currentRoute?.startsWith("adult_content") == true
                 if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
                     val config = LocalConfiguration.current
                     val screenWidthDp = config.screenWidthDp.toFloat()
@@ -292,7 +294,9 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                         navController.navigate("detail/$id/$type")
                     },
                     onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
-                        navController.navigate("mb_details/$id/$type?title=${android.net.Uri.encode(title)}&posterUrl=${android.net.Uri.encode(posterUrl)}")
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
                     },
                     onNavigateToSettings = {
                         navController.navigate("settings")
@@ -307,8 +311,37 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 ExploreScreen(
                     viewModel = movieBoxViewModel,
                     onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
-                        navController.navigate("mb_details/$id/$type?title=${android.net.Uri.encode(title)}&posterUrl=${android.net.Uri.encode(posterUrl)}")
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
+                    },
+                    onNavigateToAdultContent = { queries ->
+                        val encQueries = java.net.URLEncoder.encode(queries, "UTF-8")
+                        navController.navigate("adult_content?queries=$encQueries")
                     }
+                )
+            }
+
+            // Adult +18 Full Page
+            composable(
+                route = "adult_content?queries={queries}",
+                arguments = listOf(
+                    navArgument("queries") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) { backStackEntry ->
+                val queries = backStackEntry.arguments?.getString("queries") ?: ""
+                val adultViewModel: MovieBoxViewModel = viewModel(
+                    factory = ViewModelFactory(context)
+                )
+                AdultContentScreen(
+                    viewModel = adultViewModel,
+                    initialQueries = java.net.URLDecoder.decode(queries, "UTF-8"),
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
+                    },
+                    onBack = { navController.popBackStack() }
                 )
             }
 
