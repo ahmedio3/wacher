@@ -146,22 +146,24 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
     private fun handleStreamEvent(
         updatedMessages: List<ChatMessage>,
         providerId: String
-    ): (AiChatRepository.AiStreamEvent) -> Unit = { event ->
-        if (event.error != null) {
-            _chatState.value = AiChatState.Error(event.error)
-            return@handleStreamEvent
-        }
-        if (event.content.isNotEmpty()) {
-            _streamingContent.value += event.content
-        }
-        if (event.isDone) {
-            val finalContent = _streamingContent.value
-            val assistantMsg = ChatMessage(role = "assistant", content = finalContent)
-            val finalMessages = updatedMessages + assistantMsg
-            _messages.value = finalMessages
-            AiProviderManager.saveMessages(context, providerId, finalMessages)
-            _streamingContent.value = ""
-            _chatState.value = AiChatState.Success(finalContent)
+    ): (AiChatRepository.AiStreamEvent) -> Unit {
+        return { event ->
+            if (event.error != null) {
+                _chatState.value = AiChatState.Error(event.error)
+            } else {
+                if (event.content.isNotEmpty()) {
+                    _streamingContent.value += event.content
+                }
+                if (event.isDone) {
+                    val finalContent = _streamingContent.value
+                    val assistantMsg = ChatMessage(role = "assistant", content = finalContent)
+                    val finalMessages = updatedMessages + assistantMsg
+                    _messages.value = finalMessages
+                    AiProviderManager.saveMessages(context, providerId, finalMessages)
+                    _streamingContent.value = ""
+                    _chatState.value = AiChatState.Success(finalContent)
+                }
+            }
         }
     }
 
