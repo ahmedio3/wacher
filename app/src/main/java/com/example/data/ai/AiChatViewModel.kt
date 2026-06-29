@@ -92,24 +92,7 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
                 provider = provider,
                 model = model,
                 messages = fullMessages,
-                onEvent = { event ->
-                    if (event.error != null) {
-                        _chatState.value = AiChatState.Error(event.error)
-                        return@launch
-                    }
-                    if (event.content.isNotEmpty()) {
-                        _streamingContent.value += event.content
-                    }
-                    if (event.isDone) {
-                        val finalContent = _streamingContent.value
-                        val assistantMsg = ChatMessage(role = "assistant", content = finalContent)
-                        val finalMessages = updatedMessages + assistantMsg
-                        _messages.value = finalMessages
-                        AiProviderManager.saveMessages(context, providerId, finalMessages)
-                        _streamingContent.value = ""
-                        _chatState.value = AiChatState.Success(finalContent)
-                    }
-                }
+                onEvent = handleStreamEvent(updatedMessages, providerId)
             )
         }
     }
@@ -157,6 +140,28 @@ class AiChatViewModel(private val context: Context) : ViewModel() {
                 _selectedProviderId.value = null
                 _selectedModelName.value = null
             }
+        }
+    }
+
+    private fun handleStreamEvent(
+        updatedMessages: List<ChatMessage>,
+        providerId: String
+    ): (AiChatRepository.AiStreamEvent) -> Unit = { event ->
+        if (event.error != null) {
+            _chatState.value = AiChatState.Error(event.error)
+            return@handleStreamEvent
+        }
+        if (event.content.isNotEmpty()) {
+            _streamingContent.value += event.content
+        }
+        if (event.isDone) {
+            val finalContent = _streamingContent.value
+            val assistantMsg = ChatMessage(role = "assistant", content = finalContent)
+            val finalMessages = updatedMessages + assistantMsg
+            _messages.value = finalMessages
+            AiProviderManager.saveMessages(context, providerId, finalMessages)
+            _streamingContent.value = ""
+            _chatState.value = AiChatState.Success(finalContent)
         }
     }
 

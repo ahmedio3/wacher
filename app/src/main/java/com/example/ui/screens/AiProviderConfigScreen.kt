@@ -117,7 +117,7 @@ fun AiProviderConfigScreen(
                 }
                 // Model configs: name -> (thinkingEffort, webSearch)
                 var modelConfigs by remember(editingProviderId) {
-                    mutableStateOf(
+                    mutableStateOf<Map<String, Pair<Boolean, Boolean>>>(
                         existingProvider?.models?.associate { it.name to Pair(it.thinkingEffort, it.webSearch) } ?: emptyMap()
                     )
                 }
