@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,7 +81,7 @@ fun HomeScreen(
         ) {
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
+                onValueChange = { viewModel.setSearchQueryOnly(it) },
                 modifier = Modifier.weight(1f),
                 placeholder = { Text(if (isMovieBoxSearch) "ابحث في MovieBox..." else "ابحث عن الأفلام أو المسلسلات...", fontSize = 14.sp) },
                 leadingIcon = {
@@ -90,7 +93,7 @@ fun HomeScreen(
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                        IconButton(onClick = { viewModel.setSearchQueryOnly("") }) {
                             Icon(imageVector = Icons.Default.Close, contentDescription = "مسح البحث")
                         }
                     }
@@ -102,8 +105,26 @@ fun HomeScreen(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = Color.Transparent
-                )
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { viewModel.triggerSearch() })
             )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = { viewModel.triggerSearch() },
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "بحث",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
             
             Spacer(modifier = Modifier.width(8.dp))
             

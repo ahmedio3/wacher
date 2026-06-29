@@ -12,6 +12,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -139,6 +142,7 @@ fun OfflinePlayerScreen(
     var activeSubtitleText by remember { mutableStateOf("") }
     var searchSubsList by remember { mutableStateOf<List<com.example.ui.viewmodel.SubtitleHelper.SubtitleItem>?>(null) }
     var isDownloadingSub by remember { mutableStateOf(false) }
+    var isSubtitleHidden by remember { mutableStateOf(false) }
 
     // Update active subtitle
     LaunchedEffect(currentPosition, subtitleTimeOffsetMs, parsedSubtitles) {
@@ -156,8 +160,8 @@ fun OfflinePlayerScreen(
     }
 
     // Auto-hide controls
-    LaunchedEffect(showControls, isPlaying, showEpisodesDrawer, showSubtitleDrawer) {
-        if (showControls && isPlaying && !showEpisodesDrawer && !showSubtitleDrawer) {
+    LaunchedEffect(showControls, isPlaying, showEpisodesDrawer, showSubtitleDrawer, isDraggingSlider) {
+        if (showControls && isPlaying && !showEpisodesDrawer && !showSubtitleDrawer && !isDraggingSlider) {
             delay(4000)
             showControls = false
         }
@@ -276,27 +280,33 @@ fun OfflinePlayerScreen(
                         } else {
                             exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
                         }
-                    },
-                    onPress = { offset ->
-                        wasLongPress = false
-                        // Long press to 2x speed
-                        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
-                        val pressJob = scope.launch {
-                            kotlinx.coroutines.delay(500) // wait for 500ms to consider it a long press
-                            wasLongPress = true
-                            exoPlayer.setPlaybackSpeed(2f)
-                            isSpeedUp = true
-                            showControls = false
-                        }
-                        try {
-                            awaitRelease()
-                        } finally {
-                            pressJob.cancel()
-                            exoPlayer.setPlaybackSpeed(1f)
-                            isSpeedUp = false
-                        }
                     }
                 )
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val longPressJob = launch {
+                        delay(500)
+                        wasLongPress = true
+                        exoPlayer.setPlaybackSpeed(2f)
+                        isSpeedUp = true
+                        showControls = false
+                    }
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            if (event.changes.all { !it.pressed }) break
+                        }
+                    } finally {
+                        longPressJob.cancel()
+                        if (wasLongPress || isSpeedUp) {
+                            exoPlayer.setPlaybackSpeed(1f)
+                            isSpeedUp = false
+                            wasLongPress = false
+                        }
+                    }
+                }
             }
     ) {
         // Video Surface
@@ -373,17 +383,17 @@ fun OfflinePlayerScreen(
         }
 
         // Gesture zones for Volume (right) & Brightness (left) — full height range, wider zones
-        var gestureZoneHeight by remember { mutableFloatStateOf(1f) }
+        var volumeGestureZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterEnd)
-                .onSizeChanged { gestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(gestureZoneHeight) {
+                .onSizeChanged { volumeGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
+                .pointerInput(volumeGestureZoneHeight) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount / gestureZoneHeight
+                        val delta = -dragAmount / volumeGestureZoneHeight
                         val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
                         if (newVol != currentVolume) {
                             currentVolume = newVol
@@ -393,16 +403,17 @@ fun OfflinePlayerScreen(
                     }
                 }
         )
+        var brightnessGestureZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterStart)
-                .onSizeChanged { gestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(gestureZoneHeight) {
+                .onSizeChanged { brightnessGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
+                .pointerInput(brightnessGestureZoneHeight) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
-                        val delta = -dragAmount / gestureZoneHeight
+                        val delta = -dragAmount / brightnessGestureZoneHeight
                         // Brightness: 0.01f (near-dark) to 1.0f (full) — matches device actual range
                         val newBrightness = (currentBrightness + delta).coerceIn(0.01f, 1f)
                         if (newBrightness != currentBrightness) {
@@ -438,7 +449,7 @@ fun OfflinePlayerScreen(
         }
 
         // Custom Subtitle Overlay
-        if (activeSubtitleText.isNotEmpty()) {
+        if (!isSubtitleHidden && activeSubtitleText.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -632,35 +643,45 @@ fun OfflinePlayerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(formatTimeRange(currentPosition), color = Color.White, style = MaterialTheme.typography.labelMedium)
-                            // Seek preview time
-                            if (isDraggingSlider) {
-                                val previewPos = (dragPosition * totalDuration).toLong()
-                                Text(
-                                    text = formatTimeRange(previewPos),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                            }
                             Text(formatTimeRange(totalDuration), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
-                        Slider(
-                            value = if (isDraggingSlider) dragPosition else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f,
-                            onValueChange = { percent ->
-                                isDraggingSlider = true
-                                dragPosition = percent
-                            },
-                            onValueChangeFinished = {
-                                isDraggingSlider = false
-                                val newPos = (dragPosition * totalDuration).toLong()
-                                exoPlayer.seekTo(newPos)
-                            },
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Slider(
+                                value = if (isDraggingSlider) dragPosition else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f,
+                                onValueChange = { percent ->
+                                    isDraggingSlider = true
+                                    dragPosition = percent
+                                },
+                                onValueChangeFinished = {
+                                    isDraggingSlider = false
+                                    val newPos = (dragPosition * totalDuration).toLong()
+                                    exoPlayer.seekTo(newPos)
+                                },
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (isDraggingSlider) {
+                                val previewPos = (dragPosition * totalDuration).toLong()
+                                Surface(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .offset(y = (-8).dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                ) {
+                                    Text(
+                                        text = formatTimeRange(previewPos),
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -698,6 +719,26 @@ fun OfflinePlayerScreen(
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
+                                        // Subtitle Hide Toggle
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                if (isSubtitleHidden) "الترجمة مخفية" else "إخفاء الترجمة",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            IconButton(onClick = { isSubtitleHidden = !isSubtitleHidden }) {
+                                                Icon(
+                                                    if (isSubtitleHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (isSubtitleHidden) "إظهار الترجمة" else "إخفاء الترجمة"
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
                                         Text("إعدادات الترجمة الحالية", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.height(8.dp))
                                         
@@ -709,12 +750,18 @@ fun OfflinePlayerScreen(
                                         ) {
                                             Text("موضع الترجمة", style = MaterialTheme.typography.bodyMedium)
                                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(onClick = { subtitleYOffset -= 10f }, modifier = Modifier.size(36.dp)) {
+                                                    Text("-10", fontSize = 10.sp)
+                                                }
                                                 IconButton(onClick = { subtitleYOffset -= 1f }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.ArrowUpward, "أعلى")
                                                 }
                                                 Text("${(-subtitleYOffset).toInt()}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(30.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                                 IconButton(onClick = { subtitleYOffset += 1f }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.ArrowDownward, "أسفل")
+                                                }
+                                                IconButton(onClick = { subtitleYOffset += 10f }, modifier = Modifier.size(36.dp)) {
+                                                    Text("+10", fontSize = 10.sp)
                                                 }
                                             }
                                         }
@@ -939,7 +986,6 @@ fun OfflinePlayerScreen(
             }
         }
     }
-}
 }
 
 private fun formatTimeRange(millis: Long): String {

@@ -50,6 +50,22 @@ data class VideoFile(
     }
 }
 
+data class ItemDetailResult(
+    val subjectId: String,
+    val title: String,
+    val description: String,
+    val posterUrl: String,
+    val rating: Double,
+    val year: String,
+    val type: String,
+    val languages: List<String> = emptyList(),
+    val country: String = "",
+    val genre: List<String> = emptyList(),
+    val seasonsCount: Int = 0,
+    val durationSeconds: Int = 0,
+    val hasResource: Boolean = false
+)
+
 data class Subtitle(
     val languageCode: String,
     val languageName: String,

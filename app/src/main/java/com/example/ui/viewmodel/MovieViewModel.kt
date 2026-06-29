@@ -150,8 +150,25 @@ class MovieViewModel(
 
     fun updateSearchMode(isMovieBox: Boolean) {
         _isMovieBoxSearchMode.value = isMovieBox
-        val currentQuery = _searchQuery.value
-        updateSearchQuery(currentQuery) // Re-trigger search with new mode
+    }
+
+    fun setSearchQueryOnly(query: String) {
+        _searchQuery.value = query
+        if (query.isEmpty()) {
+            _searchResults.value = RequestState.Idle
+            _movieBoxSearchResults.value = RequestState.Idle
+        }
+    }
+
+    fun triggerSearch() {
+        val query = _searchQuery.value.trim()
+        if (query.isEmpty()) return
+        _searchResults.value = RequestState.Loading
+        if (_isMovieBoxSearchMode.value) {
+            searchMovieBox(query)
+        } else {
+            searchMedia(query)
+        }
     }
 
     fun updateSearchQuery(query: String) {

@@ -12,6 +12,11 @@ interface MovieBoxApi {
     suspend fun search(query: String, originalLanguage: String? = null, limit: Int = 8): Result<List<SearchResult>>
     suspend fun getDownloadLinks(subjectId: String, resolution: Int? = null): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
+    suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
+    suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
+    suspend fun adultContent(type: String? = null, limit: Int = 20, sort: String? = null): Result<List<SearchResult>>
 }
 
 class MovieBoxApiImpl : MovieBoxApi {
@@ -208,6 +213,269 @@ class MovieBoxApiImpl : MovieBoxApi {
                     )
                 )
 
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/browse".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("limit", limit.toString())
+                    if (genre != null) addQueryParameter("genre", genre)
+                    if (type != null) addQueryParameter("type", type)
+                    if (sort != null) addQueryParameter("sort", sort)
+                    if (safeMode != null) addQueryParameter("safe_mode", safeMode.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val resultsArray = rootJson.optJSONArray("results")
+                val list = mutableListOf<SearchResult>()
+                if (resultsArray != null) {
+                    for (i in 0 until resultsArray.length()) {
+                        val item = resultsArray.optJSONObject(i) ?: continue
+                        list.add(
+                            SearchResult(
+                                subjectId = item.optString("subject_id"),
+                                title = item.optString("title"),
+                                type = item.optString("type"),
+                                posterUrl = item.optString("poster"),
+                                year = item.optString("year"),
+                                hasResource = item.optBoolean("has_resource", false),
+                                rating = item.optDouble("rating", 0.0),
+                                seasons = item.optInt("seasons", 0),
+                                country = item.optString("country"),
+                                description = item.optString("description"),
+                                durationSeconds = item.optInt("duration_seconds", 0)
+                            ).withParsedLanguages(item.optJSONArray("languages"))
+                             .withParsedGenre(item.optJSONArray("genre"))
+                        )
+                    }
+                }
+                Result.success(list)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/trending".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("limit", limit.toString())
+                    if (genre != null) addQueryParameter("genre", genre)
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val resultsArray = rootJson.optJSONArray("results")
+                val list = mutableListOf<SearchResult>()
+                if (resultsArray != null) {
+                    for (i in 0 until resultsArray.length()) {
+                        val item = resultsArray.optJSONObject(i) ?: continue
+                        list.add(
+                            SearchResult(
+                                subjectId = item.optString("subject_id"),
+                                title = item.optString("title"),
+                                type = item.optString("type"),
+                                posterUrl = item.optString("poster"),
+                                year = item.optString("year"),
+                                hasResource = item.optBoolean("has_resource", false),
+                                rating = item.optDouble("rating", 0.0),
+                                seasons = item.optInt("seasons", 0),
+                                country = item.optString("country"),
+                                description = item.optString("description"),
+                                durationSeconds = item.optInt("duration_seconds", 0)
+                            ).withParsedLanguages(item.optJSONArray("languages"))
+                             .withParsedGenre(item.optJSONArray("genre"))
+                        )
+                    }
+                }
+                Result.success(list)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/random".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("limit", limit.toString())
+                    if (type != null) addQueryParameter("type", type)
+                    if (safeMode != null) addQueryParameter("safe_mode", safeMode.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val resultsArray = rootJson.optJSONArray("results")
+                val list = mutableListOf<SearchResult>()
+                if (resultsArray != null) {
+                    for (i in 0 until resultsArray.length()) {
+                        val item = resultsArray.optJSONObject(i) ?: continue
+                        list.add(
+                            SearchResult(
+                                subjectId = item.optString("subject_id"),
+                                title = item.optString("title"),
+                                type = item.optString("type"),
+                                posterUrl = item.optString("poster"),
+                                year = item.optString("year"),
+                                hasResource = item.optBoolean("has_resource", false),
+                                rating = item.optDouble("rating", 0.0),
+                                seasons = item.optInt("seasons", 0),
+                                country = item.optString("country"),
+                                description = item.optString("description"),
+                                durationSeconds = item.optInt("duration_seconds", 0)
+                            ).withParsedLanguages(item.optJSONArray("languages"))
+                             .withParsedGenre(item.optJSONArray("genre"))
+                        )
+                    }
+                }
+                Result.success(list)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun itemDetails(subjectId: String): Result<ItemDetailResult> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/item_details".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("subject_id", subjectId)
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val item = JSONObject(bodyStr)
+                if (item.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val langsArray = item.optJSONArray("languages")
+                val langsList = if (langsArray != null) {
+                    (0 until langsArray.length()).mapNotNull { langsArray.optString(it).takeIf { s -> s.isNotEmpty() } }
+                } else emptyList()
+
+                val genreArray = item.optJSONArray("genre")
+                val genreList = if (genreArray != null) {
+                    (0 until genreArray.length()).mapNotNull { genreArray.optString(it).takeIf { s -> s.isNotEmpty() } }
+                } else emptyList()
+
+                Result.success(
+                    ItemDetailResult(
+                        subjectId = item.optString("subject_id"),
+                        title = item.optString("title"),
+                        description = item.optString("description"),
+                        posterUrl = item.optString("poster"),
+                        rating = item.optDouble("rating", 0.0),
+                        year = item.optString("year"),
+                        type = item.optString("type"),
+                        languages = langsList,
+                        country = item.optString("country"),
+                        genre = genreList,
+                        seasonsCount = item.optInt("seasons", 0),
+                        durationSeconds = item.optInt("duration_seconds", 0),
+                        hasResource = item.optBoolean("has_resource", false)
+                    )
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun adultContent(type: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/adult".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("limit", limit.toString())
+                    if (type != null) addQueryParameter("type", type)
+                    if (sort != null) addQueryParameter("sort", sort)
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val resultsArray = rootJson.optJSONArray("results")
+                val list = mutableListOf<SearchResult>()
+                if (resultsArray != null) {
+                    for (i in 0 until resultsArray.length()) {
+                        val item = resultsArray.optJSONObject(i) ?: continue
+                        list.add(
+                            SearchResult(
+                                subjectId = item.optString("subject_id"),
+                                title = item.optString("title"),
+                                type = item.optString("type"),
+                                posterUrl = item.optString("poster"),
+                                year = item.optString("year"),
+                                hasResource = item.optBoolean("has_resource", false),
+                                rating = item.optDouble("rating", 0.0),
+                                seasons = item.optInt("seasons", 0),
+                                country = item.optString("country"),
+                                description = item.optString("description"),
+                                durationSeconds = item.optInt("duration_seconds", 0)
+                            ).withParsedLanguages(item.optJSONArray("languages"))
+                             .withParsedGenre(item.optJSONArray("genre"))
+                        )
+                    }
+                }
+                Result.success(list)
             } catch (e: Exception) {
                 Result.failure(e)
             }

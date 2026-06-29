@@ -12,6 +12,11 @@ interface MovieBoxRepository {
     suspend fun search(query: String, originalLanguage: String? = null, limit: Int = 8): Result<List<SearchResult>>
     suspend fun getDownloadLinks(subjectId: String, resolution: Int? = null): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
+    suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
+    suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
+    suspend fun adultContent(type: String? = null, limit: Int = 20, sort: String? = null): Result<List<SearchResult>>
 }
 
 class MovieBoxRepositoryImpl(
@@ -79,6 +84,46 @@ class MovieBoxRepositoryImpl(
 
     override suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse> {
         return api.getSubtitles(subjectId, resourceId)
+    }
+
+    override suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>> {
+        val cacheKey = "browse_${genre}_${type}_${sort}_${safeMode}_$limit"
+        searchCache[cacheKey]?.let { return Result.success(it) }
+
+        return api.browse(genre, type, sort, safeMode, limit).onSuccess {
+            searchCache[cacheKey] = it
+        }
+    }
+
+    override suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>> {
+        val cacheKey = "trending_${genre}_${page}_$limit"
+        searchCache[cacheKey]?.let { return Result.success(it) }
+
+        return api.trending(genre, page, limit).onSuccess {
+            searchCache[cacheKey] = it
+        }
+    }
+
+    override suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>> {
+        val cacheKey = "random_${type}_${safeMode}_$limit"
+        searchCache[cacheKey]?.let { return Result.success(it) }
+
+        return api.randomContent(type, safeMode, limit).onSuccess {
+            searchCache[cacheKey] = it
+        }
+    }
+
+    override suspend fun itemDetails(subjectId: String): Result<ItemDetailResult> {
+        return api.itemDetails(subjectId)
+    }
+
+    override suspend fun adultContent(type: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
+        val cacheKey = "adult_${type}_${limit}_${sort}"
+        searchCache[cacheKey]?.let { return Result.success(it) }
+
+        return api.adultContent(type, limit, sort).onSuccess {
+            searchCache[cacheKey] = it
+        }
     }
 
     // ─── Serialization helpers ────────────────────────────────────────────

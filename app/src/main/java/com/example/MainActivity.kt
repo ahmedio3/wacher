@@ -51,6 +51,7 @@ import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.ViewModelFactory
+import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -300,9 +301,14 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             }
             
             composable("explore") {
+                val movieBoxViewModel: MovieBoxViewModel = viewModel(
+                    factory = ViewModelFactory(context)
+                )
                 ExploreScreen(
-                    viewModel = movieViewModel,
-                    onNavigateToGlobalChat = { navController.navigate("chat/global") }
+                    viewModel = movieBoxViewModel,
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate("mb_details/$id/$type?title=${android.net.Uri.encode(title)}&posterUrl=${android.net.Uri.encode(posterUrl)}")
+                    }
                 )
             }
 
