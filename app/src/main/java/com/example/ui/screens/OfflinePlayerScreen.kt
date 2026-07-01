@@ -61,7 +61,7 @@ import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -362,17 +362,15 @@ fun OfflinePlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Tap + double-tap handler (stable key = Unit — never restarts mid-gesture)
+        // Unified gesture handler: uses Compose's built-in detectTapGestures
+        // which handles tap/double-tap/long-press internally and reliably
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = {
-                            if (!wasLongPress) {
-                                showControls = !showControls
-                            }
-                            wasLongPress = false
+                            showControls = !showControls
                         },
                         onDoubleTap = { offset ->
                             if (!showSubtitleDrawer && !showEpisodesDrawer) {
@@ -383,46 +381,32 @@ fun OfflinePlayerScreen(
                                     exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
                                 }
                             }
+                        },
+                        onLongPress = {
+                            // Activate 2x speed immediately on long-press
+                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
+                                wasLongPress = true
+                                exoPlayer.setPlaybackSpeed(2f)
+                                isSpeedUp = true
+                                showControls = false
+                            }
                         }
                     )
                 }
-                // Long-press 2x handler (separate, stable key = Unit)
+                // Finger-up detector: resets 2x speed when finger lifts after long-press
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        // Check gestures at start only — keys never change
-                        if (showSubtitleDrawer || showEpisodesDrawer) {
-                            down.consume()
-                            return@awaitEachGesture
+                        awaitFirstDown(requireUnconsumed = false)
+                        // Wait for finger to lift
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            if (event.changes.all { !it.pressed }) break
                         }
-
-                        val pressStart = System.nanoTime()
-                        var activated = false
-                        val eventScope = this
-                        try {
-                            while (true) {
-                                if (!activated) {
-                                    val elapsed = (System.nanoTime() - pressStart) / 1_000_000
-                                    if (elapsed >= 500) {
-                                        activated = true
-                                        wasLongPress = true
-                                        exoPlayer.setPlaybackSpeed(2f)
-                                        isSpeedUp = true
-                                        showControls = false
-                                    }
-                                }
-                                // Poll every 100ms — timer fires even when finger is perfectly still
-                                val event = withTimeoutOrNull(100) {
-                                    eventScope.awaitPointerEvent(PointerEventPass.Main)
-                                }
-                                if (event != null && event.changes.all { !it.pressed }) break
-                            }
-                        } finally {
-                            if (activated || isSpeedUp) {
-                                exoPlayer.setPlaybackSpeed(1f)
-                                isSpeedUp = false
-                                wasLongPress = false
-                            }
+                        // Cleanup speed if still active
+                        if (isSpeedUp) {
+                            exoPlayer.setPlaybackSpeed(1f)
+                            isSpeedUp = false
+                            wasLongPress = false
                         }
                     }
                 }
