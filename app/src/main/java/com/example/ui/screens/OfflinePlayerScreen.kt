@@ -13,10 +13,12 @@ import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -430,7 +432,7 @@ fun OfflinePlayerScreen(
                 .onSizeChanged { brightnessZoneHeight = it.height.coerceAtLeast(1).toFloat() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         // Don't consume down — let tap handler also receive it
                         if (showSubtitleDrawer || showEpisodesDrawer) {
                             down.consume()
@@ -440,12 +442,12 @@ fun OfflinePlayerScreen(
                         var totalDrag = 0f
                         var lastPos = down.position
                         while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
                             val change = event.changes.firstOrNull() ?: break
                             if (change.pressed) {
                                 totalDrag += change.position.y - lastPos.y
                                 lastPos = change.position
-                                change.consume() // Consume MOVE only — tap handler still gets down
+                                change.consume()
                                 val delta = -totalDrag / brightnessZoneHeight
                                 val newBrightness = (startBrightness + delta).coerceIn(0.01f, 1f)
                                 if (newBrightness != currentBrightness) {
@@ -472,7 +474,7 @@ fun OfflinePlayerScreen(
                 .onSizeChanged { volumeZoneHeight = it.height.coerceAtLeast(1).toFloat() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         if (showSubtitleDrawer || showEpisodesDrawer) {
                             down.consume()
                             return@awaitEachGesture
@@ -481,7 +483,7 @@ fun OfflinePlayerScreen(
                         var totalDrag = 0f
                         var lastPos = down.position
                         while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
                             val change = event.changes.firstOrNull() ?: break
                             if (change.pressed) {
                                 totalDrag += change.position.y - lastPos.y
@@ -502,7 +504,7 @@ fun OfflinePlayerScreen(
         )
 
         // Unified gesture handler (highest z-index AFTER brightness/volume zones)
-        // Receives events FIRST before the edge drag handlers below
+        // Tap + long-press handler (NO onDoubleTap — avoids 300ms timeout delay on single tap)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -511,6 +513,20 @@ fun OfflinePlayerScreen(
                         onTap = {
                             showControls = !showControls
                         },
+                        onLongPress = {
+                            // Activate 2x speed immediately on long-press
+                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
+                                wasLongPress = true
+                                exoPlayer.setPlaybackSpeed(2f)
+                                isSpeedUp = true
+                                showControls = false
+                            }
+                        }
+                    )
+                }
+                // Double-tap handler (separate pointerInput so onTap above fires immediately)
+                .pointerInput(Unit) {
+                    detectTapGestures(
                         onDoubleTap = { offset ->
                             if (!showSubtitleDrawer && !showEpisodesDrawer) {
                                 val width = this.size.width
@@ -519,15 +535,6 @@ fun OfflinePlayerScreen(
                                 } else {
                                     exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
                                 }
-                            }
-                        },
-                        onLongPress = {
-                            // Activate 2x speed immediately on long-press
-                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
-                                wasLongPress = true
-                                exoPlayer.setPlaybackSpeed(2f)
-                                isSpeedUp = true
-                                showControls = false
                             }
                         }
                     )
@@ -775,6 +782,7 @@ fun OfflinePlayerScreen(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .padding(horizontal = 40.dp, vertical = 24.dp)
+                            .padding(bottom = 8.dp)
                     ) {
                         // Time indicators
                         Row(
@@ -784,32 +792,85 @@ fun OfflinePlayerScreen(
                             Text(formatTimeRange(currentPosition), color = Color.White, style = MaterialTheme.typography.labelMedium)
                             Text(formatTimeRange(totalDuration), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
-                        // Slider
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            Slider(
-                                value = if (isDraggingSlider) dragPosition else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f,
-                                onValueChange = { percent ->
-                                    isDraggingSlider = true
-                                    dragPosition = percent
-                                },
-                                onValueChangeFinished = {
-                                    isDraggingSlider = false
-                                    val newPos = (dragPosition * totalDuration).toLong()
-                                    exoPlayer.seekTo(newPos)
-                                },
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                        // Custom thin seekbar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                                .pointerInput(Unit) {
+                                    detectTapGestures { offset ->
+                                        if (totalDuration > 0) {
+                                            val percent = (offset.x / this.size.width).coerceIn(0f, 1f)
+                                            exoPlayer.seekTo((percent * totalDuration).toLong())
+                                        }
+                                    }
+                                }
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            isDraggingSlider = true
+                                            if (totalDuration > 0) {
+                                                dragPosition = (offset.x / this.size.width).coerceIn(0f, 1f)
+                                            }
+                                        },
+                                        onDrag = { change, _ ->
+                                            if (totalDuration > 0) {
+                                                dragPosition = (change.position.x / this.size.width).coerceIn(0f, 1f)
+                                            }
+                                            change.consume()
+                                        },
+                                        onDragEnd = {
+                                            isDraggingSlider = false
+                                            if (totalDuration > 0) {
+                                                val newPos = (dragPosition * totalDuration).toLong()
+                                                exoPlayer.seekTo(newPos)
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            isDraggingSlider = false
+                                        }
+                                    )
+                                }
+                        ) {
+                            val progress = if (isDraggingSlider) dragPosition else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+                            val trackColor = MaterialTheme.colorScheme.primary
+                            val inactiveColor = Color.White.copy(alpha = 0.3f)
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val trackHeight = 3.dp.toPx()
+                                val thumbRadius = 6.dp.toPx()
+                                val centerY = size.height / 2
+                                // Inactive track
+                                drawRoundRect(
+                                    color = inactiveColor,
+                                    topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+                                    size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2)
+                                )
+                                // Active track
+                                val activeWidth = size.width * progress
+                                if (activeWidth > 0f) {
+                                    drawRoundRect(
+                                        color = trackColor,
+                                        topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+                                        size = androidx.compose.ui.geometry.Size(activeWidth, trackHeight),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2)
+                                    )
+                                }
+                                // Thumb dot
+                                val thumbX = activeWidth.coerceAtMost(size.width - thumbRadius).coerceAtLeast(thumbRadius)
+                                drawCircle(
+                                    color = trackColor,
+                                    radius = thumbRadius,
+                                    center = androidx.compose.ui.geometry.Offset(thumbX, centerY)
+                                )
+                            }
+                            // Time preview on drag
                             if (isDraggingSlider) {
                                 val previewPos = (dragPosition * totalDuration).toLong()
                                 Surface(
                                     modifier = Modifier
                                         .align(Alignment.TopCenter)
-                                        .offset(y = (-8).dp),
+                                        .offset(y = (-6).dp),
                                     shape = RoundedCornerShape(8.dp),
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
                                 ) {
