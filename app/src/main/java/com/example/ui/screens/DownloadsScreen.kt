@@ -1089,7 +1089,7 @@ fun LocalFilesTab(
 
     Column(
         modifier = Modifier
-            .weight(1f)
+            .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
         // Header with add button
@@ -1118,7 +1118,7 @@ fun LocalFilesTab(
                 modifier = Modifier.padding(vertical = 4.dp)
             )
             LazyColumn(
-                modifier = Modifier.height(playlists.size * 60.dp.coerceAtMost(180.dp)),
+                modifier = Modifier.height((playlists.size * 60).dp.coerceAtMost(180.dp)),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(playlists, key = { it.id }) { pl ->

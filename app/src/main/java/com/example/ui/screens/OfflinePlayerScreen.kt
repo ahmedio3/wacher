@@ -1011,39 +1011,6 @@ fun OfflinePlayerScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
-                            // Local subtitle file picker
-                            val subtitleFilePickerLauncher = rememberLauncherForActivityResult(
-                                contract = ActivityResultContracts.OpenDocument()
-                            ) { uri ->
-                                if (uri != null) {
-                                    scope.launch {
-                                        try {
-                                            val inputStream = context.contentResolver.openInputStream(uri)
-                                            val tempFile = java.io.File(context.cacheDir, "picked_sub.srt")
-                                            inputStream?.use { input ->
-                                                tempFile.outputStream().use { output ->
-                                                    input.copyTo(output)
-                                                }
-                                            }
-                                            parsedSubtitles = SubtitleParser.parseBlock(tempFile)
-                                            if (parsedSubtitles.isNotEmpty()) {
-                                                showSubtitleDrawer = false
-                                            }
-                                        } catch (_: Exception) { }
-                                    }
-                                }
-                            }
-                            OutlinedButton(
-                                onClick = { subtitleFilePickerLauncher.launch(arrayOf("text/*", "application/octet-stream")) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("اختيار ملف ترجمة من الجهاز", fontSize = 13.sp)
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
                             // Search + Full Series Download in one Row (half each)
                             val scope = rememberCoroutineScope()
                             if (parsedSubtitles.isNotEmpty() || true) { // Always show buttons
@@ -1108,6 +1075,39 @@ fun OfflinePlayerScreen(
                                         }
                                     }
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Local subtitle file picker
+                            val subtitleFilePickerLauncher = rememberLauncherForActivityResult(
+                                contract = ActivityResultContracts.OpenDocument()
+                            ) { uri ->
+                                if (uri != null) {
+                                    scope.launch {
+                                        try {
+                                            val inputStream = context.contentResolver.openInputStream(uri)
+                                            val tempFile = java.io.File(context.cacheDir, "picked_sub.srt")
+                                            inputStream?.use { input ->
+                                                tempFile.outputStream().use { output ->
+                                                    input.copyTo(output)
+                                                }
+                                            }
+                                            parsedSubtitles = SubtitleParser.parseBlock(tempFile)
+                                            if (parsedSubtitles.isNotEmpty()) {
+                                                showSubtitleDrawer = false
+                                            }
+                                        } catch (_: Exception) { }
+                                    }
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { subtitleFilePickerLauncher.launch(arrayOf("text/*", "application/octet-stream")) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("اختيار ملف ترجمة من الجهاز", fontSize = 13.sp)
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
