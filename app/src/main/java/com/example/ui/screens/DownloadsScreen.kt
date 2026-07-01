@@ -854,11 +854,9 @@ fun DownloadItemRow(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    val fileSizeText = try {
+                    val fileSizeText = runCatching {
                         formatBytes(File(item.localFilePath).length())
-                    } catch (e: Exception) {
-                        "..."
-                    }
+                    }.getOrDefault("...")
                     Text(
                         text = "جاهز للمشاهدة بدون اتصال ($fileSizeText)",
                         fontSize = 11.sp,
