@@ -1,9 +1,12 @@
 package com.example.ui.screens
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -16,11 +19,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,8 +35,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,20 +46,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.MainActivity
+import com.example.data.local.DownloadEntity
 import com.example.ui.viewmodel.MovieViewModel
+import com.example.ui.viewmodel.SubtitleHelper
+import com.example.ui.viewmodel.SubtitleLine
+import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.ui.layout.onSizeChanged
-import com.example.data.local.DownloadEntity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -86,10 +95,22 @@ fun OfflinePlayerScreen(
                 it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 val window = it.window
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                val insetsController = WindowInsetsControllerCompat(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
         }
+    }
+
+    // --- Pause video when app goes to background ---
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                // Will be handled by exoPlayer reference below
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     BackHandler {
@@ -97,14 +118,13 @@ fun OfflinePlayerScreen(
     }
 
     val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
-    
+
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var totalDuration by remember { mutableLongStateOf(0L) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var isSpeedUp by remember { mutableStateOf(false) }
-
     var wasLongPress by remember { mutableStateOf(false) }
 
     // Volume & Brightness Controls
@@ -115,16 +135,13 @@ fun OfflinePlayerScreen(
     var currentBrightness by remember { mutableFloatStateOf(initialBrightness) }
     var showVolumeOverlay by remember { mutableStateOf(false) }
     var showBrightnessOverlay by remember { mutableStateOf(false) }
-    var volumeOverlayTimer by remember { mutableStateOf(0L) }
-    var brightnessOverlayTimer by remember { mutableStateOf(0L) }
 
-    // Auto-hide volume/brightness overlay
-    LaunchedEffect(showVolumeOverlay, showBrightnessOverlay) {
-        if (showVolumeOverlay || showBrightnessOverlay) {
-            delay(1500)
-            showVolumeOverlay = false
-            showBrightnessOverlay = false
-        }
+    // Separate auto-hide timers for volume & brightness
+    LaunchedEffect(showVolumeOverlay) {
+        if (showVolumeOverlay) { delay(1500); showVolumeOverlay = false }
+    }
+    LaunchedEffect(showBrightnessOverlay) {
+        if (showBrightnessOverlay) { delay(1500); showBrightnessOverlay = false }
     }
 
     // Overlays
@@ -138,11 +155,39 @@ fun OfflinePlayerScreen(
     var subtitleYOffset by remember { mutableFloatStateOf(prefs.getFloat("sub_y", -35f)) }
     var subtitleSize by remember { mutableFloatStateOf(prefs.getFloat("sub_size", 20f)) }
     var subtitleTimeOffsetMs by remember { mutableLongStateOf(0L) }
-    var parsedSubtitles by remember { mutableStateOf<List<com.example.ui.viewmodel.SubtitleLine>>(emptyList()) }
+    var parsedSubtitles by remember { mutableStateOf<List<SubtitleLine>>(emptyList()) }
     var activeSubtitleText by remember { mutableStateOf("") }
-    var searchSubsList by remember { mutableStateOf<List<com.example.ui.viewmodel.SubtitleHelper.SubtitleItem>?>(null) }
+    var searchSubsList by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
     var isDownloadingSub by remember { mutableStateOf(false) }
     var isSubtitleHidden by remember { mutableStateOf(false) }
+
+    // Subtitle status info text
+    val subtitleStatusText = remember(parsedSubtitles, activeId, context) {
+        val episodeSubFile = File(context.filesDir, "downloads/$activeId.srt")
+        val episodeVttFile = File(context.filesDir, "downloads/$activeId.vtt")
+        val episodeExists = episodeSubFile.exists() || episodeVttFile.exists()
+
+        // Check if full series subtitle folder exists
+        val baseIdOnly = activeId.substringBefore("-s")
+        val seriesFolder = File(context.filesDir, "downloads")
+        val seriesSubFiles = seriesFolder.listFiles()?.filter {
+            it.name.startsWith(baseIdOnly) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
+        } ?: emptyList()
+        val seriesSubCount = seriesSubFiles.size
+
+        buildString {
+            if (parsedSubtitles.isNotEmpty() && episodeExists) {
+                append("✓ ترجمة هذه الحلقة محملة")
+                if (seriesSubCount > 1) {
+                    append(" (+$seriesSubCount ترجمات للمسلسل)")
+                }
+            } else if (seriesSubCount > 0) {
+                append("✓ تم تحميل $seriesSubCount ترجمة للمسلسل (ليس لهذه الحلقة)")
+            } else {
+                append("لم يتم تحميل ترجمة بعد")
+            }
+        }
+    }
 
     // Update active subtitle
     LaunchedEffect(currentPosition, subtitleTimeOffsetMs, parsedSubtitles) {
@@ -177,8 +222,29 @@ fun OfflinePlayerScreen(
     val seriesEpisodes = remember(downloadsList, parentTmdbId) {
         downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
     }
-    
+
     val isTv = activeId.contains("-s")
+
+    // --- Battery & Clock state ---
+    var batteryLevel by remember { mutableIntStateOf(0) }
+    var currentTimeText by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        while (true) {
+            // Battery
+            val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryIntent = context.registerReceiver(null, intentFilter)
+            val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
+            val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+            batteryLevel = (level * 100 / scale)
+
+            // Time
+            currentTimeText = timeFormat.format(Date())
+
+            delay(30_000) // Update every 30s
+        }
+    }
 
     // Setup ExoPlayer
     val exoPlayer = remember {
@@ -189,23 +255,34 @@ fun OfflinePlayerScreen(
         }
     }
 
+    // --- Pause on app background via lifecycle ---
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                if (exoPlayer.isPlaying) exoPlayer.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Load Media
     LaunchedEffect(activeLocalFilePath) {
         if (activeLocalFilePath.isNotEmpty()) {
             val file = File(activeLocalFilePath)
             if (file.exists()) {
                 val mediaItemBuilder = MediaItem.Builder().setUri(Uri.fromFile(file))
-                
+
                 val srtFile = File(context.filesDir, "downloads/$activeId.srt")
                 val vttFile = File(context.filesDir, "downloads/$activeId.vtt")
                 if (srtFile.exists()) {
-                    parsedSubtitles = com.example.ui.viewmodel.SubtitleParser.parseBlock(srtFile)
+                    parsedSubtitles = SubtitleParser.parseBlock(srtFile)
                 } else if (vttFile.exists()) {
-                    parsedSubtitles = com.example.ui.viewmodel.SubtitleParser.parseBlock(vttFile)
+                    parsedSubtitles = SubtitleParser.parseBlock(vttFile)
                 } else {
                     parsedSubtitles = emptyList()
                 }
-                
+
                 exoPlayer.setMediaItem(mediaItemBuilder.build())
                 val lastPos = prefs.getLong("pos_$activeId", 0L)
                 if (lastPos > 0) {
@@ -213,36 +290,35 @@ fun OfflinePlayerScreen(
                 }
                 exoPlayer.prepare()
                 exoPlayer.play()
-                
+
                 // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
                     launch(Dispatchers.IO) {
                         try {
-                            val isTvShow = activeId.contains("-s")
-                            val tmdbIdStr = if (isTvShow) activeId.substringBefore("-s") else activeId
-                            val seasonSub = if (isTvShow) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                            val episodeSub = if (isTvShow) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                            val subs = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(
-                                tmdbIdStr, isTvShow, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
+                            val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                            val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                            val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                            val subs = SubtitleHelper.fetchSubtitles(
+                                tmdbIdStr, isTv, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
                             )
                             val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
                             if (arSub != null) {
-                                val extracted = com.example.ui.viewmodel.SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
+                                val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
                                 if (extracted != null) {
-                                    parsedSubtitles = com.example.ui.viewmodel.SubtitleParser.parseBlock(extracted)
+                                    parsedSubtitles = SubtitleParser.parseBlock(extracted)
                                 }
                             }
                         } catch (_: Exception) { }
                     }
                 }
-                
+
                 // Update position periodically with higher frequency for smooth subtitles
                 while (true) {
                     currentPosition = exoPlayer.currentPosition
                     val dur = exoPlayer.duration
                     if (dur > 0) totalDuration = dur
                     isPlaying = exoPlayer.isPlaying
-                    // Save position periodically (every 5 seconds) to avoid spamming SharedPreferences
+                    // Save position periodically (every 5 seconds)
                     if (currentPosition > 0 && currentPosition % 5000 < 50) {
                         prefs.edit().putLong("pos_$activeId", currentPosition).apply()
                     }
@@ -250,6 +326,11 @@ fun OfflinePlayerScreen(
                 }
             }
         }
+    }
+
+    // Sync playback speed
+    LaunchedEffect(playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(playbackSpeed)
     }
 
     DisposableEffect(Unit) {
@@ -263,55 +344,6 @@ fun OfflinePlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        if (!wasLongPress) {
-                            showControls = !showControls
-                        }
-                        wasLongPress = false
-                    },
-                    onDoubleTap = { offset ->
-                        // Double tap to seek
-                        wasLongPress = false
-                        val width = this.size.width
-                        if (offset.x > width / 2) {
-                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                        } else {
-                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                        }
-                    }
-                )
-            }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    var longPressActivated = false
-                    val pressStart = System.nanoTime()
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            if (event.changes.all { !it.pressed }) break
-                            if (!longPressActivated) {
-                                val elapsed = (System.nanoTime() - pressStart) / 1_000_000
-                                if (elapsed >= 500) {
-                                    longPressActivated = true
-                                    wasLongPress = true
-                                    exoPlayer.setPlaybackSpeed(2f)
-                                    isSpeedUp = true
-                                    showControls = false
-                                }
-                            }
-                        }
-                    } finally {
-                        if (wasLongPress || isSpeedUp) {
-                            exoPlayer.setPlaybackSpeed(1f)
-                            isSpeedUp = false
-                            wasLongPress = false
-                        }
-                    }
-                }
-            }
     ) {
         // Video Surface
         AndroidView(
@@ -327,6 +359,69 @@ fun OfflinePlayerScreen(
                 }
             },
             modifier = Modifier.fillMaxSize()
+        )
+
+        // Gesture zone: Tap to toggle controls + double-tap to seek
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(showSubtitleDrawer, showEpisodesDrawer) {
+                    detectTapGestures(
+                        onTap = {
+                            if (!wasLongPress) {
+                                showControls = !showControls
+                            }
+                            wasLongPress = false
+                        },
+                        onDoubleTap = { offset ->
+                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
+                                val width = this.size.width
+                                if (offset.x > width / 2) {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
+                                } else {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                }
+                            }
+                        }
+                    )
+                }
+                .pointerInput(isDraggingSlider, showSubtitleDrawer, showEpisodesDrawer) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        // Skip if slider is being dragged or drawer is open
+                        if (isDraggingSlider || showSubtitleDrawer || showEpisodesDrawer) {
+                            down.consume()
+                            return@awaitEachGesture
+                        }
+
+                        var activated = false
+
+                        // Launch timer coroutine for long-press 2x activation
+                        val timerJob = launch {
+                            delay(400) // Activate after 400ms hold
+                            activated = true
+                            wasLongPress = true
+                            exoPlayer.setPlaybackSpeed(2f)
+                            isSpeedUp = true
+                            showControls = false
+                        }
+
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                if (event.changes.all { !it.pressed }) break
+                                // Once activated, keep 2x active while finger moves
+                            }
+                        } finally {
+                            timerJob.cancel()
+                            if (activated || isSpeedUp) {
+                                exoPlayer.setPlaybackSpeed(1f)
+                                isSpeedUp = false
+                                wasLongPress = false
+                            }
+                        }
+                    }
+                }
         )
 
         // Volume & Brightness Overlay Indicators
@@ -386,7 +481,7 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture zones for Volume (right) & Brightness (left) — full height range, wider zones
+        // Gesture zones for Volume (right) & Brightness (left)
         var volumeGestureZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
@@ -394,9 +489,11 @@ fun OfflinePlayerScreen(
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterEnd)
                 .onSizeChanged { volumeGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(volumeGestureZoneHeight) {
+                .pointerInput(volumeGestureZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
+                        // Don't adjust volume when drawers are open
+                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
                         val delta = -dragAmount / volumeGestureZoneHeight
                         val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
                         if (newVol != currentVolume) {
@@ -414,11 +511,11 @@ fun OfflinePlayerScreen(
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterStart)
                 .onSizeChanged { brightnessGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(brightnessGestureZoneHeight) {
+                .pointerInput(brightnessGestureZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
+                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
                         val delta = -dragAmount / brightnessGestureZoneHeight
-                        // Brightness: 0.01f (near-dark) to 1.0f (full) — matches device actual range
                         val newBrightness = (currentBrightness + delta).coerceIn(0.01f, 1f)
                         if (newBrightness != currentBrightness) {
                             currentBrightness = newBrightness
@@ -479,7 +576,7 @@ fun OfflinePlayerScreen(
                         fontSize = subtitleSize.sp,
                         fontWeight = FontWeight.Medium,
                         lineHeight = (subtitleSize * 1.5).sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        textAlign = TextAlign.Center,
                         shadow = androidx.compose.ui.graphics.Shadow(
                             color = Color.Black,
                             offset = androidx.compose.ui.geometry.Offset(2f, 2f),
@@ -513,81 +610,97 @@ fun OfflinePlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = activeTitle,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = activeTitle,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Active Downloads button (shows when downloads are active)
-                        val activeDlCount = downloadsList.count { it.status == "downloading" || it.status == "queued" }
-                        if (activeDlCount > 0) {
-                            var showActiveDlSheet by remember { mutableStateOf(false) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Home button (exit to home screen, keep app alive)
                             IconButton(
-                                onClick = { showActiveDlSheet = true },
+                                onClick = {
+                                    exoPlayer.pause()
+                                    activity?.moveTaskToBack(true)
+                                },
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f))
+                                    .background(Color.White.copy(alpha = 0.2f))
                             ) {
-                                Icon(Icons.Default.ArrowCircleDown, contentDescription = "التحميلات النشطة", tint = MaterialTheme.colorScheme.tertiary)
+                                Icon(Icons.Default.Home, contentDescription = "الخروج إلى الشاشة الرئيسية", tint = Color.White)
                             }
-                            
-                            if (showActiveDlSheet) {
-                                ModalBottomSheet(
-                                    onDismissRequest = { showActiveDlSheet = false },
-                                    containerColor = MaterialTheme.colorScheme.surface
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // Active Downloads button
+                            val activeDlCount = downloadsList.count { it.status == "downloading" || it.status == "queued" }
+                            if (activeDlCount > 0) {
+                                var showActiveDlSheet by remember { mutableStateOf(false) }
+                                IconButton(
+                                    onClick = { showActiveDlSheet = true },
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f))
                                 ) {
-                                    Column(Modifier.padding(16.dp)) {
-                                        Text("التحميلات النشطة", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 16.dp))
-                                        val activeDls = downloadsList.filter { it.status == "downloading" || it.status == "queued" || it.status == "paused" }
-                                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            items(activeDls) { dl ->
-                                                com.example.ui.screens.DownloadItemRow(item = dl, viewModel = viewModel, onPlayClick = {})
+                                    Icon(Icons.Default.ArrowCircleDown, contentDescription = "التحميلات النشطة", tint = MaterialTheme.colorScheme.tertiary)
+                                }
+
+                                if (showActiveDlSheet) {
+                                    ModalBottomSheet(
+                                        onDismissRequest = { showActiveDlSheet = false },
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    ) {
+                                        Column(Modifier.padding(16.dp)) {
+                                            Text("التحميلات النشطة", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 16.dp))
+                                            val activeDls = downloadsList.filter { it.status == "downloading" || it.status == "queued" || it.status == "paused" }
+                                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                items(activeDls) { dl ->
+                                                    DownloadItemRow(item = dl, viewModel = viewModel, onPlayClick = {})
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            
-                            Spacer(modifier = Modifier.width(12.dp))
-                        }
-                        
-                        // Subtitle Button
-                        IconButton(
-                            onClick = {
-                                showSubtitleDrawer = !showSubtitleDrawer
-                                showEpisodesDrawer = false
-                            },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (showSubtitleDrawer) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f))
-                        ) {
-                            Icon(Icons.Default.Subtitles, contentDescription = "ترجمة", tint = Color.White)
-                        }
-                        
-                        Spacer(modifier = Modifier.width(12.dp))
 
-                        // Episodes Button
-                        if (isTv) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+
+                            // Subtitle Button
                             IconButton(
                                 onClick = {
-                                    showEpisodesDrawer = !showEpisodesDrawer
-                                    showSubtitleDrawer = false
+                                    showSubtitleDrawer = !showSubtitleDrawer
+                                    showEpisodesDrawer = false
                                 },
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(if (showEpisodesDrawer) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f))
+                                    .background(if (showSubtitleDrawer) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f))
                             ) {
-                                Icon(Icons.Default.VideoLibrary, contentDescription = "الحلقات", tint = Color.White)
+                                Icon(Icons.Default.Subtitles, contentDescription = "ترجمة", tint = Color.White)
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // Episodes Button
+                            if (isTv) {
+                                IconButton(
+                                    onClick = {
+                                        showEpisodesDrawer = !showEpisodesDrawer
+                                        showSubtitleDrawer = false
+                                    },
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(if (showEpisodesDrawer) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f))
+                                ) {
+                                    Icon(Icons.Default.VideoLibrary, contentDescription = "الحلقات", tint = Color.White)
+                                }
                             }
                         }
                     }
@@ -634,7 +747,7 @@ fun OfflinePlayerScreen(
                     }
                 }
 
-                // Bottom Progress Bar
+                // Bottom Progress Bar + Controls Row + Battery/Clock
                 if (!showEpisodesDrawer && !showSubtitleDrawer && !isSpeedUp) {
                     Column(
                         modifier = Modifier
@@ -642,6 +755,7 @@ fun OfflinePlayerScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 40.dp, vertical = 24.dp)
                     ) {
+                        // Time indicators
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -649,6 +763,7 @@ fun OfflinePlayerScreen(
                             Text(formatTimeRange(currentPosition), color = Color.White, style = MaterialTheme.typography.labelMedium)
                             Text(formatTimeRange(totalDuration), color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
+                        // Slider
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Slider(
                                 value = if (isDraggingSlider) dragPosition else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f,
@@ -686,10 +801,109 @@ fun OfflinePlayerScreen(
                                 }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Bottom row: controls (left) + battery & clock (right)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Left side: play/pause + next episode
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                // Play/Pause
+                                IconButton(
+                                    onClick = {
+                                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                        isPlaying = exoPlayer.isPlaying
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "تشغيل / إيقاف",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+
+                                // Next episode (only for TV series)
+                                if (isTv && seriesEpisodes.isNotEmpty()) {
+                                    val currentEpisodeNum = activeId.substringAfter("-e").toIntOrNull() ?: 0
+                                    val nextEp = seriesEpisodes
+                                        .filter { it.episode > currentEpisodeNum && it.season == (activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1) }
+                                        .minByOrNull { it.episode }
+                                    if (nextEp != null) {
+                                        IconButton(
+                                            onClick = {
+                                                prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                                                activeId = nextEp.id
+                                                activeTitle = nextEp.title
+                                                activeLocalFilePath = nextEp.localFilePath
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.SkipNext,
+                                                contentDescription = "الحلقة التالية",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Right side: battery + clock
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Battery
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = when {
+                                            batteryLevel > 80 -> Icons.Default.BatteryFull
+                                            batteryLevel > 50 -> Icons.Default.BatteryStd
+                                            batteryLevel > 20 -> Icons.Default.Battery3Bar
+                                            else -> Icons.Default.BatteryAlert
+                                        },
+                                        contentDescription = "البطارية",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "$batteryLevel%",
+                                        color = Color.White,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                // Clock
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = currentTimeText,
+                                        color = Color.White,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Subtitle Drawer Overlay
+                // ===== SUBTITLE DRAWER =====
                 AnimatedVisibility(
                     visible = showSubtitleDrawer,
                     enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
@@ -699,24 +913,48 @@ fun OfflinePlayerScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(360.dp),
+                            .width(360.dp)
+                            .pointerInput(Unit) {
+                                // Consume all touch events so they don't pass to video
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        ev.changes.forEach { it.consume() }
+                                        if (ev.changes.all { !it.pressed }) break
+                                    }
+                                }
+                            },
                         shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
                         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            // Title + close button inline (no gap)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("الترجمة والمظهر", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                                Text(
+                                    "الترجمة",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.weight(1f)
+                                )
                                 IconButton(onClick = { showSubtitleDrawer = false }) {
                                     Icon(Icons.Default.Close, "إغلاق")
                                 }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
 
-                            // Controls for offset
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Subtitle status note
+                            Text(
+                                text = subtitleStatusText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+
+                            // Controls for offset (only when subtitles loaded)
                             if (parsedSubtitles.isNotEmpty()) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -741,12 +979,8 @@ fun OfflinePlayerScreen(
                                             }
                                         }
 
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        Text("إعدادات الترجمة الحالية", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        
-                                        // Y Offset Control
+                                        // Subtitle Position (directly under hide toggle)
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -760,7 +994,7 @@ fun OfflinePlayerScreen(
                                                 IconButton(onClick = { subtitleYOffset -= 1f }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.ArrowUpward, "أعلى")
                                                 }
-                                                Text("${(-subtitleYOffset).toInt()}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(30.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                                Text("${(-subtitleYOffset).toInt()}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
                                                 IconButton(onClick = { subtitleYOffset += 1f }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.ArrowDownward, "أسفل")
                                                 }
@@ -770,7 +1004,8 @@ fun OfflinePlayerScreen(
                                             }
                                         }
 
-                                        // Time Offset Control
+                                        // Time Sync
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -781,7 +1016,7 @@ fun OfflinePlayerScreen(
                                                 IconButton(onClick = { subtitleTimeOffsetMs += 100L }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.Add, "تأخير")
                                                 }
-                                                Text("${subtitleTimeOffsetMs / 1000f}s", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(50.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                                Text("${subtitleTimeOffsetMs / 1000f}s", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(50.dp), textAlign = TextAlign.Center)
                                                 IconButton(onClick = { subtitleTimeOffsetMs -= 100L }, modifier = Modifier.size(36.dp)) {
                                                     Icon(Icons.Default.Remove, "تقديم")
                                                 }
@@ -789,73 +1024,82 @@ fun OfflinePlayerScreen(
                                         }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                             }
 
-                            // Fetch Subtitles logic
+                            // Search + Full Series Download in one Row (half each)
                             val scope = rememberCoroutineScope()
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        isDownloadingSub = true
-                                        val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                        val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                        searchSubsList = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
-                                        isDownloadingSub = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isDownloadingSub
-                            ) {
-                                if (isDownloadingSub) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                                } else {
-                                    Icon(Icons.Default.Search, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("البحث عن ترجمات")
-                                }
-                            }
-
-                            if (isTv) {
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            isDownloadingSub = true
-                                            // Fetch episodes from downloads list and get subtitles for all
-                                            val allEpisodes = downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
-                                            for (ep in allEpisodes) {
-                                                try {
-                                                    val subs = com.example.ui.viewmodel.SubtitleHelper.fetchSubtitles(
-                                                        parentTmdbId, true, ep.season, ep.episode, activeTitle.substringBefore(" - ")
-                                                    )
-                                                    val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
-                                                    if (arSub != null) {
-                                                        com.example.ui.viewmodel.SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, ep.id)
-                                                    }
-                                                } catch (_: Exception) { }
-                                            }
-                                            isDownloadingSub = false
-                                        }
-                                    },
+                            if (parsedSubtitles.isNotEmpty() || true) { // Always show buttons
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    enabled = !isDownloadingSub,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    if (isDownloadingSub) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                                    } else {
-                                        Icon(Icons.Default.Download, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("تحميل ترجمات المسلسل كامل")
+                                    // Search button - half width
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                isDownloadingSub = true
+                                                val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                                val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                                searchSubsList = SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
+                                                isDownloadingSub = false
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !isDownloadingSub
+                                    ) {
+                                        if (isDownloadingSub) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("بحث", fontSize = 13.sp)
+                                        }
+                                    }
+
+                                    // Download series subtitles button - half width
+                                    if (isTv) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    isDownloadingSub = true
+                                                    val allEpisodes = downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
+                                                    for (ep in allEpisodes) {
+                                                        try {
+                                                            val subs = SubtitleHelper.fetchSubtitles(
+                                                                parentTmdbId, true, ep.season, ep.episode, activeTitle.substringBefore(" - ")
+                                                            )
+                                                            val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
+                                                            if (arSub != null) {
+                                                                SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, ep.id)
+                                                            }
+                                                        } catch (_: Exception) { }
+                                                    }
+                                                    isDownloadingSub = false
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            enabled = !isDownloadingSub
+                                        ) {
+                                            if (isDownloadingSub) {
+                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                                            } else {
+                                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("تحميل المسلسل", fontSize = 13.sp)
+                                            }
+                                        }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Subtitle List
-                            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Subtitle Search Results List
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 searchSubsList?.let { subs ->
                                     if (subs.isEmpty()) {
                                         item {
@@ -878,9 +1122,9 @@ fun OfflinePlayerScreen(
                                                     IconButton(onClick = {
                                                         scope.launch {
                                                             isDownloadingSub = true
-                                                            val extracted = com.example.ui.viewmodel.SubtitleHelper.downloadAndExtractSubtitle(context, sub.url, activeId)
+                                                            val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, sub.url, activeId)
                                                             if (extracted != null) {
-                                                                parsedSubtitles = com.example.ui.viewmodel.SubtitleParser.parseBlock(extracted)
+                                                                parsedSubtitles = SubtitleParser.parseBlock(extracted)
                                                                 showSubtitleDrawer = false
                                                             }
                                                             isDownloadingSub = false
@@ -898,7 +1142,7 @@ fun OfflinePlayerScreen(
                     }
                 }
 
-                // Episodes Drawer Overlay
+                // ===== EPISODES DRAWER =====
                 AnimatedVisibility(
                     visible = showEpisodesDrawer,
                     enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -908,10 +1152,38 @@ fun OfflinePlayerScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(340.dp),
+                            .width(340.dp)
+                            .pointerInput(Unit) {
+                                // Consume all touch events so they don't pass to video
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        ev.changes.forEach { it.consume() }
+                                        if (ev.changes.all { !it.pressed }) break
+                                    }
+                                }
+                            },
                         shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
+                        val episodesListState = rememberLazyListState()
+                        val groupedBySeason = remember(seriesEpisodes) {
+                            seriesEpisodes.groupBy { it.season }.toSortedMap()
+                        }
+                        // Find current episode index for auto-scroll
+                        val currentEpIndex = remember(seriesEpisodes, activeId) {
+                            val sortedEps = seriesEpisodes.sortedBy { it.episode }
+                            sortedEps.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
+                        }
+
+                        LaunchedEffect(showEpisodesDrawer, currentEpIndex) {
+                            if (showEpisodesDrawer && currentEpIndex > 0) {
+                                delay(200)
+                                episodesListState.animateScrollToItem(currentEpIndex)
+                            }
+                        }
+
                         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -928,58 +1200,52 @@ fun OfflinePlayerScreen(
                             if (seriesEpisodes.isEmpty()) {
                                 Text("لا توجد حلقات محملة أخرى.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             } else {
-                                // Group by season
-                                val groupedBySeason = seriesEpisodes.groupBy { it.season }.toSortedMap()
-                                LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    groupedBySeason.forEach { (seasonNum, episodes) ->
-                                        item {
-                                            Text(
-                                                text = "الموسم $seasonNum",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(bottom = 6.dp)
-                                            )
-                                        }
-                                        items(episodes.sortedByDescending { it.episode }) { ep ->
-                                            val isPlayingThis = ep.id == activeId
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isPlayingThis) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                                    .clickable {
-                                                        // Save current position before switching
-                                                        prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
-                                                        activeId = ep.id
-                                                        activeTitle = ep.title
-                                                        activeLocalFilePath = ep.localFilePath
-                                                        showEpisodesDrawer = false
-                                                    }
-                                                    .padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(if (isPlayingThis) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.2f)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (isPlayingThis) {
-                                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                                    } else {
-                                                        Text("${ep.episode}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-                                                    }
+                                LazyColumn(
+                                    state = episodesListState,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Ascending order episodes
+                                    val sortedEps = remember(seriesEpisodes) {
+                                        seriesEpisodes.sortedBy { it.episode }
+                                    }
+                                    items(sortedEps, key = { it.id }) { ep ->
+                                        val isPlayingThis = ep.id == activeId
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (isPlayingThis) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                                .clickable {
+                                                    prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                                                    activeId = ep.id
+                                                    activeTitle = ep.title
+                                                    activeLocalFilePath = ep.localFilePath
+                                                    showEpisodesDrawer = false
                                                 }
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Text(
-                                                    text = "الحلقة ${ep.episode}",
-                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (isPlayingThis) FontWeight.Bold else FontWeight.Normal),
-                                                    color = if (isPlayingThis) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isPlayingThis) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.2f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (isPlayingThis) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                                } else {
+                                                    Text("${ep.episode}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                                                }
                                             }
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text(
+                                                text = "الحلقة ${ep.episode}",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (isPlayingThis) FontWeight.Bold else FontWeight.Normal),
+                                                color = if (isPlayingThis) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -990,8 +1256,6 @@ fun OfflinePlayerScreen(
             }
         }
     }
-}
-
 }
 
 private fun formatTimeRange(millis: Long): String {
