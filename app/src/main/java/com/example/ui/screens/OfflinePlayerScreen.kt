@@ -386,6 +386,7 @@ fun OfflinePlayerScreen(
                     )
                 }
                 .pointerInput(isDraggingSlider, showSubtitleDrawer, showEpisodesDrawer) {
+                    val gestureScope = this
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         // Skip if slider is being dragged or drawer is open
@@ -395,9 +396,7 @@ fun OfflinePlayerScreen(
                         }
 
                         var activated = false
-
-                        // Launch timer coroutine for long-press 2x activation
-                        val timerJob = launch {
+                        val timerJob = gestureScope.launch {
                             delay(400) // Activate after 400ms hold
                             activated = true
                             wasLongPress = true
@@ -1168,12 +1167,12 @@ fun OfflinePlayerScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
                         val episodesListState = rememberLazyListState()
-                        val groupedBySeason = remember(seriesEpisodes) {
-                            seriesEpisodes.groupBy { it.season }.toSortedMap()
+                        // Ascending order episodes
+                        val sortedEps = remember(seriesEpisodes) {
+                            seriesEpisodes.sortedBy { it.episode }
                         }
                         // Find current episode index for auto-scroll
                         val currentEpIndex = remember(seriesEpisodes, activeId) {
-                            val sortedEps = seriesEpisodes.sortedBy { it.episode }
                             sortedEps.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
                         }
 
@@ -1204,10 +1203,6 @@ fun OfflinePlayerScreen(
                                     state = episodesListState,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    // Ascending order episodes
-                                    val sortedEps = remember(seriesEpisodes) {
-                                        seriesEpisodes.sortedBy { it.episode }
-                                    }
                                     items(sortedEps, key = { it.id }) { ep ->
                                         val isPlayingThis = ep.id == activeId
                                         Row(
