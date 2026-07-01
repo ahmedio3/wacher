@@ -61,6 +61,7 @@ import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -361,11 +362,11 @@ fun OfflinePlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Tap + double-tap handler (reliable, built-in)
+        // Tap + double-tap handler (stable key = Unit — never restarts mid-gesture)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(showSubtitleDrawer, showEpisodesDrawer) {
+                .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = {
                             if (!wasLongPress) {
@@ -385,20 +386,21 @@ fun OfflinePlayerScreen(
                         }
                     )
                 }
-                // Long-press 2x handler (separate, no conflicts)
-                .pointerInput(isDraggingSlider, showSubtitleDrawer, showEpisodesDrawer) {
+                // Long-press 2x handler (separate, stable key = Unit)
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        if (isDraggingSlider || showSubtitleDrawer || showEpisodesDrawer) {
+                        // Check gestures at start only — keys never change
+                        if (showSubtitleDrawer || showEpisodesDrawer) {
                             down.consume()
                             return@awaitEachGesture
                         }
 
                         val pressStart = System.nanoTime()
                         var activated = false
+                        val eventScope = this
                         try {
                             while (true) {
-                                // Check timer on every iteration (even before first awaitPointerEvent)
                                 if (!activated) {
                                     val elapsed = (System.nanoTime() - pressStart) / 1_000_000
                                     if (elapsed >= 500) {
@@ -409,8 +411,11 @@ fun OfflinePlayerScreen(
                                         showControls = false
                                     }
                                 }
-                                val event = awaitPointerEvent(PointerEventPass.Main)
-                                if (event.changes.all { !it.pressed }) break
+                                // Poll every 100ms — timer fires even when finger is perfectly still
+                                val event = withTimeoutOrNull(100) {
+                                    eventScope.awaitPointerEvent(PointerEventPass.Main)
+                                }
+                                if (event != null && event.changes.all { !it.pressed }) break
                             }
                         } finally {
                             if (activated || isSpeedUp) {
@@ -480,7 +485,7 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture zones: Brightness (left) & Volume (right) — identical pattern
+        // Gesture zones: Brightness (left) & Volume (right) — identical pattern, stable keys
         var brightnessZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
@@ -488,7 +493,7 @@ fun OfflinePlayerScreen(
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterStart)
                 .onSizeChanged { brightnessZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(brightnessZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
+                .pointerInput(Unit) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
                         if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
@@ -513,14 +518,14 @@ fun OfflinePlayerScreen(
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterEnd)
                 .onSizeChanged { volumeZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(volumeZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
+                .pointerInput(Unit) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
                         if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
                         val delta = -dragAmount / volumeZoneHeight
-                        val currentSysVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                        val newVol = (currentSysVol + delta * maxVolume).toInt().coerceIn(0, maxVolume)
-                        if (newVol != currentSysVol) {
+                        // Use local state variable just like brightness (not system read)
+                        val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
+                        if (newVol != currentVolume) {
                             currentVolume = newVol
                             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
                             showVolumeOverlay = true
@@ -1140,18 +1145,7 @@ fun OfflinePlayerScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(340.dp)
-                            .pointerInput(Unit) {
-                                // Consume all touch events so they don't pass to video
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
-                                    while (true) {
-                                        val ev = awaitPointerEvent()
-                                        ev.changes.forEach { it.consume() }
-                                        if (ev.changes.all { !it.pressed }) break
-                                    }
-                                }
-                            },
+                            .width(340.dp),
                         shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
