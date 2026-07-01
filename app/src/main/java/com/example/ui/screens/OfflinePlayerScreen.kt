@@ -420,91 +420,8 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture zones: Brightness (left) & Volume (right) — DO NOT consume DOWN event
-        // This allows the gesture Box below to also receive taps for show/hide controls.
-        // Only MOVE events are consumed (for drag), not the initial down.
-        var brightnessZoneHeight by remember { mutableFloatStateOf(1f) }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.35f)
-                .align(Alignment.CenterStart)
-                .onSizeChanged { brightnessZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        // Don't consume down — let tap handler also receive it
-                        if (showSubtitleDrawer || showEpisodesDrawer) {
-                            down.consume()
-                            return@awaitEachGesture
-                        }
-                        val startBrightness = currentBrightness
-                        var totalDrag = 0f
-                        var lastPos = down.position
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull() ?: break
-                            if (change.pressed) {
-                                totalDrag += change.position.y - lastPos.y
-                                lastPos = change.position
-                                change.consume()
-                                val delta = -totalDrag / brightnessZoneHeight
-                                val newBrightness = (startBrightness + delta).coerceIn(0.01f, 1f)
-                                if (newBrightness != currentBrightness) {
-                                    currentBrightness = newBrightness
-                                    activity?.window?.let { win ->
-                                        val lp = win.attributes
-                                        lp.screenBrightness = newBrightness
-                                        win.attributes = lp
-                                    }
-                                    showBrightnessOverlay = true
-                                }
-                            }
-                            if (!change.pressed) break
-                        }
-                    }
-                }
-        )
-        var volumeZoneHeight by remember { mutableFloatStateOf(1f) }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.35f)
-                .align(Alignment.CenterEnd)
-                .onSizeChanged { volumeZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        if (showSubtitleDrawer || showEpisodesDrawer) {
-                            down.consume()
-                            return@awaitEachGesture
-                        }
-                        val startVolume = currentVolume
-                        var totalDrag = 0f
-                        var lastPos = down.position
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull() ?: break
-                            if (change.pressed) {
-                                totalDrag += change.position.y - lastPos.y
-                                lastPos = change.position
-                                change.consume()
-                                val delta = -totalDrag / volumeZoneHeight
-                                val newVol = (startVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
-                                if (newVol != currentVolume) {
-                                    currentVolume = newVol
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                                    showVolumeOverlay = true
-                                }
-                            }
-                            if (!change.pressed) break
-                        }
-                    }
-                }
-        )
-
-        // Unified gesture handler (highest z-index AFTER brightness/volume zones)
-        // Tap + long-press handler (NO onDoubleTap — avoids 300ms timeout delay on single tap)
+        // Unified gesture handler: tap, long-press, double-tap, finger-up reset
+        // All in one Box with separate pointerInput blocks (no conflicting overlapping siblings)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -524,7 +441,7 @@ fun OfflinePlayerScreen(
                         }
                     )
                 }
-                // Double-tap handler (separate pointerInput so onTap above fires immediately)
+                // Double-tap handler (separate pointerInput so onTap fires immediately)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
@@ -543,12 +460,10 @@ fun OfflinePlayerScreen(
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
-                        // Wait for finger to lift
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
                             if (event.changes.all { !it.pressed }) break
                         }
-                        // Cleanup speed if still active
                         if (isSpeedUp) {
                             exoPlayer.setPlaybackSpeed(1f)
                             isSpeedUp = false
