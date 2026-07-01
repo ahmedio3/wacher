@@ -488,11 +488,13 @@ fun OfflinePlayerScreen(
                         }
                         val startBrightness = currentBrightness
                         var totalDrag = 0f
+                        var lastPos = down.position
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
                             val change = event.changes.firstOrNull() ?: break
                             if (change.pressed) {
-                                totalDrag += change.positionChange().y
+                                totalDrag += change.position.y - lastPos.y
+                                lastPos = change.position
                                 change.consume() // Consume MOVE only — tap handler still gets down
                                 val delta = -totalDrag / brightnessZoneHeight
                                 val newBrightness = (startBrightness + delta).coerceIn(0.01f, 1f)
@@ -527,11 +529,13 @@ fun OfflinePlayerScreen(
                         }
                         val startVolume = currentVolume
                         var totalDrag = 0f
+                        var lastPos = down.position
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
                             val change = event.changes.firstOrNull() ?: break
                             if (change.pressed) {
-                                totalDrag += change.positionChange().y
+                                totalDrag += change.position.y - lastPos.y
+                                lastPos = change.position
                                 change.consume()
                                 val delta = -totalDrag / volumeZoneHeight
                                 val newVol = (startVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
