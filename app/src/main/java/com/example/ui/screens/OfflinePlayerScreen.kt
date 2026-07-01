@@ -61,6 +61,7 @@ import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -161,6 +162,19 @@ fun OfflinePlayerScreen(
     var isDownloadingSub by remember { mutableStateOf(false) }
     var isSubtitleHidden by remember { mutableStateOf(false) }
 
+    // Active media tracking (allows switching episodes without leaving screen)
+    var activeId by remember { mutableStateOf(mediaId) }
+    var activeTitle by remember { mutableStateOf(title) }
+    var activeLocalFilePath by remember { mutableStateOf(localFilePath) }
+
+    val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
+    val parentTmdbId = if (activeId.contains("-s")) activeId.substringBefore("-s") else activeId
+    val seriesEpisodes = remember(downloadsList, parentTmdbId) {
+        downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
+    }
+
+    val isTv = activeId.contains("-s")
+
     // Subtitle status info text
     val subtitleStatusText = remember(parsedSubtitles, activeId, context) {
         val episodeSubFile = File(context.filesDir, "downloads/$activeId.srt")
@@ -211,19 +225,6 @@ fun OfflinePlayerScreen(
             showControls = false
         }
     }
-
-    // Active media tracking (allows switching episodes without leaving screen)
-    var activeId by remember { mutableStateOf(mediaId) }
-    var activeTitle by remember { mutableStateOf(title) }
-    var activeLocalFilePath by remember { mutableStateOf(localFilePath) }
-
-    val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
-    val parentTmdbId = if (activeId.contains("-s")) activeId.substringBefore("-s") else activeId
-    val seriesEpisodes = remember(downloadsList, parentTmdbId) {
-        downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
-    }
-
-    val isTv = activeId.contains("-s")
 
     // --- Battery & Clock state ---
     var batteryLevel by remember { mutableIntStateOf(0) }
@@ -386,7 +387,6 @@ fun OfflinePlayerScreen(
                     )
                 }
                 .pointerInput(isDraggingSlider, showSubtitleDrawer, showEpisodesDrawer) {
-                    val gestureScope = this
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         // Skip if slider is being dragged or drawer is open
@@ -395,24 +395,31 @@ fun OfflinePlayerScreen(
                             return@awaitEachGesture
                         }
 
+                        val startTime = System.nanoTime()
                         var activated = false
-                        val timerJob = gestureScope.launch {
-                            delay(400) // Activate after 400ms hold
-                            activated = true
-                            wasLongPress = true
-                            exoPlayer.setPlaybackSpeed(2f)
-                            isSpeedUp = true
-                            showControls = false
-                        }
 
                         try {
                             while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Main)
-                                if (event.changes.all { !it.pressed }) break
-                                // Once activated, keep 2x active while finger moves
+                                // Poll with short timeout to check timer even without new events
+                                val event = withTimeoutOrNull(100L) {
+                                    awaitPointerEvent(PointerEventPass.Main)
+                                }
+                                // If event received and finger lifted, break
+                                if (event != null && event.changes.all { !it.pressed }) break
+
+                                // Check if 400ms have elapsed to activate 2x
+                                if (!activated) {
+                                    val elapsed = (System.nanoTime() - startTime) / 1_000_000
+                                    if (elapsed >= 400) {
+                                        activated = true
+                                        wasLongPress = true
+                                        exoPlayer.setPlaybackSpeed(2f)
+                                        isSpeedUp = true
+                                        showControls = false
+                                    }
+                                }
                             }
                         } finally {
-                            timerJob.cancel()
                             if (activated || isSpeedUp) {
                                 exoPlayer.setPlaybackSpeed(1f)
                                 isSpeedUp = false
