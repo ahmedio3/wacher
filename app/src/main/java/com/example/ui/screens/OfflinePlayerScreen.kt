@@ -353,7 +353,10 @@ fun OfflinePlayerScreen(
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false
+                    isClickable = false
+                    isFocusable = false
                     subtitleView?.visibility = android.view.View.GONE
+                    setOnTouchListener { _, _ -> false }
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -420,8 +423,7 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Unified gesture handler: tap, long-press, double-tap, finger-up reset
-        // All in one Box with separate pointerInput blocks (no conflicting overlapping siblings)
+        // Gesture handler: single detectTapGestures for tap + long-press + double-tap
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -430,20 +432,6 @@ fun OfflinePlayerScreen(
                         onTap = {
                             showControls = !showControls
                         },
-                        onLongPress = {
-                            // Activate 2x speed immediately on long-press
-                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
-                                wasLongPress = true
-                                exoPlayer.setPlaybackSpeed(2f)
-                                isSpeedUp = true
-                                showControls = false
-                            }
-                        }
-                    )
-                }
-                // Double-tap handler (separate pointerInput so onTap fires immediately)
-                .pointerInput(Unit) {
-                    detectTapGestures(
                         onDoubleTap = { offset ->
                             if (!showSubtitleDrawer && !showEpisodesDrawer) {
                                 val width = this.size.width
@@ -452,6 +440,14 @@ fun OfflinePlayerScreen(
                                 } else {
                                     exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
                                 }
+                            }
+                        },
+                        onLongPress = {
+                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
+                                wasLongPress = true
+                                exoPlayer.setPlaybackSpeed(2f)
+                                isSpeedUp = true
+                                showControls = false
                             }
                         }
                     )
