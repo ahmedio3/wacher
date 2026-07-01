@@ -59,6 +59,7 @@ fun DetailScreen(
     var pendingDownloadId by remember { mutableStateOf("") }
     var pendingDownloadTitle by remember { mutableStateOf("") }
     var pendingDownloadPoster by remember { mutableStateOf("") }
+    var pendingDownloadStillPath by remember { mutableStateOf("") }
     var pendingDownloadMediaType by remember { mutableStateOf("") }
     var pendingDownloadSeason by remember { mutableIntStateOf(0) }
     var pendingDownloadEpisode by remember { mutableIntStateOf(0) }
@@ -164,10 +165,11 @@ fun DetailScreen(
                                         val episodeTitle = "${tv.name ?: "مسلسل"} - الموسم $s الحلقة $e"
                                         onNavigateToPlayer(activeId, episodeTitle, activeLocalFilePath)
                                     },
-                                    onDownloadEpisode = { id, title, poster, type, s, ep ->
+                                    onDownloadEpisode = { id, title, poster, type, stillPath, s, ep ->
                                         pendingDownloadId = id
                                         pendingDownloadTitle = title
                                         pendingDownloadPoster = poster
+                                        pendingDownloadStillPath = stillPath
                                         pendingDownloadMediaType = type
                                         pendingDownloadSeason = s
                                         pendingDownloadEpisode = ep
@@ -201,6 +203,7 @@ fun DetailScreen(
                         mediaId = pendingDownloadId,
                         title = pendingDownloadTitle,
                         posterPath = pendingDownloadPoster,
+                        stillPath = pendingDownloadStillPath,
                         mediaType = pendingDownloadMediaType,
                         season = if (pendingDownloadMediaType == "tv") s else 0,
                         episode = if (pendingDownloadMediaType == "tv") ep else 0,
@@ -450,7 +453,7 @@ fun TvDetailContent(
     seasonDetailsMap: Map<String, RequestState<TmdbSeasonDetails>>,
     isPlayerPlaying: Boolean,
     onPlayEpisode: (Int, Int) -> Unit,
-    onDownloadEpisode: (String, String, String, String, Int, Int) -> Unit
+    onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${tv.backdropPath ?: tv.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${tv.posterPath}"
@@ -679,8 +682,9 @@ fun TvDetailContent(
                                         onDownloadEpisode(
                                             tv.id.toString(),
                                             tv.name ?: "",
-                                            tv.posterPath ?: "",
+                                            episode.stillPath ?: tv.posterPath ?: "",
                                             "tv",
+                                            episode.stillPath ?: "",
                                             selectedSeasonNumber,
                                             episode.episodeNumber
                                         )

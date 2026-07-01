@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.app.Application
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -106,7 +108,8 @@ fun DownloadsScreen(
                 ) {
                     val tabs = listOf(
                         "المسلسلات (${seriesPlaylists.size})",
-                        "الأفلام (${individualDownloads.size})"
+                        "الأفلام (${individualDownloads.size})",
+                        "محلي"
                     )
                     tabs.forEachIndexed { index, title ->
                         val isSelected = activeSegmentTab == index
@@ -133,94 +136,106 @@ fun DownloadsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // RENDER SELECTED SECTION
-                if (activeSegmentTab == 1) {
-                    // MOVIE FILES
-                    if (individualDownloads.isEmpty()) {
-                        EmptyDownloadsView(message = "لا توجد أفلام أو تنزيلات فردية")
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            items(individualDownloads, key = { it.id }) { item ->
-                                DownloadItemRow(
-                                    item = item,
-                                    viewModel = viewModel,
-                                    onPlayClick = { path ->
-                                        if (path != null) {
-                                            onNavigateToPlayer(item.id, item.title, path)
+                when (activeSegmentTab) {
+                    0 -> {
+                        // SERIES PLAYLISTS
+                        if (seriesPlaylists.isEmpty()) {
+                            EmptyDownloadsView(message = "لا تملك مسلسلات منزلة بعد. قم بتحميل حلقات مسلسل لتنظيمها وعرضها هنا.")
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                items(seriesPlaylists.keys.toList()) { mediaId ->
+                                    val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
+                                    val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
+                                    val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
+                                    
+                                    PlaylistFolderCard(
+                                        seriesTitle = parentTitle,
+                                        posterPath = posterPath,
+                                        episodesCount = playlistEpisodes.size,
+                                        onClick = {
+                                            selectedSeriesIdForSheet = mediaId
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
-                } else {
-                    // SERIES PLAYLISTS
-                    if (seriesPlaylists.isEmpty()) {
-                        EmptyDownloadsView(message = "لا تملك مسلسلات منزلة بعد. قم بتحميل حلقات مسلسل لتنظيمها وعرضها هنا.")
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            items(seriesPlaylists.keys.toList()) { mediaId ->
-                                val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
-                                val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
-                                val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
-                                
-                                PlaylistFolderCard(
-                                    seriesTitle = parentTitle,
-                                    posterPath = posterPath,
-                                    episodesCount = playlistEpisodes.size,
-                                    onClick = {
-                                        selectedSeriesIdForSheet = mediaId
-                                    }
-                                )
+                    1 -> {
+                        // MOVIE FILES
+                        if (individualDownloads.isEmpty()) {
+                            EmptyDownloadsView(message = "لا توجد أفلام أو تنزيلات فردية")
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                items(individualDownloads, key = { it.id }) { item ->
+                                    DownloadItemRow(
+                                        item = item,
+                                        viewModel = viewModel,
+                                        onPlayClick = { path ->
+                                            if (path != null) {
+                                                onNavigateToPlayer(item.id, item.title, path)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
+                    }
+                    2 -> {
+                        // LOCAL FILES from device storage
+                        LocalFilesTab(
+                            context = context,
+                            onNavigateToPlayer = onNavigateToPlayer
+                        )
                     }
                 }
 
-                // Files Storage Directory Location Notice Card at the bottom of the column (Arabic)
-                val exactPath = remember(context) {
-                    File(context.filesDir, "downloads").absolutePath
-                }
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                // Files Storage Directory Location Notice Card (only in non-local tabs)
+                if (activeSegmentTab != 2) {
+                    val exactPath = remember(context) {
+                        File(context.filesDir, "downloads").absolutePath
+                    }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                         )
-                        Column {
-                            Text(
-                                text = "مسار حفظ الملفات على الجهاز:",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onBackground
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
                             )
-                            Text(
-                                text = exactPath,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Column {
+                                Text(
+                                    text = "مسار حفظ الملفات على الجهاز:",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Text(
+                                    text = exactPath,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -606,7 +621,8 @@ fun DownloadItemRow(
     val context = androidx.compose.ui.platform.LocalContext.current
     val isCompleted = item.status == "completed"
     val isPaused = item.status == "paused"
-    val posterUrl = "https://image.tmdb.org/t/p/w185${item.posterPath}"
+    val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w185${item.posterPath}"
+    val episodeStillUrl = if (item.stillPath.isNotEmpty()) "https://image.tmdb.org/t/p/w300${item.stillPath}" else null
     var showMenuSheet by remember { mutableStateOf(false) }
 
     val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
@@ -629,15 +645,16 @@ fun DownloadItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Mini Poster
+        // Mini Poster (use episode still if available for landscape 16:9)
+        val thumbUrl = if (item.mediaType == "tv" && episodeStillUrl != null) episodeStillUrl else posterUrl
         Box(
             modifier = Modifier
-                .size(width = 60.dp, height = 86.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(if (item.mediaType == "tv" && episodeStillUrl != null) androidx.compose.ui.unit.DpSize(60.dp, 34.dp) else androidx.compose.ui.unit.DpSize(60.dp, 86.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             AsyncImage(
-                model = posterUrl,
+                model = thumbUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -949,6 +966,323 @@ fun DownloadItemRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LocalFilesTab(
+    context: android.content.Context,
+    onNavigateToPlayer: (String, String, String) -> Unit
+) {
+    // Scan /storage/emulated/0/Movies/ for video files + user-picked files
+    val prefs = context.getSharedPreferences("local_videos", android.content.Context.MODE_PRIVATE)
+    var localFiles by remember { mutableStateOf<List<com.example.data.local.LocalVideoFile>>(emptyList()) }
+    var selectedVideoForPlaylist by remember { mutableStateOf<String?>(null) }
+    var playlists by remember { mutableStateOf<List<com.example.data.local.LocalPlaylist>>(emptyList()) }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var currentPlaylistName by remember { mutableStateOf("") }
+
+    // Load user-picked files from prefs
+    fun loadUserPickedFiles(): List<String> {
+        val json = prefs.getString("picked_files", "[]") ?: "[]"
+        return try {
+            com.example.data.local.UserPickedFileList.fromJson(json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    fun saveUserPickedFiles(files: List<String>) {
+        prefs.edit().putString("picked_files", com.example.data.local.UserPickedFileList.toJson(files)).apply()
+    }
+    fun loadPlaylists(): List<com.example.data.local.LocalPlaylist> {
+        val json = prefs.getString("playlists", "[]") ?: "[]"
+        return try {
+            com.example.data.local.LocalPlaylistList.fromJson(json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    fun savePlaylists(pl: List<com.example.data.local.LocalPlaylist>) {
+        prefs.edit().putString("playlists", com.example.data.local.LocalPlaylistList.toJson(pl)).apply()
+    }
+
+    // Scan Movies directory on first composition
+    LaunchedEffect(Unit) {
+        playlists = loadPlaylists()
+        val userPicked = loadUserPickedFiles()
+        val files = mutableListOf<com.example.data.local.LocalVideoFile>()
+        // Scan /storage/emulated/0/Movies/
+        try {
+            val moviesDir = java.io.File("/storage/emulated/0/Movies/")
+            if (moviesDir.exists() && moviesDir.isDirectory) {
+                val videoExts = setOf("mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "3gp")
+                moviesDir.listFiles()?.forEach { file ->
+                    if (file.isFile && file.name.contains(".") && file.extension.lowercase() in videoExts) {
+                        files.add(com.example.data.local.LocalVideoFile(
+                            id = file.absolutePath,
+                            name = file.nameWithoutExtension,
+                            filePath = file.absolutePath,
+                            size = file.length()
+                        ))
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        // Add user-picked files
+        userPicked.forEach { path ->
+            val f = java.io.File(path)
+            if (f.exists()) {
+                files.add(com.example.data.local.LocalVideoFile(
+                    id = f.absolutePath,
+                    name = f.nameWithoutExtension,
+                    filePath = f.absolutePath,
+                    size = f.length()
+                ))
+            }
+        }
+        localFiles = files.distinctBy { it.id }
+    }
+
+    // File picker launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                // Copy the selected file URI info
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIdx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        val sizeIdx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                        val name = if (nameIdx >= 0) it.getString(nameIdx) else "فيديو"
+                        val size = if (sizeIdx >= 0) it.getLong(sizeIdx) else 0L
+                        // Save as a reference — we'll use content:// URI directly
+                        val filePath = uri.toString()
+                        val userPicked = loadUserPickedFiles()
+                        if (filePath !in userPicked) {
+                            saveUserPickedFiles(userPicked + filePath)
+                            // Add to local files list
+                            localFiles = localFiles + com.example.data.local.LocalVideoFile(
+                                id = filePath,
+                                name = name,
+                                filePath = filePath,
+                                size = size
+                            )
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun removeFile(id: String) {
+        localFiles = localFiles.filter { it.id != id }
+        val userPicked = loadUserPickedFiles().filter { it != id }
+        saveUserPickedFiles(userPicked)
+        // Remove from playlists too
+        var updatedPlaylists = playlists.map { pl ->
+            pl.copy(videoIds = pl.videoIds.filter { it != id })
+        }
+        updatedPlaylists = updatedPlaylists.filter { it.videoIds.isNotEmpty() }
+        savePlaylists(updatedPlaylists)
+        playlists = updatedPlaylists
+    }
+
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .padding(horizontal = 16.dp)
+    ) {
+        // Header with add button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "فيديوهات الجهاز (${localFiles.size})",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            IconButton(onClick = {
+                filePickerLauncher.launch(arrayOf("video/*"))
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "إضافة فيديو", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        // Playlists section
+        if (playlists.isNotEmpty()) {
+            Text(
+                text = "قوائم التشغيل",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            LazyColumn(
+                modifier = Modifier.height(playlists.size * 60.dp.coerceAtMost(180.dp)),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(playlists, key = { it.id }) { pl ->
+                    val playlistVideos = pl.videoIds.mapNotNull { id -> localFiles.find { it.id == id } }
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // Navigate to playlist — just show videos in this playlist
+                                // Show videos in playlist
+                            },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(pl.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text("${playlistVideos.size} فيديو", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Video list
+        if (localFiles.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "لا توجد فيديوهات. اضغط + لإضافة فيديو",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(localFiles, key = { it.id }) { video ->
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onNavigateToPlayer(video.id, video.name, video.filePath)
+                            },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Thumbnail placeholder
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Movie,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = video.name,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = formatBytes(video.size),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // Add to playlist button
+                            IconButton(onClick = {
+                                selectedVideoForPlaylist = video.id
+                                showCreatePlaylistDialog = true
+                            }) {
+                                Icon(Icons.Default.PlaylistAdd, contentDescription = "إضافة لقائمة تشغيل", tint = MaterialTheme.colorScheme.secondary)
+                            }
+                            // Remove button
+                            IconButton(onClick = { removeFile(video.id) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "إزالة", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Create/Add to playlist dialog
+    if (showCreatePlaylistDialog && selectedVideoForPlaylist != null) {
+        AlertDialog(
+            onDismissRequest = { showCreatePlaylistDialog = false },
+            title = { Text("إضافة لقائمة تشغيل") },
+            text = {
+                Column {
+                    Text("اختر قائمة تشغيل موجودة أو أنشئ واحدة جديدة:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = currentPlaylistName,
+                        onValueChange = { currentPlaylistName = it },
+                        label = { Text("اسم قائمة جديدة") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (playlists.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("أو اختر من القوائم الموجودة:", style = MaterialTheme.typography.labelMedium)
+                        playlists.forEach { pl ->
+                            TextButton(
+                                onClick = {
+                                    val updatedPlaylists = playlists.map {
+                                        if (it.id == pl.id && selectedVideoForPlaylist !in it.videoIds) {
+                                            it.copy(videoIds = it.videoIds + selectedVideoForPlaylist!!)
+                                        } else it
+                                    }
+                                    savePlaylists(updatedPlaylists)
+                                    playlists = updatedPlaylists
+                                    showCreatePlaylistDialog = false
+                                }
+                            ) {
+                                Text(pl.name)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (currentPlaylistName.isNotBlank()) {
+                    TextButton(onClick = {
+                        val newPlaylist = com.example.data.local.LocalPlaylist(
+                            id = java.util.UUID.randomUUID().toString(),
+                            name = currentPlaylistName,
+                            videoIds = listOf(selectedVideoForPlaylist!!)
+                        )
+                        val updatedPlaylists = playlists + newPlaylist
+                        savePlaylists(updatedPlaylists)
+                        playlists = updatedPlaylists
+                        currentPlaylistName = ""
+                        showCreatePlaylistDialog = false
+                    }) { Text("إنشاء") }
+                }
+            },
+            dismissButton = { TextButton(onClick = { showCreatePlaylistDialog = false }) { Text("إلغاء") } }
+        )
+    }
+
+}
+
+@Composable
 fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0.0 MB"
     val mb = bytes.toDouble() / (1024.0 * 1024.0)
