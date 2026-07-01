@@ -18,7 +18,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -469,7 +468,9 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture zones: Brightness (left) & Volume (right) — identical pattern, stable keys
+        // Gesture zones: Brightness (left) & Volume (right) — DO NOT consume DOWN event
+        // This allows the gesture Box below to also receive taps for show/hide controls.
+        // Only MOVE events are consumed (for drag), not the initial down.
         var brightnessZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
@@ -478,19 +479,34 @@ fun OfflinePlayerScreen(
                 .align(Alignment.CenterStart)
                 .onSizeChanged { brightnessZoneHeight = it.height.coerceAtLeast(1).toFloat() }
                 .pointerInput(Unit) {
-                    detectVerticalDragGestures { change, dragAmount ->
-                        change.consume()
-                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
-                        val delta = -dragAmount / brightnessZoneHeight
-                        val newBrightness = (currentBrightness + delta).coerceIn(0.01f, 1f)
-                        if (newBrightness != currentBrightness) {
-                            currentBrightness = newBrightness
-                            activity?.window?.let { win ->
-                                val lp = win.attributes
-                                lp.screenBrightness = newBrightness
-                                win.attributes = lp
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        // Don't consume down — let tap handler also receive it
+                        if (showSubtitleDrawer || showEpisodesDrawer) {
+                            down.consume()
+                            return@awaitEachGesture
+                        }
+                        val startBrightness = currentBrightness
+                        var totalDrag = 0f
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val change = event.changes.firstOrNull() ?: break
+                            if (change.pressed) {
+                                totalDrag += change.positionChange().y
+                                change.consume() // Consume MOVE only — tap handler still gets down
+                                val delta = -totalDrag / brightnessZoneHeight
+                                val newBrightness = (startBrightness + delta).coerceIn(0.01f, 1f)
+                                if (newBrightness != currentBrightness) {
+                                    currentBrightness = newBrightness
+                                    activity?.window?.let { win ->
+                                        val lp = win.attributes
+                                        lp.screenBrightness = newBrightness
+                                        win.attributes = lp
+                                    }
+                                    showBrightnessOverlay = true
+                                }
                             }
-                            showBrightnessOverlay = true
+                            if (!change.pressed) break
                         }
                     }
                 }
@@ -503,16 +519,29 @@ fun OfflinePlayerScreen(
                 .align(Alignment.CenterEnd)
                 .onSizeChanged { volumeZoneHeight = it.height.coerceAtLeast(1).toFloat() }
                 .pointerInput(Unit) {
-                    detectVerticalDragGestures { change, dragAmount ->
-                        change.consume()
-                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
-                        val delta = -dragAmount / volumeZoneHeight
-                        // Use local state variable just like brightness (not system read)
-                        val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
-                        if (newVol != currentVolume) {
-                            currentVolume = newVol
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                            showVolumeOverlay = true
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        if (showSubtitleDrawer || showEpisodesDrawer) {
+                            down.consume()
+                            return@awaitEachGesture
+                        }
+                        val startVolume = currentVolume
+                        var totalDrag = 0f
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val change = event.changes.firstOrNull() ?: break
+                            if (change.pressed) {
+                                totalDrag += change.positionChange().y
+                                change.consume()
+                                val delta = -totalDrag / volumeZoneHeight
+                                val newVol = (startVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
+                                if (newVol != currentVolume) {
+                                    currentVolume = newVol
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                    showVolumeOverlay = true
+                                }
+                            }
+                            if (!change.pressed) break
                         }
                     }
                 }
