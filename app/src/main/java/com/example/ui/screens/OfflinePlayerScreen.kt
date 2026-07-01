@@ -61,7 +61,6 @@ import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -139,7 +138,7 @@ fun OfflinePlayerScreen(
 
     // Separate auto-hide timers for volume & brightness
     LaunchedEffect(showVolumeOverlay) {
-        if (showVolumeOverlay) { delay(1500); showVolumeOverlay = false }
+        if (showVolumeOverlay) { delay(2000); showVolumeOverlay = false }
     }
     LaunchedEffect(showBrightnessOverlay) {
         if (showBrightnessOverlay) { delay(1500); showBrightnessOverlay = false }
@@ -362,7 +361,7 @@ fun OfflinePlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gesture zone: Tap to toggle controls + double-tap to seek
+        // Tap + double-tap handler (reliable, built-in)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -386,31 +385,23 @@ fun OfflinePlayerScreen(
                         }
                     )
                 }
+                // Long-press 2x handler (separate, no conflicts)
                 .pointerInput(isDraggingSlider, showSubtitleDrawer, showEpisodesDrawer) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        // Skip if slider is being dragged or drawer is open
                         if (isDraggingSlider || showSubtitleDrawer || showEpisodesDrawer) {
                             down.consume()
                             return@awaitEachGesture
                         }
 
-                        val startTime = System.nanoTime()
+                        val pressStart = System.nanoTime()
                         var activated = false
-
                         try {
                             while (true) {
-                                // Poll with short timeout to check timer even without new events
-                                val event = withTimeoutOrNull(100L) {
-                                    awaitPointerEvent(PointerEventPass.Main)
-                                }
-                                // If event received and finger lifted, break
-                                if (event != null && event.changes.all { !it.pressed }) break
-
-                                // Check if 400ms have elapsed to activate 2x
+                                // Check timer on every iteration (even before first awaitPointerEvent)
                                 if (!activated) {
-                                    val elapsed = (System.nanoTime() - startTime) / 1_000_000
-                                    if (elapsed >= 400) {
+                                    val elapsed = (System.nanoTime() - pressStart) / 1_000_000
+                                    if (elapsed >= 500) {
                                         activated = true
                                         wasLongPress = true
                                         exoPlayer.setPlaybackSpeed(2f)
@@ -418,6 +409,8 @@ fun OfflinePlayerScreen(
                                         showControls = false
                                     }
                                 }
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                if (event.changes.all { !it.pressed }) break
                             }
                         } finally {
                             if (activated || isSpeedUp) {
@@ -487,41 +480,19 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture zones for Volume (right) & Brightness (left)
-        var volumeGestureZoneHeight by remember { mutableFloatStateOf(1f) }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.35f)
-                .align(Alignment.CenterEnd)
-                .onSizeChanged { volumeGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(volumeGestureZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
-                    detectVerticalDragGestures { change, dragAmount ->
-                        change.consume()
-                        // Don't adjust volume when drawers are open
-                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
-                        val delta = -dragAmount / volumeGestureZoneHeight
-                        val newVol = (currentVolume + delta * maxVolume).toInt().coerceIn(0, maxVolume)
-                        if (newVol != currentVolume) {
-                            currentVolume = newVol
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                            showVolumeOverlay = true
-                        }
-                    }
-                }
-        )
-        var brightnessGestureZoneHeight by remember { mutableFloatStateOf(1f) }
+        // Gesture zones: Brightness (left) & Volume (right) — identical pattern
+        var brightnessZoneHeight by remember { mutableFloatStateOf(1f) }
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.35f)
                 .align(Alignment.CenterStart)
-                .onSizeChanged { brightnessGestureZoneHeight = it.height.coerceAtLeast(1).toFloat() }
-                .pointerInput(brightnessGestureZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
+                .onSizeChanged { brightnessZoneHeight = it.height.coerceAtLeast(1).toFloat() }
+                .pointerInput(brightnessZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
                     detectVerticalDragGestures { change, dragAmount ->
                         change.consume()
                         if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
-                        val delta = -dragAmount / brightnessGestureZoneHeight
+                        val delta = -dragAmount / brightnessZoneHeight
                         val newBrightness = (currentBrightness + delta).coerceIn(0.01f, 1f)
                         if (newBrightness != currentBrightness) {
                             currentBrightness = newBrightness
@@ -531,6 +502,28 @@ fun OfflinePlayerScreen(
                                 win.attributes = lp
                             }
                             showBrightnessOverlay = true
+                        }
+                    }
+                }
+        )
+        var volumeZoneHeight by remember { mutableFloatStateOf(1f) }
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.35f)
+                .align(Alignment.CenterEnd)
+                .onSizeChanged { volumeZoneHeight = it.height.coerceAtLeast(1).toFloat() }
+                .pointerInput(volumeZoneHeight, showSubtitleDrawer, showEpisodesDrawer) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        if (showSubtitleDrawer || showEpisodesDrawer) return@detectVerticalDragGestures
+                        val delta = -dragAmount / volumeZoneHeight
+                        val currentSysVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        val newVol = (currentSysVol + delta * maxVolume).toInt().coerceIn(0, maxVolume)
+                        if (newVol != currentSysVol) {
+                            currentVolume = newVol
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                            showVolumeOverlay = true
                         }
                     }
                 }
@@ -919,18 +912,7 @@ fun OfflinePlayerScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(360.dp)
-                            .pointerInput(Unit) {
-                                // Consume all touch events so they don't pass to video
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
-                                    while (true) {
-                                        val ev = awaitPointerEvent()
-                                        ev.changes.forEach { it.consume() }
-                                        if (ev.changes.all { !it.pressed }) break
-                                    }
-                                }
-                            },
+                            .width(360.dp),
                         shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
