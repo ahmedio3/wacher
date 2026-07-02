@@ -15,6 +15,6 @@
 .cxx
 local.properties
 .env
-debug.keystore
+# debug.keystore is committed for consistent SHA-1
 # APK files
 apk/

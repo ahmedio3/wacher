@@ -1,0 +1,11 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "wacher",
+        "supportEmail": "ahmedsarri123@gmail.com"
+      }
+    }
+  }
+}
