@@ -150,7 +150,9 @@ fun DownloadsScreen(
                                 items(seriesPlaylists.keys.toList()) { mediaId ->
                                     val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
                                     val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
-                                    val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
+                                    // Use series poster (episode with empty stillPath has posterPath = series poster)
+                                    val posterPath = playlistEpisodes.firstOrNull { it.stillPath.isEmpty() }?.posterPath
+                                        ?: playlistEpisodes.firstOrNull()?.posterPath ?: ""
                                     
                                     PlaylistFolderCard(
                                         seriesTitle = parentTitle,
@@ -430,11 +432,11 @@ fun SeriesDetailBottomSheet(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(currentSeasonEpisodesList, key = { it.id }) { item ->
-                        DownloadItemRow(
+                        CompactEpisodeRow(
                             item = item,
                             viewModel = viewModel,
                             onPlayClick = { path ->
@@ -469,7 +471,7 @@ fun SeriesDetailBottomSheet(
                     ) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
                         Text(
-                            text = "تحميل وتنزيل حلقات جديدة للوضع الأوفلاين",
+                            text = "تنزيل باقي حلقات المسلسل",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = Color.White
@@ -553,7 +555,7 @@ fun PlaylistFolderCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$episodesCount حلقات مخزنة على الهاتف",
+                    text = "تم تحميل $episodesCount حلقات من المسلسل",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -561,7 +563,7 @@ fun PlaylistFolderCard(
             }
 
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)
@@ -958,6 +960,282 @@ fun DownloadItemRow(
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+// Compact row for bottom sheet episode list (no card background, larger thumb, gradient progress bar)
+@Composable
+fun CompactEpisodeRow(
+    item: DownloadEntity,
+    viewModel: MovieViewModel,
+    onPlayClick: (String?) -> Unit
+) {
+    val context = LocalContext.current
+    val isCompleted = item.status == "completed"
+    val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w300${item.posterPath}"
+    var showMenuSheet by remember { mutableStateOf(false) }
+
+    // Watch progress
+    val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
+    val lastPos = prefs.getLong("pos_${item.id}", 0L)
+    val durationSecs = remember(item.id, isCompleted) {
+        if (!isCompleted) 0L else {
+            try {
+                val file = File(item.localFilePath)
+                if (file.exists()) {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    retriever.setDataSource(file.absolutePath)
+                    val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    retriever.release()
+                    durStr?.toLongOrNull()?.let { it / 1000 } ?: 0L
+                } else 0L
+            } catch (_: Exception) { 0L }
+        }
+    }
+    val progress = if (isCompleted && durationSecs > 0 && lastPos > 0) {
+        (lastPos.toFloat() / 1000f / durationSecs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    if (isCompleted) onPlayClick(item.localFilePath)
+                    else if (item.status == "paused") viewModel.resumeDownload(item.id)
+                    else viewModel.pauseDownload(item.id)
+                }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Thumbnail with gradient progress bar at bottom
+            Box(
+                modifier = Modifier
+                    .size(width = 80.dp, height = 50.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Gradient progress bar at bottom
+                if (isCompleted && progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .align(Alignment.BottomCenter)
+                    ) {
+                        // Track background
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f))
+                        )
+                        // Active progress with gradient
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color.Cyan, Color.Green)
+                                    )
+                                )
+                        )
+                    }
+                }
+            }
+
+            // Details
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                // Episode number only (no season tag)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "الحلقة ${item.episode}",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = item.quality,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                if (isCompleted) {
+                    // File size only (small, no checkmark, no "جاهز" text)
+                    val fileSizeText = runCatching {
+                        formatBytes(File(item.localFilePath).length())
+                    }.getOrDefault("...")
+
+                    // Progress time + file size
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (durationSecs > 0 && lastPos > 0) {
+                            val posSecs = lastPos / 1000
+                            val durMins = durationSecs / 60
+                            val durSecs = durationSecs % 60
+                            Text(
+                                text = "${posSecs / 60}:${String.format("%02d", posSecs % 60)} / $durMins:${String.format("%02d", durSecs)}",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = fileSizeText,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    // Download progress
+                    val formattedDownloaded = formatBytes(item.downloadedBytes)
+                    val formattedTotal = formatBytes(item.totalBytes)
+                    Text(
+                        text = if (item.totalBytes == item.downloadedBytes) formattedDownloaded else "$formattedDownloaded / $formattedTotal",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
+                    LinearProgressIndicator(
+                        progress = { item.progress / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+            }
+
+            // Menu button
+            IconButton(
+                onClick = { showMenuSheet = true },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "خيارات",
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        // Thin divider between episodes
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            thickness = 0.5.dp
+        )
+    }
+
+    if (showMenuSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showMenuSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("خيارات التحميل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.deleteDownload(item.id)
+                            showMenuSheet = false
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
+                    Text("حذف الملف", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
+
+                if (isCompleted) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                try {
+                                    val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                                    if (!destDir.exists()) destDir.mkdirs()
+                                    val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                                    val destFile = java.io.File(destDir, "$safeTitle.mp4")
+                                    java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
+                                    android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                showMenuSheet = false
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(Icons.Default.Share, "حفظ للمعرض", tint = MaterialTheme.colorScheme.primary)
+                        Text("حفظ الفيديو (في المعرض)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
+                                if (java.io.File(partialFilePath).exists()) {
+                                    onPlayClick(partialFilePath)
+                                } else {
+                                    android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                showMenuSheet = false
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, "تشغيل ما تم تحميله", tint = MaterialTheme.colorScheme.secondary)
+                        Text("مشاهدة الفيديو المكتمل (${item.progress}%)", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
