@@ -18,3 +18,6 @@ local.properties
 # debug.keystore is committed for consistent SHA-1
 # APK files
 apk/
+apk_new/
+new_apk/
+*.apk
