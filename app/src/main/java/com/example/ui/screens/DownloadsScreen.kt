@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -150,14 +151,16 @@ fun DownloadsScreen(
                                 items(seriesPlaylists.keys.toList()) { mediaId ->
                                     val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
                                     val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
-                                    // Use series poster (episode with empty stillPath has posterPath = series poster)
-                                    val posterPath = playlistEpisodes.firstOrNull { it.stillPath.isEmpty() }?.posterPath
-                                        ?: playlistEpisodes.firstOrNull()?.posterPath ?: ""
+                                    // posterPath is now always the series poster (stored at download time)
+                                    val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
+                                    val completedCount = playlistEpisodes.count { it.status == "completed" }
+                                    val downloadingCount = playlistEpisodes.size - completedCount
                                     
                                     PlaylistFolderCard(
                                         seriesTitle = parentTitle,
                                         posterPath = posterPath,
-                                        episodesCount = playlistEpisodes.size,
+                                        completedCount = completedCount,
+                                        downloadingCount = downloadingCount,
                                         onClick = {
                                             selectedSeriesIdForSheet = mediaId
                                         }
@@ -518,9 +521,11 @@ fun SeriesDetailBottomSheet(
 fun PlaylistFolderCard(
     seriesTitle: String,
     posterPath: String,
-    episodesCount: Int,
+    completedCount: Int,
+    downloadingCount: Int,
     onClick: () -> Unit
 ) {
+    val posterUrl = if (posterPath.startsWith("http")) posterPath else "https://image.tmdb.org/t/p/w185$posterPath"
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -540,7 +545,7 @@ fun PlaylistFolderCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
-                    model = "https://image.tmdb.org/t/p/w185$posterPath",
+                    model = posterUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -554,16 +559,25 @@ fun PlaylistFolderCard(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "تم تحميل $episodesCount حلقات من المسلسل",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
+                if (downloadingCount > 0) {
+                    Text(
+                        text = "تم تحميل $completedCount حلقات — $downloadingCount حلقات قيد التحميل",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text(
+                        text = "تم تحميل $completedCount حلقات من المسلسل",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = Icons.Default.ChevronLeft,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)
@@ -976,8 +990,15 @@ fun CompactEpisodeRow(
 ) {
     val context = LocalContext.current
     val isCompleted = item.status == "completed"
-    val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w300${item.posterPath}"
-    var showMenuSheet by remember { mutableStateOf(false) }
+    val isPaused = item.status == "paused"
+    val isDownloading = !isCompleted && !isPaused && item.status != "queued"
+    // Use stillPath for episode thumbnail, fall back to posterPath
+    val thumbUrl = if (item.stillPath.isNotEmpty()) {
+        if (item.stillPath.startsWith("http")) item.stillPath else "https://image.tmdb.org/t/p/w300${item.stillPath}"
+    } else {
+        if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w300${item.posterPath}"
+    }
+    var showMenuDialog by remember { mutableStateOf(false) }
 
     // Watch progress
     val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
@@ -1006,8 +1027,8 @@ fun CompactEpisodeRow(
                 .fillMaxWidth()
                 .clickable {
                     if (isCompleted) onPlayClick(item.localFilePath)
-                    else if (item.status == "paused") viewModel.resumeDownload(item.id)
-                    else viewModel.pauseDownload(item.id)
+                    else if (isPaused) viewModel.resumeDownload(item.id)
+                    else if (!isCompleted) viewModel.pauseDownload(item.id)
                 }
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1019,19 +1040,20 @@ fun CompactEpisodeRow(
                     .size(width = 80.dp, height = 50.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier)
             ) {
                 AsyncImage(
-                    model = posterUrl,
+                    model = thumbUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                // Gradient progress bar at bottom
+                // Gradient progress bar at bottom of thumbnail
                 if (isCompleted && progress > 0f) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.dp)
+                            .height(5.dp)
                             .align(Alignment.BottomCenter)
                     ) {
                         // Track background
@@ -1057,10 +1079,11 @@ fun CompactEpisodeRow(
 
             // Details
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
+                    .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // Episode number only (no season tag)
+                // Episode number + quality
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1090,12 +1113,10 @@ fun CompactEpisodeRow(
                 }
 
                 if (isCompleted) {
-                    // File size only (small, no checkmark, no "جاهز" text)
                     val fileSizeText = runCatching {
                         formatBytes(File(item.localFilePath).length())
                     }.getOrDefault("...")
 
-                    // Progress time + file size
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1104,11 +1125,17 @@ fun CompactEpisodeRow(
                             val posSecs = lastPos / 1000
                             val durMins = durationSecs / 60
                             val durSecs = durationSecs % 60
+                            // Watched time in green, then dash, then file size
                             Text(
-                                text = "${posSecs / 60}:${String.format("%02d", posSecs % 60)} / $durMins:${String.format("%02d", durSecs)}",
+                                text = "${posSecs / 60}:${String.format("%02d", posSecs % 60)}/$durMins:${String.format("%02d", durSecs)}",
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                fontWeight = FontWeight.Medium
+                                color = Color(0xFF4CAF50),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "—",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
                             )
                         }
                         Text(
@@ -1119,7 +1146,7 @@ fun CompactEpisodeRow(
                         )
                     }
                 } else {
-                    // Download progress
+                    // Download progress — NO transparency
                     val formattedDownloaded = formatBytes(item.downloadedBytes)
                     val formattedTotal = formatBytes(item.totalBytes)
                     Text(
@@ -1139,9 +1166,26 @@ fun CompactEpisodeRow(
                 }
             }
 
-            // Menu button
+            // Play/Pause button (always visible)
             IconButton(
-                onClick = { showMenuSheet = true },
+                onClick = {
+                    if (isCompleted) onPlayClick(item.localFilePath)
+                    else if (isPaused) viewModel.resumeDownload(item.id)
+                    else if (!isCompleted) viewModel.pauseDownload(item.id)
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (isPaused || !isCompleted) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = if (isPaused || !isCompleted) "استئناف" else "إيقاف",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // Three-dot menu
+            IconButton(
+                onClick = { showMenuDialog = true },
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
@@ -1152,94 +1196,130 @@ fun CompactEpisodeRow(
                 )
             }
         }
-        // Thin divider between episodes
         HorizontalDivider(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
             thickness = 0.5.dp
         )
     }
 
-    if (showMenuSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showMenuSheet = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("خيارات التحميل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            viewModel.deleteDownload(item.id)
-                            showMenuSheet = false
+    // AlertDialog instead of ModalBottomSheet
+    if (showMenuDialog) {
+        AlertDialog(
+            onDismissRequest = { showMenuDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Text(item.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Episode info
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (item.episode > 0) {
+                            Text("الحلقة ${item.episode}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
                         }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
-                    Text("حذف الملف", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                }
-
-                if (isCompleted) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                try {
-                                    val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
-                                    if (!destDir.exists()) destDir.mkdirs()
-                                    val safeTitle = item.title.replace("/", "_").replace("\\", "_")
-                                    val destFile = java.io.File(destDir, "$safeTitle.mp4")
-                                    java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
-                                    android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                }
-                                showMenuSheet = false
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Icon(Icons.Default.Share, "حفظ للمعرض", tint = MaterialTheme.colorScheme.primary)
-                        Text("حفظ الفيديو (في المعرض)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
-                                if (java.io.File(partialFilePath).exists()) {
-                                    onPlayClick(partialFilePath)
-                                } else {
-                                    android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                                showMenuSheet = false
+
+                    HorizontalDivider()
+
+                    // Download progress during download
+                    if (!isCompleted) {
+                        val formattedDownloaded = formatBytes(item.downloadedBytes)
+                        val formattedTotal = formatBytes(item.totalBytes)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LinearProgressIndicator(
+                                progress = { item.progress / 100f },
+                                modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                            Text("${item.progress}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+                        Text("$formattedDownloaded / $formattedTotal", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                    }
+
+                    // Actions
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (!isCompleted) {
+                            // Watch partially downloaded
+                            TextButton(
+                                onClick = {
+                                    val partialPath = File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
+                                    if (File(partialPath).exists()) {
+                                        onPlayClick(partialPath)
+                                    } else {
+                                        android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("مشاهدة الفيديو المكتمل")
                             }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, "تشغيل ما تم تحميله", tint = MaterialTheme.colorScheme.secondary)
-                        Text("مشاهدة الفيديو المكتمل (${item.progress}%)", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            // Pause/Resume
+                            TextButton(
+                                onClick = {
+                                    if (isPaused) viewModel.resumeDownload(item.id)
+                                    else viewModel.pauseDownload(item.id)
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل مؤقتاً")
+                            }
+                        }
+                        if (isCompleted) {
+                            // Save to gallery
+                            TextButton(
+                                onClick = {
+                                    try {
+                                        val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                                        if (!destDir.exists()) destDir.mkdirs()
+                                        val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                                        val destFile = File(destDir, "$safeTitle.mp4")
+                                        File(item.localFilePath).copyTo(destFile, overwrite = true)
+                                        android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض", android.widget.Toast.LENGTH_LONG).show()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                    showMenuDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("حفظ الفيديو (في المعرض)")
+                            }
+                        }
+                        // Delete
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteDownload(item.id)
+                                showMenuDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("حذف الملف")
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
+            },
+            confirmButton = {
+                TextButton(onClick = { showMenuDialog = false }) { Text("إغلاق") }
             }
-        }
+        )
     }
 }
 

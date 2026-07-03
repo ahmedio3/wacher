@@ -682,7 +682,7 @@ fun TvDetailContent(
                                         onDownloadEpisode(
                                             tv.id.toString(),
                                             tv.name ?: "",
-                                            episode.stillPath ?: tv.posterPath ?: "",
+                                            tv.posterPath ?: "",
                                             "tv",
                                             episode.stillPath ?: "",
                                             selectedSeasonNumber,
