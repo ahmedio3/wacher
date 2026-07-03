@@ -967,6 +967,7 @@ fun DownloadItemRow(
 }
 
 // Compact row for bottom sheet episode list (no card background, larger thumb, gradient progress bar)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompactEpisodeRow(
     item: DownloadEntity,
