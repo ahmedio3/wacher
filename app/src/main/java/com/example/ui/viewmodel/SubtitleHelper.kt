@@ -13,12 +13,18 @@ import java.util.zip.ZipInputStream
 
 object SubtitleHelper {
     private const val API_KEY = "subdl_BLYRvzz54CHwxZVHbNW_eA7iDySnKeFhvc8XYnAXPZ0"
+    private const val SUBDL_API_KEY = "subdl_BLYRvzz54CHwxZVHbNW_eA7iDySnKeFhvc8XYnAXPZ0"
+    private const val OPENSUBTITLES_API_KEY = "JbFq0O0rQD6DsOCciqPmZIoMVFEPcSpT"
+    private const val USER_AGENT = "Cinemios v1.0"
     
     data class SubtitleItem(
         val name: String,
         val lang: String,
         val url: String,
-        val langCode: String
+        val langCode: String,
+        val source: String = "MovieBox",
+        val fileId: String? = null,
+        val downloadCount: Int = 0
     )
     
     suspend fun fetchSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, searchTitle: String? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
@@ -254,5 +260,145 @@ object SubtitleHelper {
             e.printStackTrace()
         }
         null
+    }
+
+    // ===== NEW: Direct Subdl API =====
+    suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<SubtitleItem>()
+        try {
+            val url = StringBuilder("https://api.subdl.com/api/v1/subtitles?api_key=$SUBDL_API_KEY&tmdb_id=$tmdbId&type=${if (isTv) "tv" else "movie"}&languages=ar&unpack=1")
+            if (isTv && season > 0) {
+                url.append("&season_number=$season")
+                if (episode > 0) url.append("&episode_number=$episode")
+            }
+            val conn = URL(url.toString()).openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connect()
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                if (json.optBoolean("status")) {
+                    val subtitles = json.optJSONArray("subtitles")
+                    if (subtitles != null) {
+                        for (i in 0 until subtitles.length()) {
+                            val sub = subtitles.getJSONObject(i)
+                            val subUrl = sub.optString("url", "")
+                            val lang = sub.optString("language", "")
+                            val releaseName = sub.optString("release_name", "")
+                            val name = sub.optString("name", releaseName)
+                            // Check for unpacked files (individual files)
+                            val unpackFiles = sub.optJSONArray("unpack_files")
+                            if (unpackFiles != null && unpackFiles.length() > 0) {
+                                for (j in 0 until unpackFiles.length()) {
+                                    val f = unpackFiles.getJSONObject(j)
+                                    val fileUrl = f.optString("url", "")
+                                    val fileName = f.optString("name", "")
+                                    val ep = f.optInt("episode", episode)
+                                    if (fileUrl.isNotEmpty() && (!isTv || ep == episode)) {
+                                        list.add(SubtitleItem(
+                                            name = fileName.ifEmpty { name },
+                                            lang = when (lang.uppercase()) { "AR" -> "العربية"; "EN" -> "English"; else -> lang },
+                                            url = "https://dl.subdl.com$fileUrl",
+                                            langCode = lang.lowercase(),
+                                            source = "Subdl"
+                                        ))
+                                    }
+                                }
+                            } else if (subUrl.isNotEmpty()) {
+                                list.add(SubtitleItem(
+                                    name = name,
+                                    lang = when (lang.uppercase()) { "AR" -> "العربية"; "EN" -> "English"; else -> lang },
+                                    url = "https://dl.subdl.com$subUrl",
+                                    langCode = lang.lowercase(),
+                                    source = "Subdl"
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+            conn.disconnect()
+        } catch (_: Exception) { }
+        list.distinctBy { it.url }
+    }
+
+    // ===== NEW: OpenSubtitles API =====
+    suspend fun fetchOpenSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<SubtitleItem>()
+        try {
+            val url = StringBuilder("https://api.opensubtitles.com/api/v1/subtitles?languages=ar")
+            if (isTv) {
+                url.append("&parent_tmdb_id=$tmdbId&type=episode")
+                if (season > 0) url.append("&season_number=$season")
+                if (episode > 0) url.append("&episode_number=$episode")
+            } else {
+                url.append("&tmdb_id=$tmdbId&type=movie")
+            }
+            val conn = URL(url.toString()).openConnection() as HttpURLConnection
+            conn.setRequestProperty("Api-Key", OPENSUBTITLES_API_KEY)
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.connect()
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                val data = json.optJSONArray("data")
+                if (data != null) {
+                    for (i in 0 until data.length()) {
+                        val item = data.getJSONObject(i)
+                        val attrs = item.optJSONObject("attributes")
+                        if (attrs != null) {
+                            val lang = attrs.optString("language", "")
+                            val subId = attrs.optString("subtitle_id", "")
+                            val downloadCount = attrs.optInt("download_count", 0)
+                            val files = attrs.optJSONArray("files")
+                            if (files != null && files.length() > 0) {
+                                for (j in 0 until files.length()) {
+                                    val file = files.getJSONObject(j)
+                                    val fileId = file.optInt("file_id", 0)
+                                    val fileName = file.optString("file_name", "")
+                                    if (fileId > 0) {
+                                        list.add(SubtitleItem(
+                                            name = fileName.ifEmpty { "OpenSubtitles #$subId" },
+                                            lang = when (lang.uppercase()) { "ARABIC" -> "العربية"; "ENGLISH" -> "English"; else -> lang },
+                                            url = "",
+                                            langCode = when (lang.uppercase()) { "ARABIC" -> "ar"; "ENGLISH" -> "en"; else -> lang.lowercase().take(2) },
+                                            source = "OpenSubtitles",
+                                            fileId = fileId.toString(),
+                                            downloadCount = downloadCount
+                                        ))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            conn.disconnect()
+        } catch (_: Exception) { }
+        list
+    }
+
+    // ===== NEW: Get actual download URL from OpenSubtitles =====
+    suspend fun getOpenSubtitleDownloadUrl(fileId: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val conn = URL("https://api.opensubtitles.com/api/v1/download").openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Api-Key", OPENSUBTITLES_API_KEY)
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            val body = "{\"file_id\":$fileId}"
+            conn.outputStream.write(body.toByteArray())
+            conn.connect()
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                json.optString("link", null)
+            } else {
+                null
+            }
+        } catch (_: Exception) { null }
     }
 }
