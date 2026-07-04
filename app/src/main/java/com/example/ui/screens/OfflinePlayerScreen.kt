@@ -1029,26 +1029,12 @@ fun OfflinePlayerScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
                                                 OutlinedButton(
-                                                    onClick = {
-                                                        subtitlePage = 1
-                                                        scope.launch {
-                                                            isDownloadingSub = true
-                                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                            searchSubsList = SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
-                                                            isDownloadingSub = false
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    enabled = !isDownloadingSub
+                                                    onClick = { subtitlePage = 1 },
+                                                    modifier = Modifier.weight(1f)
                                                 ) {
-                                                    if (isDownloadingSub) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                                                    } else {
-                                                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("بحث MovieBox", fontSize = 11.sp, maxLines = 1)
-                                                    }
+                                                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("بحث MovieBox", fontSize = 11.sp, maxLines = 1)
                                                 }
                                                 if (isTv) {
                                                     OutlinedButton(
@@ -1126,54 +1112,24 @@ fun OfflinePlayerScreen(
 
                                             // Subdl button → page 2
                                             OutlinedButton(
-                                                onClick = {
-                                                    subtitlePage = 2
-                                                    scope.launch {
-                                                        isLoadingSources = true
-                                                        subdlSources = null
-                                                        val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                        val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                        subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
-                                                        isLoadingSources = false
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                enabled = !isLoadingSources
+                                                onClick = { subtitlePage = 2 },
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                if (isLoadingSources) {
-                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                } else {
-                                                    Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF4A90D9))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("Subdl", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A90D9))
-                                                }
+                                                Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF4A90D9))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Subdl", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A90D9))
                                             }
 
                                             Spacer(modifier = Modifier.height(8.dp))
 
                                             // OpenSubtitles button → page 3
                                             OutlinedButton(
-                                                onClick = {
-                                                    subtitlePage = 3
-                                                    scope.launch {
-                                                        isLoadingSources = true
-                                                        openSubSources = null
-                                                        val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                        val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                        openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
-                                                        isLoadingSources = false
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                enabled = !isLoadingSources
+                                                onClick = { subtitlePage = 3 },
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                if (isLoadingSources) {
-                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                } else {
-                                                    Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF7CB342))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("OpenSubtitles", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
-                                                }
+                                                Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF7CB342))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("OpenSubtitles", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
                                             }
 
                                             Spacer(modifier = Modifier.height(16.dp))
@@ -1183,6 +1139,16 @@ fun OfflinePlayerScreen(
                                     // ===== PAGE 1: MovieBox Search Results =====
                                     1 -> {
                                         val movieScope = rememberCoroutineScope()
+
+                                        // Auto-fetch subtitles when this page enters composition
+                                        LaunchedEffect(Unit) {
+                                            isDownloadingSub = true
+                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                            searchSubsList = SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
+                                            isDownloadingSub = false
+                                        }
+
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             // Action bar: re-search button + status
                                             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1285,6 +1251,16 @@ fun OfflinePlayerScreen(
 
                                     // ===== PAGE 2: Subdl Results =====
                                     2 -> {
+                                        // Auto-fetch Subdl subtitles when this page enters composition
+                                        LaunchedEffect(Unit) {
+                                            isLoadingSources = true
+                                            subdlSources = null
+                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                            subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
+                                            isLoadingSources = false
+                                        }
+
                                         val sourceScope = rememberCoroutineScope()
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             // Retry button for re-fetch
@@ -1357,6 +1333,16 @@ fun OfflinePlayerScreen(
 
                                     // ===== PAGE 3: OpenSubtitles Results =====
                                     3 -> {
+                                        // Auto-fetch OpenSubtitles when this page enters composition
+                                        LaunchedEffect(Unit) {
+                                            isLoadingSources = true
+                                            openSubSources = null
+                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                            openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
+                                            isLoadingSources = false
+                                        }
+
                                         val sourceScope = rememberCoroutineScope()
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             // Retry button for re-fetch
