@@ -9,6 +9,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
 object SubtitleHelper {
@@ -150,34 +151,56 @@ object SubtitleHelper {
     suspend fun downloadAndExtractSubtitle(context: Context, downloadUrlPath: String, mediaId: String): File? = withContext(Dispatchers.IO) {
         try {
             val isDirectUrl = downloadUrlPath.startsWith("http")
-            // Moviebox and direct paths usually aren't zips. If it's direct HTTP, we save it directly assuming it's SRT/VTT.
             val downloadUrl = if (isDirectUrl) downloadUrlPath else "https://dl.subdl.com$downloadUrlPath"
             
             val conn = URL(downloadUrl).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
+            conn.connectTimeout = 15000  // 15 seconds to connect
+            conn.readTimeout = 30000     // 30 seconds to read data
+            conn.instanceFollowRedirects = true
             conn.connect()
             
             if (conn.responseCode == 200) {
-                val input = BufferedInputStream(conn.inputStream)
                 val downloadsDir = File(context.filesDir, "downloads")
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
-                if (isDirectUrl) {
+                // Detect content type: ZIP, GZIP, or raw subtitle
+                val isZip = downloadUrl.endsWith(".zip", ignoreCase = true)
+                val isGzip = downloadUrl.endsWith(".gz", ignoreCase = true) ||
+                    conn.contentEncoding?.lowercase()?.contains("gzip") == true
+                val isRawSub = isDirectUrl && !isZip && !isGzip
+
+                if (isRawSub) {
+                    // Direct .srt or .vtt file — save as-is
+                    val rawInput = BufferedInputStream(conn.inputStream)
                     val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
                     val file = File(downloadsDir, "$mediaId$ext")
                     val fos = FileOutputStream(file)
-                    input.copyTo(fos)
+                    rawInput.copyTo(fos)
                     fos.close()
-                    input.close()
+                    rawInput.close()
                     conn.disconnect()
                     return@withContext file
                 }
 
+                if (isGzip) {
+                    // GZIP compressed .srt (OpenSubtitles returns these)
+                    val gzInput = GZIPInputStream(BufferedInputStream(conn.inputStream))
+                    val file = File(downloadsDir, "$mediaId.srt")
+                    val fos = FileOutputStream(file)
+                    gzInput.copyTo(fos)
+                    fos.close()
+                    gzInput.close()
+                    conn.disconnect()
+                    return@withContext file
+                }
+
+                // ZIP file — extract
+                val input = BufferedInputStream(conn.inputStream)
                 val zis = ZipInputStream(input)
                 var zipEntry = zis.nextEntry
                 
                 val isTv = mediaId.contains("-s") && mediaId.contains("-e")
-                // Extract episode number — handles both "12345-s1-e3" (TMDB) and "abc123-s1-e3-s1-e3" (MovieBox double-wrapped)
                 val epStr = if (isTv) {
                     val afterE = mediaId.substringAfter("-e")
                     afterE.substringBefore("-s").takeIf { it != afterE } ?: afterE
@@ -212,7 +235,6 @@ object SubtitleHelper {
                 val seasonString = if (isTv) mediaId.substringAfter("-s").substringBefore("-e") else "1"
 
                 if (isTv) {
-                    // Try to map every extracted file to an episode number and save it independently!
                     val generalEpPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)\\b")
                     for (file in extractedFiles) {
                         val matcher = generalEpPattern.matcher(file.name)
@@ -223,7 +245,6 @@ object SubtitleHelper {
                                 val targetMediaId = "$tmdbIdString-s$seasonString-e$matchedEpNum"
                                 val targetFinalFile = File(downloadsDir, "$targetMediaId$ext")
                                 if (targetFinalFile.exists()) targetFinalFile.delete()
-                                // Copy content so we don't rename and lose it for other operations
                                 file.copyTo(targetFinalFile)
                                 
                                 if (matchedEpNum == epNum) {
@@ -232,7 +253,6 @@ object SubtitleHelper {
                             }
                         }
                     }
-                    // In case we couldn't match the specific episode regex but only have one general file or season pack
                     if (!extractedFiles.contains(bestMatch) && epNum != -1) {
                          val exactPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*$epNum\\b")
                          for (file in extractedFiles) {
@@ -250,7 +270,7 @@ object SubtitleHelper {
                 bestMatch.renameTo(finalFile)
                 
                 for (file in extractedFiles) {
-                    if (file.exists()) file.delete() // delete all tmps
+                    if (file.exists()) file.delete()
                 }
 
                 return@withContext finalFile
@@ -273,6 +293,8 @@ object SubtitleHelper {
             }
             val conn = URL(url.toString()).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
             conn.connect()
             if (conn.responseCode == 200) {
                 val response = conn.inputStream.bufferedReader().readText()
@@ -338,6 +360,8 @@ object SubtitleHelper {
             conn.setRequestProperty("Api-Key", OPENSUBTITLES_API_KEY)
             conn.setRequestProperty("User-Agent", USER_AGENT)
             conn.setRequestProperty("Accept", "application/json")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
             conn.connect()
             if (conn.responseCode == 200) {
                 val response = conn.inputStream.bufferedReader().readText()
@@ -389,6 +413,8 @@ object SubtitleHelper {
             conn.setRequestProperty("User-Agent", USER_AGENT)
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("Accept", "application/json")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
             val body = "{\"file_id\":$fileId}"
             conn.outputStream.write(body.toByteArray())
             conn.connect()

@@ -17,6 +17,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -62,7 +64,6 @@ import com.example.ui.viewmodel.SubtitleHelper
 import com.example.ui.viewmodel.SubtitleLine
 import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -935,7 +936,8 @@ fun OfflinePlayerScreen(
                                     when (subtitlePage) {
                                         0 -> "الترجمة"
                                         1 -> "بحث MovieBox"
-                                        2 -> "مصادر الترجمة"
+                                        2 -> "Subdl"
+                                        3 -> "OpenSubtitles"
                                         else -> "الترجمة"
                                     },
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -964,9 +966,14 @@ fun OfflinePlayerScreen(
                                 modifier = Modifier.weight(1f).fillMaxWidth()
                             ) { page ->
                                 when (page) {
-                                    // ===== PAGE 0: Main Controls (no scroll needed) =====
+                                    // ===== PAGE 0: Main Controls (scrollable) =====
                                     0 -> {
-                                        Column(modifier = Modifier.fillMaxSize()) {
+                                        val mainScrollState = rememberScrollState()
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .verticalScroll(mainScrollState)
+                                        ) {
                                             // Subtitle status note
                                             Text(
                                                 text = subtitleStatusText,
@@ -1010,18 +1017,17 @@ fun OfflinePlayerScreen(
                                                         }
                                                     }
                                                 }
+                                                Spacer(modifier = Modifier.height(12.dp))
                                             }
 
-                                            // Push navigation buttons to bottom
-                                            Spacer(modifier = Modifier.weight(1f))
-
-                                            // Navigation buttons row
+                                            // Navigation buttons section
                                             val scope = rememberCoroutineScope()
+
+                                            // Row: MovieBox search + Download series
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                // بحث MovieBox → page 1
                                                 OutlinedButton(
                                                     onClick = {
                                                         subtitlePage = 1
@@ -1041,11 +1047,9 @@ fun OfflinePlayerScreen(
                                                     } else {
                                                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                                         Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("بحث MovieBox", fontSize = 11.sp)
+                                                        Text("بحث MovieBox", fontSize = 11.sp, maxLines = 1)
                                                     }
                                                 }
-
-                                                // Download series subtitles
                                                 if (isTv) {
                                                     OutlinedButton(
                                                         onClick = {
@@ -1070,7 +1074,7 @@ fun OfflinePlayerScreen(
                                                         } else {
                                                             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                                             Spacer(modifier = Modifier.width(4.dp))
-                                                            Text("تحميل المسلسل", fontSize = 11.sp)
+                                                            Text("تحميل المسلسل", fontSize = 11.sp, maxLines = 1)
                                                         }
                                                     }
                                                 }
@@ -1100,33 +1104,79 @@ fun OfflinePlayerScreen(
                                             ) {
                                                 Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("اختيار ملف ترجمة من الجهاز", fontSize = 13.sp)
+                                                Text("اختيار ملف ترجمة من الجهاز", fontSize = 12.sp)
                                             }
 
                                             Spacer(modifier = Modifier.height(8.dp))
 
-                                            // Subtitle Sources button → page 2
+                                            // Divider with "مصادر إضافية" label
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)))
+                                                Text(
+                                                    "مصادر إضافية",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                                )
+                                                Box(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)))
+                                            }
+
+                                            // Subdl button → page 2
                                             OutlinedButton(
                                                 onClick = {
                                                     subtitlePage = 2
                                                     scope.launch {
                                                         isLoadingSources = true
+                                                        subdlSources = null
                                                         val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
                                                         val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                        val subdlDeferred = async(Dispatchers.IO) { SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode) }
-                                                        val openDeferred = async(Dispatchers.IO) { SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode) }
-                                                        subdlSources = subdlDeferred.await()
-                                                        openSubSources = openDeferred.await()
+                                                        subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
                                                         isLoadingSources = false
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
+                                                enabled = !isLoadingSources
                                             ) {
-                                                Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("مصادر ترجمة إضافية (Subdl + OpenSubtitles)", fontSize = 11.sp)
+                                                if (isLoadingSources) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                                } else {
+                                                    Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF4A90D9))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Subdl", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A90D9))
+                                                }
                                             }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            // OpenSubtitles button → page 3
+                                            OutlinedButton(
+                                                onClick = {
+                                                    subtitlePage = 3
+                                                    scope.launch {
+                                                        isLoadingSources = true
+                                                        openSubSources = null
+                                                        val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                                        val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                                        openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
+                                                        isLoadingSources = false
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                enabled = !isLoadingSources
+                                            ) {
+                                                if (isLoadingSources) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                                } else {
+                                                    Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF7CB342))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("OpenSubtitles", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(16.dp))
                                         }
                                     }
 
@@ -1233,22 +1283,20 @@ fun OfflinePlayerScreen(
                                         }
                                     }
 
-                                    // ===== PAGE 2: Subtitle Sources (Subdl + OpenSubtitles) =====
+                                    // ===== PAGE 2: Subdl Results =====
                                     2 -> {
                                         val sourceScope = rememberCoroutineScope()
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             // Retry button for re-fetch
-                                            if (subdlSources != null || openSubSources != null) {
+                                            if (subdlSources != null) {
                                                 OutlinedButton(
                                                     onClick = {
                                                         sourceScope.launch {
                                                             isLoadingSources = true
+                                                            subdlSources = null
                                                             val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
                                                             val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                            val subdlDeferred = async(Dispatchers.IO) { SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode) }
-                                                            val openDeferred = async(Dispatchers.IO) { SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode) }
-                                                            subdlSources = subdlDeferred.await()
-                                                            openSubSources = openDeferred.await()
+                                                            subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
                                                             isLoadingSources = false
                                                         }
                                                     },
@@ -1267,12 +1315,12 @@ fun OfflinePlayerScreen(
                                             }
 
                                             // Loading or results
-                                            if (subdlSources == null && openSubSources == null) {
+                                            if (subdlSources == null) {
                                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                         CircularProgressIndicator()
                                                         Spacer(modifier = Modifier.height(12.dp))
-                                                        Text("جاري تحميل الترجمات...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                        Text("جاري تحميل ترجمات Subdl...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                                     }
                                                 }
                                             } else {
@@ -1280,7 +1328,6 @@ fun OfflinePlayerScreen(
                                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
-                                                    // Subdl Section
                                                     subdlSources?.let { subs ->
                                                         if (subs.isNotEmpty()) {
                                                             item { SectionHeader(title = "Subdl", count = subs.size, color = Color(0xFF4A90D9)) }
@@ -1297,7 +1344,62 @@ fun OfflinePlayerScreen(
                                                         }
                                                     }
 
-                                                    // OpenSubtitles Section
+                                                    // Empty state
+                                                    item {
+                                                        if ((subdlSources?.isEmpty() ?: true) && subdlSources != null) {
+                                                            Text("لا توجد ترجمات متاحة من Subdl.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // ===== PAGE 3: OpenSubtitles Results =====
+                                    3 -> {
+                                        val sourceScope = rememberCoroutineScope()
+                                        Column(modifier = Modifier.fillMaxSize()) {
+                                            // Retry button for re-fetch
+                                            if (openSubSources != null) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        sourceScope.launch {
+                                                            isLoadingSources = true
+                                                            openSubSources = null
+                                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                                            openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
+                                                            isLoadingSources = false
+                                                        }
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    enabled = !isLoadingSources
+                                                ) {
+                                                    if (isLoadingSources) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                                    } else {
+                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("إعادة البحث", fontSize = 12.sp)
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                            }
+
+                                            // Loading or results
+                                            if (openSubSources == null) {
+                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        CircularProgressIndicator()
+                                                        Spacer(modifier = Modifier.height(12.dp))
+                                                        Text("جاري تحميل ترجمات OpenSubtitles...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                    }
+                                                }
+                                            } else {
+                                                LazyColumn(
+                                                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
                                                     openSubSources?.let { subs ->
                                                         if (subs.isNotEmpty()) {
                                                             item { SectionHeader(title = "OpenSubtitles", count = subs.size, color = Color(0xFF7CB342)) }
@@ -1319,8 +1421,8 @@ fun OfflinePlayerScreen(
 
                                                     // Empty state
                                                     item {
-                                                        if ((subdlSources?.isEmpty() ?: true) && (openSubSources?.isEmpty() ?: true) && subdlSources != null && openSubSources != null) {
-                                                            Text("لا توجد ترجمات متاحة من هذه المصادر.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
+                                                        if ((openSubSources?.isEmpty() ?: true) && openSubSources != null) {
+                                                            Text("لا توجد ترجمات متاحة من OpenSubtitles.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
                                                         }
                                                     }
                                                 }
