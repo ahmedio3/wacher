@@ -165,14 +165,25 @@ object SubtitleHelper {
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
                 // Detect content type: ZIP, GZIP, or raw subtitle
-                val isZip = downloadUrl.endsWith(".zip", ignoreCase = true)
-                val isGzip = downloadUrl.endsWith(".gz", ignoreCase = true) ||
+                // Primary detection: magic bytes (first 4 bytes of response body)
+                val rawInput = BufferedInputStream(conn.inputStream)
+                rawInput.mark(4)
+                val magic = ByteArray(4)
+                val magicBytesRead = rawInput.read(magic)
+                rawInput.reset()
+
+                val hasMagic = magicBytesRead >= 2
+                val magicZip = hasMagic && magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte() && magic[2] == 0x03.toByte() && magic[3] == 0x04.toByte()
+                val magicGzip = hasMagic && magic[0] == 0x1F.toByte() && magic[1] == 0x8B.toByte()
+
+                // Fallback: URL extension + Content-Encoding header
+                val isZip = magicZip || downloadUrl.endsWith(".zip", ignoreCase = true)
+                val isGzip = magicGzip || downloadUrl.endsWith(".gz", ignoreCase = true) ||
                     conn.contentEncoding?.lowercase()?.contains("gzip") == true
-                val isRawSub = isDirectUrl && !isZip && !isGzip
+                val isRawSub = !isZip && !isGzip
 
                 if (isRawSub) {
-                    // Direct .srt or .vtt file — save as-is
-                    val rawInput = BufferedInputStream(conn.inputStream)
+                    // Direct .srt or .vtt file — save as-is (rawInput is already marked/reset)
                     val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
                     val file = File(downloadsDir, "$mediaId$ext")
                     val fos = FileOutputStream(file)
@@ -185,7 +196,7 @@ object SubtitleHelper {
 
                 if (isGzip) {
                     // GZIP compressed .srt (OpenSubtitles returns these)
-                    val gzInput = GZIPInputStream(BufferedInputStream(conn.inputStream))
+                    val gzInput = GZIPInputStream(rawInput)
                     val file = File(downloadsDir, "$mediaId.srt")
                     val fos = FileOutputStream(file)
                     gzInput.copyTo(fos)
@@ -195,9 +206,8 @@ object SubtitleHelper {
                     return@withContext file
                 }
 
-                // ZIP file — extract
-                val input = BufferedInputStream(conn.inputStream)
-                val zis = ZipInputStream(input)
+                // ZIP file — extract (use the already-created rawInput which was reset)
+                val zis = ZipInputStream(rawInput)
                 var zipEntry = zis.nextEntry
                 
                 val isTv = mediaId.contains("-s") && mediaId.contains("-e")
@@ -307,13 +317,25 @@ object SubtitleHelper {
                 val subsDir = File(context.filesDir, "standalone_subtitles")
                 if (!subsDir.exists()) subsDir.mkdirs()
 
-                val isZip = downloadUrl.endsWith(".zip", ignoreCase = true)
-                val isGzip = downloadUrl.endsWith(".gz", ignoreCase = true) ||
+                // Detect content type: ZIP, GZIP, or raw subtitle
+                // Primary detection: magic bytes (first 4 bytes of response body)
+                val rawInput = BufferedInputStream(conn.inputStream)
+                rawInput.mark(4)
+                val magic = ByteArray(4)
+                val magicBytesRead = rawInput.read(magic)
+                rawInput.reset()
+
+                val hasMagic = magicBytesRead >= 2
+                val magicZip = hasMagic && magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte() && magic[2] == 0x03.toByte() && magic[3] == 0x04.toByte()
+                val magicGzip = hasMagic && magic[0] == 0x1F.toByte() && magic[1] == 0x8B.toByte()
+
+                // Fallback: URL extension + Content-Encoding header
+                val isZip = magicZip || downloadUrl.endsWith(".zip", ignoreCase = true)
+                val isGzip = magicGzip || downloadUrl.endsWith(".gz", ignoreCase = true) ||
                     conn.contentEncoding?.lowercase()?.contains("gzip") == true
-                val isRawSub = isDirectUrl && !isZip && !isGzip
+                val isRawSub = !isZip && !isGzip
 
                 if (isRawSub) {
-                    val rawInput = BufferedInputStream(conn.inputStream)
                     val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
                     val file = File(subsDir, "$subtitleId$ext")
                     val fos = FileOutputStream(file)
@@ -326,7 +348,7 @@ object SubtitleHelper {
                 }
 
                 if (isGzip) {
-                    val gzInput = GZIPInputStream(BufferedInputStream(conn.inputStream))
+                    val gzInput = GZIPInputStream(rawInput)
                     val file = File(subsDir, "$subtitleId.srt")
                     val fos = FileOutputStream(file)
                     gzInput.copyTo(fos)
@@ -338,8 +360,7 @@ object SubtitleHelper {
                 }
 
                 // ZIP file — extract ALL .srt/.vtt and match episode numbers
-                val input = BufferedInputStream(conn.inputStream)
-                val zis = ZipInputStream(input)
+                val zis = ZipInputStream(rawInput)
                 var zipEntry = zis.nextEntry
 
                 // Matches 3 patterns:

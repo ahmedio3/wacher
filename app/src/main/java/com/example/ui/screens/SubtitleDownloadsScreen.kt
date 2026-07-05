@@ -233,7 +233,7 @@ private fun exportSubtitleToDownloads(context: android.content.Context, item: Su
 
         val contentValues = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "${item.title}_${item.language}.srt")
-            put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
             put(android.provider.MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Watcher Subtitles")
             put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
         }
@@ -244,7 +244,7 @@ private fun exportSubtitleToDownloads(context: android.content.Context, item: Su
                 // Fallback: try using MediaStore.Files
                 val fallbackValues = android.content.ContentValues().apply {
                     put(android.provider.MediaStore.Files.FileColumns.DISPLAY_NAME, "${item.title}_${item.language}.srt")
-                    put(android.provider.MediaStore.Files.FileColumns.MIME_TYPE, "text/plain")
+                    put(android.provider.MediaStore.Files.FileColumns.MIME_TYPE, "application/octet-stream")
                     put(android.provider.MediaStore.Files.FileColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Watcher Subtitles")
                     put(android.provider.MediaStore.Files.FileColumns.IS_PENDING, 1)
                 }
