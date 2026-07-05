@@ -59,6 +59,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.MainActivity
 import com.example.data.local.DownloadEntity
+import com.example.ui.components.SubtitleSourceSheet
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.SubtitleHelper
 import com.example.ui.viewmodel.SubtitleLine
@@ -1148,8 +1149,8 @@ fun OfflinePlayerScreen(
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
                                                 showSubtitleDrawer = false
                                             },
-                                            customDownload = { url ->
-                                                SubtitleHelper.downloadAndExtractSubtitle(context, url, activeId)
+                                            customDownload = { downloadUrl: String ->
+                                                SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId)
                                             }
                                         )
                                     }

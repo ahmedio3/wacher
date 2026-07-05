@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -175,7 +176,7 @@ fun ExploreScreen(
                                 modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF9C27B0)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.ClosedCaption, contentDescription = null, tint = Color.White)
                             }
                         },
                         onClick = onNavigateToSubtitleDownloads

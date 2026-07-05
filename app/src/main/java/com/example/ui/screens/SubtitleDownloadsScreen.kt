@@ -156,7 +156,7 @@ private fun SubtitleDownloadCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
-                if (item.isTv && item.season > 0 && item.episode > 0) {
+                if (item.mediaType == "tv" && item.season > 0 && item.episode > 0) {
                     Text(
                         text = "الموسم ${item.season} • الحلقة ${item.episode}",
                         style = MaterialTheme.typography.bodySmall,

@@ -441,21 +441,22 @@ class MovieViewModel(
         languageCode: String,
         source: String,
         localFilePath: String,
-        isTv: Boolean = false,
+        mediaType: String = "movie",
         season: Int = 0,
         episode: Int = 0
     ) {
         viewModelScope.launch {
+            val id = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
             val entity = SubtitleDownloadEntity(
-                id = if (isTv) "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode",
+                id = id,
                 tmdbId = tmdbId,
                 title = title,
+                mediaType = mediaType,
                 posterPath = posterPath,
                 language = language,
                 languageCode = languageCode,
                 source = source,
                 localFilePath = localFilePath,
-                isTv = isTv,
                 season = season,
                 episode = episode,
                 downloadedAt = System.currentTimeMillis()

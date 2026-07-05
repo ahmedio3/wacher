@@ -96,6 +96,7 @@ data class SubtitleDownloadEntity(
     val tmdbId: String,                      // TMDB ID
     val title: String,                       // "Inception" or "Breaking Bad S1E3"
     val mediaType: String,                   // "movie" or "tv"
+    val posterPath: String = "",             // poster URL for display
     val season: Int = 0,
     val episode: Int = 0,
     val language: String,                    // "Arabic" (display name)

@@ -274,7 +274,7 @@ fun DetailScreen(
                                 languageCode = langCode,
                                 source = source,
                                 localFilePath = file.absolutePath,
-                                isTv = subtitleSheetIsTv,
+                                mediaType = if (subtitleSheetIsTv) "tv" else "movie",
                                 season = subtitleSheetSeason,
                                 episode = subtitleSheetEpisode
                             )
