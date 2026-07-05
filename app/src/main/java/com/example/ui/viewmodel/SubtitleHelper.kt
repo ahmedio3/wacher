@@ -342,7 +342,13 @@ object SubtitleHelper {
                 val zis = ZipInputStream(input)
                 var zipEntry = zis.nextEntry
 
-                val epPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)\\b")
+                // Matches 3 patterns:
+                // 1) E03 / EP 03 / Episode 5
+                // 2) S01E03 / S1.E03 / S01_E03
+                // 3) 1x03
+                val epPattern = java.util.regex.Pattern.compile(
+                    "(?i)(?:(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)|S\\d+[\\s_\\.-]*E[\\s_\\.-]*0*(\\d+)|(\\d+)x0*(\\d+))\\b"
+                )
                 var fileIndex = 0
 
                 while (zipEntry != null) {
@@ -360,10 +366,18 @@ object SubtitleHelper {
                         }
                         fos.close()
 
-                        // Match episode number from filename
+                        // Match episode number from filename — capture first non-null group
                         val matcher = epPattern.matcher(tmpName)
                         val matchedEp = if (matcher.find()) {
-                            matcher.group(1).toIntOrNull() ?: 0
+                            val g1 = matcher.group(1)  // E03 / Episode5
+                            val g2 = matcher.group(2)  // S01E03 (the episode digits)
+                            val g4 = matcher.group(4)  // 1x03 (the episode digits, group 3 = season)
+                            when {
+                                g1 != null -> g1.toIntOrNull() ?: 0
+                                g2 != null -> g2.toIntOrNull() ?: 0
+                                g4 != null -> g4.toIntOrNull() ?: 0
+                                else -> 0
+                            }
                         } else 0
 
                         results.add(Pair(finalFile, matchedEp))
