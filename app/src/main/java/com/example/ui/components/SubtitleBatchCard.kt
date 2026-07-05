@@ -38,7 +38,7 @@ fun SubtitleBatchCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = batchGroup.releaseName,
+                        text = batchGroup.title,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

@@ -49,7 +49,7 @@ fun SubtitleBatchSheet(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = batchGroup.releaseName,
+                            text = batchGroup.title,
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis

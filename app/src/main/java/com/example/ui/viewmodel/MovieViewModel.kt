@@ -27,6 +27,16 @@ import java.net.URL
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
+data class SubtitleBatchGroup(
+    val batchId: String,
+    val title: String,
+    val fileName: String,
+    val tmdbId: String,
+    val mediaType: String,
+    val count: Int,
+    val items: List<SubtitleDownloadEntity>
+)
+
 sealed interface RequestState<out T> {
     object Idle : RequestState<Nothing>
     object Loading : RequestState<Nothing>
@@ -94,16 +104,6 @@ class MovieViewModel(
 
     private val _showDownloadErrorDialog = MutableStateFlow(false)
     val showDownloadErrorDialog: StateFlow<Boolean> = _showDownloadErrorDialog.asStateFlow()
-
-    data class SubtitleBatchGroup(
-        val batchId: String,
-        val title: String,
-        val fileName: String,
-        val tmdbId: String,
-        val mediaType: String,
-        val count: Int,
-        val items: List<SubtitleDownloadEntity>
-    )
 
     data class BackgroundQueueItem(
         val downloadId: String,
