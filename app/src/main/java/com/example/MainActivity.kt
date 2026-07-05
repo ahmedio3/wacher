@@ -390,6 +390,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             composable("watchlist") {
                 WatchlistScreen(
                     viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() },
                     onNavigateToDetails = { id, type ->
                         navController.navigate("detail/$id/$type")
                     }

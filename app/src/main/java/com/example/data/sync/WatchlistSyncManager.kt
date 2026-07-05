@@ -79,7 +79,8 @@ object WatchlistSyncManager {
         val result = mutableMapOf<String, Map<String, Any?>>()
         for (child in snapshot.children) {
             val value = child.value as? Map<String, Any?> ?: continue
-            result[child.key] = value
+            val key = child.key ?: continue
+            result[key] = value
         }
         return result
     }

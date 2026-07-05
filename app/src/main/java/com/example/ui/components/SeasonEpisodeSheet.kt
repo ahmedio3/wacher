@@ -145,13 +145,7 @@ fun SeasonEpisodeSheet(
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
-                                    if (episode.runtime != null && episode.runtime!! > 0) {
-                                        Text(
-                                            text = "${episode.runtime} دقيقة",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                        )
-                                    }
+                                    // runtime not available on TmdbEpisode model
                                 }
 
                                 // Watched toggle
