@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.DownloadEntity
 import com.example.data.local.MovieDatabase
+import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
 import com.example.data.repository.MovieRepository
@@ -61,6 +62,7 @@ class MovieViewModel(
     // Reactively observe local database Watchlist and Downloads
     val watchlist: StateFlow<List<WatchlistEntity>>
     val downloads: StateFlow<List<DownloadEntity>>
+    val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
 
     // Home items states
     private val _popularMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
@@ -137,7 +139,10 @@ class MovieViewModel(
 
         downloads = repository.downloads
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        
+
+        subtitleDownloads = repository.subtitleDownloads
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
         // Fetch Home content on startup
         fetchHomeContent()
     }
@@ -425,6 +430,44 @@ class MovieViewModel(
             }
             repository.removeDownload(downloadId)
             processQueue()
+        }
+    }
+
+    fun saveSubtitleDownload(
+        tmdbId: String,
+        title: String,
+        posterPath: String,
+        language: String,
+        languageCode: String,
+        source: String,
+        localFilePath: String,
+        isTv: Boolean = false,
+        season: Int = 0,
+        episode: Int = 0
+    ) {
+        viewModelScope.launch {
+            val entity = SubtitleDownloadEntity(
+                id = if (isTv) "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode",
+                tmdbId = tmdbId,
+                title = title,
+                posterPath = posterPath,
+                language = language,
+                languageCode = languageCode,
+                source = source,
+                localFilePath = localFilePath,
+                isTv = isTv,
+                season = season,
+                episode = episode,
+                downloadedAt = System.currentTimeMillis()
+            )
+            repository.addSubtitleDownload(entity)
+            Toast.makeText(getApplication(), "تم تحميل الترجمة ($language)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun deleteSubtitleDownload(id: String) {
+        viewModelScope.launch {
+            repository.removeSubtitleDownload(id)
         }
     }
 

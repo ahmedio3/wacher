@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.local.DownloadEntity
 import com.example.data.local.MovieDao
+import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,17 @@ class MovieRepository(private val movieDao: MovieDao) {
 
     suspend fun getDownload(id: String): DownloadEntity? {
         return movieDao.getDownloadById(id)
+    }
+
+    // SUBTITLE DOWNLOADS DATA ACCESS
+    val subtitleDownloads: Flow<List<SubtitleDownloadEntity>> = movieDao.getSubtitleDownloads()
+
+    suspend fun addSubtitleDownload(item: SubtitleDownloadEntity) {
+        movieDao.insertSubtitleDownload(item)
+    }
+
+    suspend fun removeSubtitleDownload(id: String) {
+        movieDao.deleteSubtitleDownload(id)
     }
 
     // REMOTE TMDB APIS

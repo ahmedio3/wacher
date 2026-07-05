@@ -325,6 +325,9 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     onNavigateToAiChat = {
                         val hasProvider = com.example.data.ai.AiProviderManager.hasProvider(context)
                         navController.navigate("ai_chat/${hasProvider}")
+                    },
+                    onNavigateToSubtitleDownloads = {
+                        navController.navigate("subtitle-downloads")
                     }
                 )
             }
@@ -407,6 +410,13 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                         val encodedPath = java.net.URLEncoder.encode(localPath, "UTF-8")
                         navController.navigate("offline_player/$id/$encodedTitle?localFilePath=$encodedPath")
                     }
+                )
+            }
+
+            composable("subtitle-downloads") {
+                SubtitleDownloadsScreen(
+                    viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

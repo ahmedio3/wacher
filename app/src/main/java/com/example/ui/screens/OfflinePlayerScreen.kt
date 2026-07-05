@@ -163,16 +163,11 @@ fun OfflinePlayerScreen(
     var subtitleTimeOffsetMs by remember { mutableLongStateOf(0L) }
     var parsedSubtitles by remember { mutableStateOf<List<SubtitleLine>>(emptyList()) }
     var activeSubtitleText by remember { mutableStateOf("") }
-    var searchSubsList by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
     var isDownloadingSub by remember { mutableStateOf(false) }
     var isSubtitleHidden by remember { mutableStateOf(false) }
     
     // Subtitle sources page
     var subtitlePage by remember { mutableIntStateOf(0) }
-    var subdlSources by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
-    var openSubSources by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
-    var isLoadingSources by remember { mutableStateOf(false) }
-    var isDownloadingSourceSub by remember { mutableStateOf(false) }
 
     // Active media tracking (allows switching episodes without leaving screen)
     var activeId by remember { mutableStateOf(mediaId) }
@@ -1136,284 +1131,27 @@ fun OfflinePlayerScreen(
                                         }
                                     }
 
-                                    // ===== PAGE 1: MovieBox Search Results =====
-                                    1 -> {
-                                        val movieScope = rememberCoroutineScope()
+                                    // ===== PAGES 1, 2, 3: SubtitleSourceSheet (shared component) =====
+                                    1, 2, 3 -> {
+                                        val seasonNum = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                        val episodeNum = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
 
-                                        // Auto-fetch subtitles when this page enters composition
-                                        LaunchedEffect(Unit) {
-                                            isDownloadingSub = true
-                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                            searchSubsList = SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
-                                            isDownloadingSub = false
-                                        }
-
-                                        Column(modifier = Modifier.fillMaxSize()) {
-                                            // Action bar: re-search button + status
-                                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        movieScope.launch {
-                                                            isDownloadingSub = true
-                                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                            searchSubsList = SubtitleHelper.fetchSubtitles(parentTmdbId, isTv, season, episode, activeTitle)
-                                                            isDownloadingSub = false
-                                                        }
-                                                    },
-                                                    enabled = !isDownloadingSub,
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    if (isDownloadingSub) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                    } else {
-                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("بحث", fontSize = 12.sp)
-                                                    }
-                                                }
-                                                if (isTv) {
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            movieScope.launch {
-                                                                isDownloadingSub = true
-                                                                val allEpisodes = downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
-                                                                for (ep in allEpisodes) {
-                                                                    try {
-                                                                        val subs = SubtitleHelper.fetchSubtitles(parentTmdbId, true, ep.season, ep.episode, activeTitle.substringBefore(" - "))
-                                                                        val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
-                                                                        if (arSub != null) SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, ep.id)
-                                                                    } catch (_: Exception) { }
-                                                                }
-                                                                isDownloadingSub = false
-                                                            }
-                                                        },
-                                                        enabled = !isDownloadingSub,
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        if (isDownloadingSub) {
-                                                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                        } else {
-                                                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                            Spacer(modifier = Modifier.width(4.dp))
-                                                            Text("تحميل المسلسل", fontSize = 12.sp)
-                                                        }
-                                                    }
-                                                }
-                                                Text("بحث MovieBox", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                                        SubtitleSourceSheet(
+                                            tmdbId = parentTmdbId,
+                                            isTv = isTv,
+                                            season = seasonNum,
+                                            episode = episodeNum,
+                                            titleFallback = activeTitle,
+                                            initialPage = page,
+                                            onNavigateBack = { subtitlePage = 0 },
+                                            onSubtitleLoaded = { file, _, _, _ ->
+                                                parsedSubtitles = SubtitleParser.parseBlock(file)
+                                                showSubtitleDrawer = false
+                                            },
+                                            customDownload = { url ->
+                                                SubtitleHelper.downloadAndExtractSubtitle(context, url, activeId)
                                             }
-                                            Spacer(modifier = Modifier.height(8.dp))
-
-                                            // Results list
-                                            LazyColumn(
-                                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                searchSubsList?.let { subs ->
-                                                    if (subs.isEmpty()) {
-                                                        item { Text("لا توجد ترجمات متاحة.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
-                                                    } else {
-                                                        items(subs) { sub ->
-                                                            Card(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                                            ) {
-                                                                Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                                                    Column(modifier = Modifier.weight(1f)) {
-                                                                        Text(sub.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                                        Text(sub.lang, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                                                    }
-                                                                    IconButton(onClick = {
-                                                                        movieScope.launch {
-                                                                            isDownloadingSub = true
-                                                                            val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, sub.url, activeId)
-                                                                            if (extracted != null) {
-                                                                                parsedSubtitles = SubtitleParser.parseBlock(extracted)
-                                                                                showSubtitleDrawer = false
-                                                                            }
-                                                                            isDownloadingSub = false
-                                                                        }
-                                                                    }) {
-                                                                        Icon(Icons.Default.Download, "تحميل وتفعيل", tint = MaterialTheme.colorScheme.primary)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                if (searchSubsList == null) {
-                                                    item { Text("اضغط على 'بحث' للبحث في MovieBox", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), style = MaterialTheme.typography.bodySmall) }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // ===== PAGE 2: Subdl Results =====
-                                    2 -> {
-                                        // Auto-fetch Subdl subtitles when this page enters composition
-                                        LaunchedEffect(Unit) {
-                                            isLoadingSources = true
-                                            subdlSources = null
-                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                            subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
-                                            isLoadingSources = false
-                                        }
-
-                                        val sourceScope = rememberCoroutineScope()
-                                        Column(modifier = Modifier.fillMaxSize()) {
-                                            // Retry button for re-fetch
-                                            if (subdlSources != null) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        sourceScope.launch {
-                                                            isLoadingSources = true
-                                                            subdlSources = null
-                                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                            subdlSources = SubtitleHelper.fetchSubdlSubtitles(parentTmdbId, isTv, season, episode)
-                                                            isLoadingSources = false
-                                                        }
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    enabled = !isLoadingSources
-                                                ) {
-                                                    if (isLoadingSources) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                    } else {
-                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("إعادة البحث", fontSize = 12.sp)
-                                                    }
-                                                }
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                            }
-
-                                            // Loading or results
-                                            if (subdlSources == null) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                        CircularProgressIndicator()
-                                                        Spacer(modifier = Modifier.height(12.dp))
-                                                        Text("جاري تحميل ترجمات Subdl...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                    }
-                                                }
-                                            } else {
-                                                LazyColumn(
-                                                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    subdlSources?.let { subs ->
-                                                        if (subs.isNotEmpty()) {
-                                                            item { SectionHeader(title = "Subdl", count = subs.size, color = Color(0xFF4A90D9)) }
-                                                            items(subs) { sub ->
-                                                                SourceSubtitleCard(item = sub, isDownloading = isDownloadingSourceSub, onDownload = {
-                                                                    sourceScope.launch {
-                                                                        isDownloadingSourceSub = true
-                                                                        val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, sub.url, activeId)
-                                                                        if (extracted != null) { parsedSubtitles = SubtitleParser.parseBlock(extracted); showSubtitleDrawer = false }
-                                                                        isDownloadingSourceSub = false
-                                                                    }
-                                                                })
-                                                            }
-                                                        }
-                                                    }
-
-                                                    // Empty state
-                                                    item {
-                                                        if ((subdlSources?.isEmpty() ?: true) && subdlSources != null) {
-                                                            Text("لا توجد ترجمات متاحة من Subdl.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // ===== PAGE 3: OpenSubtitles Results =====
-                                    3 -> {
-                                        // Auto-fetch OpenSubtitles when this page enters composition
-                                        LaunchedEffect(Unit) {
-                                            isLoadingSources = true
-                                            openSubSources = null
-                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                            openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
-                                            isLoadingSources = false
-                                        }
-
-                                        val sourceScope = rememberCoroutineScope()
-                                        Column(modifier = Modifier.fillMaxSize()) {
-                                            // Retry button for re-fetch
-                                            if (openSubSources != null) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        sourceScope.launch {
-                                                            isLoadingSources = true
-                                                            openSubSources = null
-                                                            val season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                                            val episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                                            openSubSources = SubtitleHelper.fetchOpenSubtitles(parentTmdbId, isTv, season, episode)
-                                                            isLoadingSources = false
-                                                        }
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    enabled = !isLoadingSources
-                                                ) {
-                                                    if (isLoadingSources) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                                    } else {
-                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("إعادة البحث", fontSize = 12.sp)
-                                                    }
-                                                }
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                            }
-
-                                            // Loading or results
-                                            if (openSubSources == null) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                        CircularProgressIndicator()
-                                                        Spacer(modifier = Modifier.height(12.dp))
-                                                        Text("جاري تحميل ترجمات OpenSubtitles...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                    }
-                                                }
-                                            } else {
-                                                LazyColumn(
-                                                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    openSubSources?.let { subs ->
-                                                        if (subs.isNotEmpty()) {
-                                                            item { SectionHeader(title = "OpenSubtitles", count = subs.size, color = Color(0xFF7CB342)) }
-                                                            items(subs) { sub ->
-                                                                SourceSubtitleCard(item = sub, isDownloading = isDownloadingSourceSub, onDownload = {
-                                                                    sourceScope.launch {
-                                                                        isDownloadingSourceSub = true
-                                                                        val downloadUrl = if (sub.fileId != null) SubtitleHelper.getOpenSubtitleDownloadUrl(sub.fileId) ?: sub.url else sub.url
-                                                                        if (downloadUrl.isNotEmpty()) {
-                                                                            val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId)
-                                                                            if (extracted != null) { parsedSubtitles = SubtitleParser.parseBlock(extracted); showSubtitleDrawer = false }
-                                                                        }
-                                                                        isDownloadingSourceSub = false
-                                                                    }
-                                                                })
-                                                            }
-                                                        }
-                                                    }
-
-                                                    // Empty state
-                                                    item {
-                                                        if ((openSubSources?.isEmpty() ?: true) && openSubSources != null) {
-                                                            Text("لا توجد ترجمات متاحة من OpenSubtitles.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        )
                                     }
                                 }
                             }
@@ -1536,7 +1274,7 @@ private fun formatTimeRange(millis: Long): String {
 
 // ===== Subtitle Sources Helper Composables =====
 @Composable
-private fun SectionHeader(title: String, count: Int, color: Color) {
+fun SectionHeader(title: String, count: Int, color: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1573,7 +1311,7 @@ private fun SectionHeader(title: String, count: Int, color: Color) {
 }
 
 @Composable
-private fun SourceSubtitleCard(
+fun SourceSubtitleCard(
     item: SubtitleHelper.SubtitleItem,
     isDownloading: Boolean,
     onDownload: () -> Unit

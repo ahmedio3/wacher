@@ -30,6 +30,7 @@ import com.example.data.remote.*
 import com.example.ui.components.VideoPlayerView
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
+import com.example.ui.components.SubtitleSourceSheet
 import com.example.ui.components.moviebox.MovieBoxDownloadSheet
 import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,15 @@ fun DetailScreen(
     val tvDetailsMap by viewModel.tvDetails.collectAsState()
     val seasonDetailsMap by viewModel.seasonDetails.collectAsState()
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
+
+    // Subtitle sheet state
+    var showSubtitleSheet by remember { mutableStateOf(false) }
+    var subtitleSheetTmdbId by remember { mutableStateOf("") }
+    var subtitleSheetIsTv by remember { mutableStateOf(false) }
+    var subtitleSheetSeason by remember { mutableIntStateOf(0) }
+    var subtitleSheetEpisode by remember { mutableIntStateOf(0) }
+    var subtitleSheetTitle by remember { mutableStateOf("") }
+    var subtitleSheetPoster by remember { mutableStateOf("") }
 
     // Quality chooser states
     var showMovieBoxSheet by remember { mutableStateOf(false) }
@@ -141,6 +151,15 @@ fun DetailScreen(
                                         pendingDownloadEpisode = 0
                                         pendingDownloadYear = movie.releaseDate?.take(4)?.toIntOrNull()
                                         showMovieBoxSheet = true
+                                    },
+                                    onSubtitleDownloadClick = { id, title, poster ->
+                                        subtitleSheetTmdbId = id
+                                        subtitleSheetIsTv = false
+                                        subtitleSheetSeason = 0
+                                        subtitleSheetEpisode = 0
+                                        subtitleSheetTitle = title
+                                        subtitleSheetPoster = poster
+                                        showSubtitleSheet = true
                                     }
                                 )
                             }
@@ -175,6 +194,15 @@ fun DetailScreen(
                                         pendingDownloadEpisode = ep
                                         pendingDownloadYear = tv.firstAirDate?.take(4)?.toIntOrNull()
                                         showMovieBoxSheet = true
+                                    },
+                                    onSubtitleDownloadClick = { id, title, poster, season, episode ->
+                                        subtitleSheetTmdbId = id
+                                        subtitleSheetIsTv = true
+                                        subtitleSheetSeason = season
+                                        subtitleSheetEpisode = episode
+                                        subtitleSheetTitle = title
+                                        subtitleSheetPoster = poster
+                                        showSubtitleSheet = true
                                     }
                                 )
                             }
@@ -214,6 +242,48 @@ fun DetailScreen(
                 }
             )
         }
+
+        // SUBTITLE DOWNLOAD BOTTOM SHEET
+        if (showSubtitleSheet) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { showSubtitleSheet = false },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.background
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(500.dp)
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 32.dp)
+                ) {
+                    SubtitleSourceSheet(
+                        tmdbId = subtitleSheetTmdbId,
+                        isTv = subtitleSheetIsTv,
+                        season = subtitleSheetSeason,
+                        episode = subtitleSheetEpisode,
+                        titleFallback = subtitleSheetTitle,
+                        onNavigateBack = { showSubtitleSheet = false },
+                        onSubtitleLoaded = { file, language, langCode, source ->
+                            viewModel.saveSubtitleDownload(
+                                tmdbId = subtitleSheetTmdbId,
+                                title = subtitleSheetTitle,
+                                posterPath = subtitleSheetPoster,
+                                language = language,
+                                languageCode = langCode,
+                                source = source,
+                                localFilePath = file.absolutePath,
+                                isTv = subtitleSheetIsTv,
+                                season = subtitleSheetSeason,
+                                episode = subtitleSheetEpisode
+                            )
+                            showSubtitleSheet = false
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -223,7 +293,8 @@ fun MovieDetailContent(
     viewModel: MovieViewModel,
     isPlayerPlaying: Boolean,
     onPlayClick: () -> Unit,
-    onDownloadClick: (String, String, String, String) -> Unit
+    onDownloadClick: (String, String, String, String) -> Unit,
+    onSubtitleDownloadClick: (String, String, String) -> Unit = { _, _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${movie.posterPath}"
@@ -401,6 +472,27 @@ fun MovieDetailContent(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                // Subtitle download action circle
+                IconButton(
+                    onClick = {
+                        onSubtitleDownloadClick(
+                            movie.id.toString(),
+                            movie.title ?: "",
+                            movie.posterPath ?: ""
+                        )
+                    },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Subtitles,
+                        contentDescription = "تحميل ترجمة",
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -453,7 +545,8 @@ fun TvDetailContent(
     seasonDetailsMap: Map<String, RequestState<TmdbSeasonDetails>>,
     isPlayerPlaying: Boolean,
     onPlayEpisode: (Int, Int) -> Unit,
-    onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit
+    onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit,
+    onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${tv.backdropPath ?: tv.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${tv.posterPath}"
@@ -606,6 +699,35 @@ fun TvDetailContent(
                 }
             }
 
+            // Subtitle download button
+            Button(
+                onClick = {
+                    onSubtitleDownloadClick(
+                        tv.id.toString(),
+                        tv.name ?: "",
+                        tv.posterPath ?: "",
+                        selectedSeasonNumber,
+                        1
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Subtitles, contentDescription = null)
+                    Text("تحميل ترجمة", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Overviews bloc
@@ -688,6 +810,15 @@ fun TvDetailContent(
                                             selectedSeasonNumber,
                                             episode.episodeNumber
                                         )
+                                    },
+                                    onDownloadSubtitle = {
+                                        onSubtitleDownloadClick(
+                                            tv.id.toString(),
+                                            tv.name ?: "${tv.id}",
+                                            tv.posterPath ?: "",
+                                            selectedSeasonNumber,
+                                            episode.episodeNumber
+                                        )
                                     }
                                 )
                             }
@@ -725,7 +856,8 @@ fun TvDetailContent(
 fun EpisodeRowCard(
     episode: TmdbEpisode,
     onPlay: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onDownloadSubtitle: () -> Unit = {}
 ) {
     val backdropUrl = "https://image.tmdb.org/t/p/w300${episode.stillPath}"
 
@@ -785,7 +917,7 @@ fun EpisodeRowCard(
             )
         }
 
-        // Quick action buttons for play / download
+        // Quick action buttons for play / download / subtitle
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -802,6 +934,17 @@ fun EpisodeRowCard(
                 )
             ) {
                 Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل حلقة أوفلاين", modifier = Modifier.size(18.dp))
+            }
+            IconButton(
+                onClick = onDownloadSubtitle,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Subtitles,
+                    contentDescription = "تحميل ترجمة",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }

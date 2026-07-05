@@ -55,6 +55,7 @@ fun ExploreScreen(
     onNavigateToAdultContent: (String) -> Unit = {},
     onNavigateToGlobalChat: () -> Unit = {},
     onNavigateToAiChat: () -> Unit = {},
+    onNavigateToSubtitleDownloads: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeOptions = listOf("الكل", "أفلام", "مسلسلات")
@@ -163,6 +164,21 @@ fun ExploreScreen(
                             }
                         },
                         onClick = onNavigateToGlobalChat
+                    )
+
+                    // Subtitle Downloads
+                    ExploreChatItemRow(
+                        title = "الترجمات المحملة",
+                        subtitle = "تصدير وحذف الترجمات التي قمت بتحميلها",
+                        icon = {
+                            Box(
+                                modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF9C27B0)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White)
+                            }
+                        },
+                        onClick = onNavigateToSubtitleDownloads
                     )
                 }
             }

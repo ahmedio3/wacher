@@ -40,4 +40,14 @@ interface MovieDao {
 
     @Query("DELETE FROM chat_messages")
     suspend fun clearChatMessages()
+
+    // Subtitle downloads
+    @Query("SELECT * FROM subtitle_downloads ORDER BY downloadedAt DESC")
+    fun getSubtitleDownloads(): Flow<List<SubtitleDownloadEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSubtitleDownload(item: SubtitleDownloadEntity)
+
+    @Query("DELETE FROM subtitle_downloads WHERE id = :id")
+    suspend fun deleteSubtitleDownload(vararg id: String)
 }

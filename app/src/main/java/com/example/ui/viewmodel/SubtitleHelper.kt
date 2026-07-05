@@ -282,6 +282,96 @@ object SubtitleHelper {
         null
     }
 
+    /**
+     * Downloads subtitle to a standalone directory (not tied to a video download).
+     * Uses a UUID-based filename to avoid collisions with mediaId-based naming.
+     * Returns the local file or null on failure.
+     */
+    suspend fun downloadSubtitleStandalone(context: Context, downloadUrlPath: String, subtitleId: String): File? = withContext(Dispatchers.IO) {
+        try {
+            val isDirectUrl = downloadUrlPath.startsWith("http")
+            val downloadUrl = if (isDirectUrl) downloadUrlPath else "https://dl.subdl.com$downloadUrlPath"
+
+            val conn = URL(downloadUrl).openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
+            conn.instanceFollowRedirects = true
+            conn.connect()
+
+            if (conn.responseCode == 200) {
+                val subsDir = File(context.filesDir, "standalone_subtitles")
+                if (!subsDir.exists()) subsDir.mkdirs()
+
+                val isZip = downloadUrl.endsWith(".zip", ignoreCase = true)
+                val isGzip = downloadUrl.endsWith(".gz", ignoreCase = true) ||
+                    conn.contentEncoding?.lowercase()?.contains("gzip") == true
+                val isRawSub = isDirectUrl && !isZip && !isGzip
+
+                if (isRawSub) {
+                    val rawInput = BufferedInputStream(conn.inputStream)
+                    val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
+                    val file = File(subsDir, "$subtitleId$ext")
+                    val fos = FileOutputStream(file)
+                    rawInput.copyTo(fos)
+                    fos.close()
+                    rawInput.close()
+                    conn.disconnect()
+                    return@withContext file
+                }
+
+                if (isGzip) {
+                    val gzInput = GZIPInputStream(BufferedInputStream(conn.inputStream))
+                    val file = File(subsDir, "$subtitleId.srt")
+                    val fos = FileOutputStream(file)
+                    gzInput.copyTo(fos)
+                    fos.close()
+                    gzInput.close()
+                    conn.disconnect()
+                    return@withContext file
+                }
+
+                // ZIP file — extract first .srt/.vtt
+                val input = BufferedInputStream(conn.inputStream)
+                val zis = ZipInputStream(input)
+                var zipEntry = zis.nextEntry
+                var bestMatch: File? = null
+
+                while (zipEntry != null) {
+                    if (!zipEntry.isDirectory && (zipEntry.name.endsWith(".srt") || zipEntry.name.endsWith(".vtt"))) {
+                        val tmpName = File(zipEntry.name).name
+                        val tmpFile = File(subsDir, "${subtitleId}_$tmpName")
+                        val fos = FileOutputStream(tmpFile)
+                        val buffer = ByteArray(2048)
+                        var bytesRead: Int
+                        while (zis.read(buffer).also { bytesRead = it } != -1) {
+                            fos.write(buffer, 0, bytesRead)
+                        }
+                        fos.close()
+                        if (bestMatch == null) bestMatch = tmpFile
+                        else tmpFile.delete()
+                    }
+                    zipEntry = zis.nextEntry
+                }
+                zis.close()
+                conn.disconnect()
+
+                bestMatch?.let { file ->
+                    val ext = if (file.name.endsWith(".srt")) ".srt" else ".vtt"
+                    val finalFile = File(subsDir, "$subtitleId$ext")
+                    if (finalFile.exists()) finalFile.delete()
+                    file.renameTo(finalFile)
+                    return@withContext finalFile
+                }
+                return@withContext null
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        null
+    }
+
     // ===== NEW: Direct Subdl API =====
     suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
