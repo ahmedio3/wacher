@@ -305,16 +305,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             }
             
             composable("explore") {
-                val movieBoxViewModel: MovieBoxViewModel = viewModel(
-                    factory = ViewModelFactory(context)
-                )
                 ExploreScreen(
-                    viewModel = movieBoxViewModel,
-                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
-                        navController.navigate(
-                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
-                        )
-                    },
                     onNavigateToAdultContent = { queries ->
                         val encQueries = java.net.URLEncoder.encode(queries, "UTF-8")
                         navController.navigate("adult_content?queries=$encQueries")
@@ -328,6 +319,9 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     },
                     onNavigateToSubtitleDownloads = {
                         navController.navigate("subtitle-downloads")
+                    },
+                    onNavigateToWatchlist = {
+                        navController.navigate("watchlist")
                     }
                 )
             }
@@ -423,8 +417,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             composable("settings") {
                 SettingsScreen(
                     viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() },
-                    onNavigateToWatchlist = { navController.navigate("watchlist") }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

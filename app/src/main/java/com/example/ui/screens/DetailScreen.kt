@@ -31,12 +31,21 @@ import com.example.data.remote.*
 import com.example.ui.components.VideoPlayerView
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
+import com.example.ui.components.StatusPickerSheet
 import com.example.ui.components.SubtitleSourceSheet
 import com.example.ui.components.moviebox.MovieBoxDownloadSheet
 import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.viewmodel.ViewModelFactory
+
+data class PendingWatchlist(
+    val id: String,
+    val title: String,
+    val posterPath: String,
+    val mediaType: String,
+    val rating: Double
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +73,10 @@ fun DetailScreen(
     var subtitleSheetEpisode by remember { mutableIntStateOf(0) }
     var subtitleSheetTitle by remember { mutableStateOf("") }
     var subtitleSheetPoster by remember { mutableStateOf("") }
+
+    // Status picker sheet state
+    var showStatusPicker by remember { mutableStateOf(false) }
+    var pendingWatchlist by remember { mutableStateOf<PendingWatchlist?>(null) }
 
     // Quality chooser states
     var showMovieBoxSheet by remember { mutableStateOf(false) }
@@ -136,33 +149,43 @@ fun DetailScreen(
                                 val activeLocalDownload = downloadsList.find { it.id == movie.id.toString() && it.status == "completed" }
                                 val activeLocalFilePath = activeLocalDownload?.localFilePath ?: ""
 
-                                MovieDetailContent(
-                                    movie = movie,
-                                    viewModel = viewModel,
-                                    isPlayerPlaying = false,
-                                    onPlayClick = {
-                                        onNavigateToPlayer(movie.id.toString(), movie.title ?: "فيلم", activeLocalFilePath)
-                                    },
-                                    onDownloadClick = { id, title, poster, type ->
-                                        pendingDownloadId = id
-                                        pendingDownloadTitle = title
-                                        pendingDownloadPoster = poster
-                                        pendingDownloadMediaType = type
-                                        pendingDownloadSeason = 0
-                                        pendingDownloadEpisode = 0
-                                        pendingDownloadYear = movie.releaseDate?.take(4)?.toIntOrNull()
-                                        showMovieBoxSheet = true
-                                    },
-                                    onSubtitleDownloadClick = { id, title, poster ->
-                                        subtitleSheetTmdbId = id
-                                        subtitleSheetIsTv = false
-                                        subtitleSheetSeason = 0
-                                        subtitleSheetEpisode = 0
-                                        subtitleSheetTitle = title
-                                        subtitleSheetPoster = poster
-                                        showSubtitleSheet = true
-                                    }
-                                )
+                                    MovieDetailContent(
+                                        movie = movie,
+                                        viewModel = viewModel,
+                                        isPlayerPlaying = false,
+                                        onPlayClick = {
+                                            onNavigateToPlayer(movie.id.toString(), movie.title ?: "فيلم", activeLocalFilePath)
+                                        },
+                                        onDownloadClick = { id, title, poster, type ->
+                                            pendingDownloadId = id
+                                            pendingDownloadTitle = title
+                                            pendingDownloadPoster = poster
+                                            pendingDownloadMediaType = type
+                                            pendingDownloadSeason = 0
+                                            pendingDownloadEpisode = 0
+                                            pendingDownloadYear = movie.releaseDate?.take(4)?.toIntOrNull()
+                                            showMovieBoxSheet = true
+                                        },
+                                        onSubtitleDownloadClick = { id, title, poster ->
+                                            subtitleSheetTmdbId = id
+                                            subtitleSheetIsTv = false
+                                            subtitleSheetSeason = 0
+                                            subtitleSheetEpisode = 0
+                                            subtitleSheetTitle = title
+                                            subtitleSheetPoster = poster
+                                            showSubtitleSheet = true
+                                        },
+                                        onLongPressWatchlist = {
+                                            pendingWatchlist = PendingWatchlist(
+                                                id = movie.id.toString(),
+                                                title = movie.title ?: "",
+                                                posterPath = movie.posterPath ?: "",
+                                                mediaType = "movie",
+                                                rating = movie.voteAverage ?: 0.0
+                                            )
+                                            showStatusPicker = true
+                                        }
+                                    )
                             }
                             is RequestState.Loading -> DetailSkeleton()
                             is RequestState.Error -> ErrorContent(state.message)
@@ -173,39 +196,49 @@ fun DetailScreen(
                         when (state) {
                             is RequestState.Success -> {
                                 val tv = state.data
-                                TvDetailContent(
-                                    tv = tv,
-                                    viewModel = viewModel,
-                                    seasonDetailsMap = seasonDetailsMap,
-                                    isPlayerPlaying = false,
-                                    onPlayEpisode = { s, e ->
-                                        val activeId = "${tv.id}-s$s-e$e"
-                                        val activeLocalDownload = downloadsList.find { it.id == activeId && it.status == "completed" }
-                                        val activeLocalFilePath = activeLocalDownload?.localFilePath ?: ""
-                                        val episodeTitle = "${tv.name ?: "مسلسل"} - الموسم $s الحلقة $e"
-                                        onNavigateToPlayer(activeId, episodeTitle, activeLocalFilePath)
-                                    },
-                                    onDownloadEpisode = { id, title, poster, type, stillPath, s, ep ->
-                                        pendingDownloadId = id
-                                        pendingDownloadTitle = title
-                                        pendingDownloadPoster = poster
-                                        pendingDownloadStillPath = stillPath
-                                        pendingDownloadMediaType = type
-                                        pendingDownloadSeason = s
-                                        pendingDownloadEpisode = ep
-                                        pendingDownloadYear = tv.firstAirDate?.take(4)?.toIntOrNull()
-                                        showMovieBoxSheet = true
-                                    },
-                                    onSubtitleDownloadClick = { id, title, poster, season, episode ->
-                                        subtitleSheetTmdbId = id
-                                        subtitleSheetIsTv = true
-                                        subtitleSheetSeason = season
-                                        subtitleSheetEpisode = episode
-                                        subtitleSheetTitle = title
-                                        subtitleSheetPoster = poster
-                                        showSubtitleSheet = true
-                                    }
-                                )
+                                    TvDetailContent(
+                                        tv = tv,
+                                        viewModel = viewModel,
+                                        seasonDetailsMap = seasonDetailsMap,
+                                        isPlayerPlaying = false,
+                                        onPlayEpisode = { s, e ->
+                                            val activeId = "${tv.id}-s$s-e$e"
+                                            val activeLocalDownload = downloadsList.find { it.id == activeId && it.status == "completed" }
+                                            val activeLocalFilePath = activeLocalDownload?.localFilePath ?: ""
+                                            val episodeTitle = "${tv.name ?: "مسلسل"} - الموسم $s الحلقة $e"
+                                            onNavigateToPlayer(activeId, episodeTitle, activeLocalFilePath)
+                                        },
+                                        onDownloadEpisode = { id, title, poster, type, stillPath, s, ep ->
+                                            pendingDownloadId = id
+                                            pendingDownloadTitle = title
+                                            pendingDownloadPoster = poster
+                                            pendingDownloadStillPath = stillPath
+                                            pendingDownloadMediaType = type
+                                            pendingDownloadSeason = s
+                                            pendingDownloadEpisode = ep
+                                            pendingDownloadYear = tv.firstAirDate?.take(4)?.toIntOrNull()
+                                            showMovieBoxSheet = true
+                                        },
+                                        onSubtitleDownloadClick = { id, title, poster, season, episode ->
+                                            subtitleSheetTmdbId = id
+                                            subtitleSheetIsTv = true
+                                            subtitleSheetSeason = season
+                                            subtitleSheetEpisode = episode
+                                            subtitleSheetTitle = title
+                                            subtitleSheetPoster = poster
+                                            showSubtitleSheet = true
+                                        },
+                                        onLongPressWatchlist = {
+                                            pendingWatchlist = PendingWatchlist(
+                                                id = tv.id.toString(),
+                                                title = tv.name ?: "",
+                                                posterPath = tv.posterPath ?: "",
+                                                mediaType = "tv",
+                                                rating = tv.voteAverage ?: 0.0
+                                            )
+                                            showStatusPicker = true
+                                        }
+                                    )
                             }
                             is RequestState.Loading -> DetailSkeleton()
                             is RequestState.Error -> ErrorContent(state.message)
@@ -240,6 +273,25 @@ fun DetailScreen(
                         customUrl = url
                     )
                     showMovieBoxSheet = false
+                }
+            )
+        }
+
+        // STATUS PICKER BOTTOM SHEET (long-press on bookmark)
+        if (showStatusPicker && pendingWatchlist != null) {
+            val p = pendingWatchlist!!
+            val defaultStatus by viewModel.defaultWatchStatus.collectAsState()
+            StatusPickerSheet(
+                currentDefault = defaultStatus,
+                onDismiss = { showStatusPicker = false; pendingWatchlist = null },
+                onStatusSelected = { status ->
+                    viewModel.saveToWatchlistWithStatus(p.id, p.title, p.posterPath, p.mediaType, p.rating, status)
+                    showStatusPicker = false
+                    pendingWatchlist = null
+                    Toast.makeText(context, "تم الحفظ بـ \"$status\"", Toast.LENGTH_SHORT).show()
+                },
+                onSetAsDefault = { status ->
+                    viewModel.setDefaultWatchStatus(status)
                 }
             )
         }
@@ -299,6 +351,7 @@ fun DetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MovieDetailContent(
     movie: TmdbMovieDetails,
@@ -306,7 +359,8 @@ fun MovieDetailContent(
     isPlayerPlaying: Boolean,
     onPlayClick: () -> Unit,
     onDownloadClick: (String, String, String, String) -> Unit,
-    onSubtitleDownloadClick: (String, String, String) -> Unit = { _, _, _ -> }
+    onSubtitleDownloadClick: (String, String, String) -> Unit = { _, _, _ -> },
+    onLongPressWatchlist: () -> Unit = {}
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${movie.posterPath}"
@@ -440,21 +494,25 @@ fun MovieDetailContent(
                     }
                 }
 
-                // Add Watchlist Action Circle
-                IconButton(
-                    onClick = {
-                        viewModel.toggleWatchlist(
-                            id = movie.id.toString(),
-                            title = movie.title ?: "",
-                            posterPath = movie.posterPath ?: "",
-                            mediaType = "movie",
-                            rating = movie.voteAverage ?: 0.0
-                        )
-                    },
+                // Add Watchlist Action Circle (tap = save/delete, long-press = status picker)
+                Box(
                     modifier = Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .combinedClickable(
+                            onClick = {
+                                viewModel.toggleWatchlist(
+                                    id = movie.id.toString(),
+                                    title = movie.title ?: "",
+                                    posterPath = movie.posterPath ?: "",
+                                    mediaType = "movie",
+                                    rating = movie.voteAverage ?: 0.0
+                                )
+                            },
+                            onLongClick = onLongPressWatchlist
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
@@ -550,6 +608,7 @@ fun MovieDetailContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TvDetailContent(
     tv: TmdbTvDetails,
@@ -558,7 +617,8 @@ fun TvDetailContent(
     isPlayerPlaying: Boolean,
     onPlayEpisode: (Int, Int) -> Unit,
     onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit,
-    onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> }
+    onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
+    onLongPressWatchlist: () -> Unit = {}
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${tv.backdropPath ?: tv.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${tv.posterPath}"
@@ -681,32 +741,41 @@ fun TvDetailContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Add Watchlist Action Circle
-                Button(
-                    onClick = {
-                        viewModel.toggleWatchlist(
-                            id = tv.id.toString(),
-                            title = tv.name ?: "",
-                            posterPath = tv.posterPath ?: "",
-                            mediaType = "tv",
-                            rating = tv.voteAverage ?: 0.0
-                        )
-                    },
+                // Add Watchlist Action Circle (tap = save/delete, long-press = status picker)
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
-                    )
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        .combinedClickable(
+                            onClick = {
+                                viewModel.toggleWatchlist(
+                                    id = tv.id.toString(),
+                                    title = tv.name ?: "",
+                                    posterPath = tv.posterPath ?: "",
+                                    mediaType = "tv",
+                                    rating = tv.voteAverage ?: 0.0
+                                )
+                            },
+                            onLongClick = onLongPressWatchlist
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder, contentDescription = null)
-                        Text(if (isFavorited) "تم الحفظ بالمفضلة" else "حفظ للمشاهدة لاحقاً", fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                            contentDescription = null,
+                            tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            if (isFavorited) "تم الحفظ بالمفضلة" else "حفظ للمشاهدة لاحقاً",
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
+                        )
                     }
                 }
             }

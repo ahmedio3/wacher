@@ -23,7 +23,22 @@ data class WatchlistEntity(
     val posterPath: String,
     val mediaType: String, // "movie" or "tv"
     val rating: Double,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    val status: String = "PLAN_TO_WATCH", // PLAN_TO_WATCH | WATCHING | COMPLETED
+    val isDeleted: Boolean = false,       // soft-delete للمزامنة السحابية
+    val updatedAt: Long = System.currentTimeMillis() // timestamp لكل تعديل
+)
+
+@Entity(
+    tableName = "episode_watch_status",
+    primaryKeys = ["tmdbId", "season", "episode"]
+)
+data class EpisodeWatchStatusEntity(
+    val tmdbId: String,
+    val season: Int,
+    val episode: Int,
+    val watched: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 data class LocalVideoFile(

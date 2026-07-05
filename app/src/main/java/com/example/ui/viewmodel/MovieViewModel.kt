@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.DownloadEntity
+import com.example.data.local.EpisodeWatchStatusEntity
 import com.example.data.local.MovieDatabase
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
@@ -51,10 +52,25 @@ class MovieViewModel(
 
     private val repository: MovieRepository
 
-    // Settings Configuration: Arabic vs English posters
+    // Settings Configuration
     private val sharedPrefs = application.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+
+    // Arabic vs English posters
     private val _isArabicPosters = MutableStateFlow(sharedPrefs.getBoolean("arabic_posters", true))
     val isArabicPosters: StateFlow<Boolean> = _isArabicPosters.asStateFlow()
+
+    // Default watch status (used by tap in DetailScreen)
+    private val _defaultWatchStatus = MutableStateFlow(sharedPrefs.getString("default_watch_status", "PLAN_TO_WATCH") ?: "PLAN_TO_WATCH")
+    val defaultWatchStatus: StateFlow<String> = _defaultWatchStatus.asStateFlow()
+
+    fun setDefaultWatchStatus(status: String) {
+        sharedPrefs.edit().putString("default_watch_status", status).apply()
+        _defaultWatchStatus.value = status
+    }
+
+    // Sync state
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     fun setArabicPosters(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("arabic_posters", enabled).apply()
@@ -74,6 +90,20 @@ class MovieViewModel(
     val downloads: StateFlow<List<DownloadEntity>>
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
     val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
+
+    // Episode watch tracking
+    fun getEpisodeWatchStatusForSeason(tmdbId: String, season: Int): StateFlow<List<EpisodeWatchStatusEntity>> {
+        return repository.getEpisodeWatchStatusForSeason(tmdbId, season)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+
+    val watchedCountMap = mutableMapOf<String, StateFlow<Int>>()
+    fun getWatchedCountForTvShow(tmdbId: String): StateFlow<Int> {
+        return watchedCountMap.getOrPut(tmdbId) {
+            repository.getWatchedCountForTvShow(tmdbId)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        }
+    }
 
     // Home items states
     private val _popularMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
@@ -349,18 +379,89 @@ class MovieViewModel(
     // WATCHLIST OPERATIONS
     fun toggleWatchlist(id: String, title: String, posterPath: String, mediaType: String, rating: Double) {
         viewModelScope.launch {
-            if (repository.isItemInWatchlist(id)) {
-                repository.removeFromWatchlist(id)
+            val existing = repository.getWatchlistById(id)
+            val now = System.currentTimeMillis()
+            val isVisible = existing?.let { !it.isDeleted } ?: false
+            if (existing != null && isVisible) {
+                // ضغطة ثانية = soft-delete
+                repository.softDeleteWatchlist(id, now)
             } else {
+                // upsert (جديد أو معاد تفعيله بعد حذف)
                 repository.addToWatchlist(
-                    WatchlistEntity(id = id, title = title, posterPath = posterPath, mediaType = mediaType, rating = rating)
+                    WatchlistEntity(
+                        id = id, title = title, posterPath = posterPath,
+                        mediaType = mediaType, rating = rating,
+                        status = _defaultWatchStatus.value,
+                        isDeleted = false,
+                        addedAt = existing?.addedAt ?: now,
+                        updatedAt = now
+                    )
                 )
             }
         }
     }
 
+    fun saveToWatchlistWithStatus(id: String, title: String, posterPath: String, mediaType: String, rating: Double, status: String) {
+        viewModelScope.launch {
+            val existing = repository.getWatchlistById(id)
+            val now = System.currentTimeMillis()
+            repository.addToWatchlist(
+                WatchlistEntity(
+                    id = id, title = title, posterPath = posterPath,
+                    mediaType = mediaType, rating = rating,
+                    status = status,
+                    isDeleted = false,
+                    addedAt = existing?.addedAt ?: now,
+                    updatedAt = now
+                )
+            )
+        }
+    }
+
+    fun deleteFromWatchlist(id: String) {
+        viewModelScope.launch {
+            repository.softDeleteWatchlist(id, System.currentTimeMillis())
+        }
+    }
+
     fun isItemInWatchlist(id: String): Flow<Boolean> {
-        return repository.isItemInWatchlistFlow(id).map { it != null }
+        return repository.isItemInWatchlistFlow(id).map { it != null && !it.isDeleted }
+    }
+
+    // EPISODE WATCH STATUS
+    fun toggleEpisodeWatchStatus(tmdbId: String, season: Int, episode: Int) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.upsertEpisodeWatchStatus(
+                EpisodeWatchStatusEntity(
+                    tmdbId = tmdbId,
+                    season = season,
+                    episode = episode,
+                    watched = true,
+                    updatedAt = now
+                )
+            )
+        }
+    }
+
+    // SYNC
+    fun syncWatchlist(onComplete: (Boolean) -> Unit = {}) {
+        if (_isSyncing.value) return
+        viewModelScope.launch {
+            _isSyncing.value = true
+            try {
+                com.example.data.sync.WatchlistSyncManager.sync(
+                    repository = repository,
+                    getApplication()
+                )
+                onComplete(true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(false)
+            } finally {
+                _isSyncing.value = false
+            }
+        }
     }
 
     // DOWNLOAD OPERATIONS - Single queue (one at a time, FIFO)

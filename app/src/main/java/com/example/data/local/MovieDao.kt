@@ -5,14 +5,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MovieDao {
-    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    // ---- Watchlist ----
+    @Query("SELECT * FROM watchlist WHERE isDeleted = 0 ORDER BY addedAt DESC")
     fun getWatchlist(): Flow<List<WatchlistEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWatchlist(item: WatchlistEntity)
 
-    @Query("DELETE FROM watchlist WHERE id = :id")
-    suspend fun deleteWatchlistById(id: String)
+    @Query("UPDATE watchlist SET isDeleted = 1, updatedAt = :now WHERE id = :id")
+    suspend fun softDeleteWatchlistById(id: String, now: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM watchlist WHERE id = :id LIMIT 1")
     fun getWatchlistByIdFlow(id: String): Flow<WatchlistEntity?>
@@ -20,6 +21,10 @@ interface MovieDao {
     @Query("SELECT * FROM watchlist WHERE id = :id LIMIT 1")
     suspend fun getWatchlistById(id: String): WatchlistEntity?
 
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    suspend fun getAllWatchlistItems(): List<WatchlistEntity>
+
+    // ---- Downloads ----
     @Query("SELECT * FROM downloads ORDER BY addedAt DESC")
     fun getDownloads(): Flow<List<DownloadEntity>>
 
@@ -31,7 +36,8 @@ interface MovieDao {
 
     @Query("SELECT * FROM downloads WHERE id = :id LIMIT 1")
     suspend fun getDownloadById(id: String): DownloadEntity?
-    
+
+    // ---- Chat ----
     @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
     fun getLocalChatMessages(): Flow<List<ChatEntity>>
 
@@ -41,7 +47,7 @@ interface MovieDao {
     @Query("DELETE FROM chat_messages")
     suspend fun clearChatMessages()
 
-    // Subtitle downloads
+    // ---- Subtitle downloads ----
     @Query("SELECT * FROM subtitle_downloads ORDER BY downloadedAt DESC")
     fun getSubtitleDownloads(): Flow<List<SubtitleDownloadEntity>>
 
@@ -50,4 +56,17 @@ interface MovieDao {
 
     @Query("DELETE FROM subtitle_downloads WHERE id = :id")
     suspend fun deleteSubtitleDownload(vararg id: String)
+
+    // ---- Episode Watch Status ----
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEpisodeWatchStatus(item: EpisodeWatchStatusEntity)
+
+    @Query("SELECT * FROM episode_watch_status WHERE tmdbId = :tmdbId AND season = :season")
+    fun getEpisodeWatchStatusForSeason(tmdbId: String, season: Int): Flow<List<EpisodeWatchStatusEntity>>
+
+    @Query("SELECT COUNT(*) FROM episode_watch_status WHERE tmdbId = :tmdbId AND watched = 1")
+    fun getWatchedCountForTvShow(tmdbId: String): Flow<Int>
+
+    @Query("SELECT * FROM episode_watch_status ORDER BY tmdbId, season, episode")
+    suspend fun getAllEpisodeWatchStatus(): List<EpisodeWatchStatusEntity>
 }

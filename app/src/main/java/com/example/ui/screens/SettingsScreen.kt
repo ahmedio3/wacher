@@ -12,9 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -43,7 +41,6 @@ import com.example.auth.UserProfile
 fun SettingsScreen(
     viewModel: MovieViewModel,
     onBackClick: () -> Unit,
-    onNavigateToWatchlist: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
@@ -312,29 +309,6 @@ fun SettingsScreen(
                 }
             }
             
-            // Watchlist Button
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth().clickable { onNavigateToWatchlist() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                        Text("قائمتي", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    }
-                }
-            }
-
             if (isAdmin) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
