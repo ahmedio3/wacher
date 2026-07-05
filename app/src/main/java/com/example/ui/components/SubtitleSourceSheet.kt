@@ -6,6 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -44,7 +46,7 @@ fun SubtitleSourceSheet(
     season: Int = 0,
     episode: Int = 0,
     titleFallback: String = "",
-    initialPage: Int = 1,
+    initialPage: Int = 0,
     context: Context = LocalContext.current,
     onNavigateBack: () -> Unit = {},
     onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String) -> Unit = { _, _, _, _ -> },
@@ -75,13 +77,14 @@ fun SubtitleSourceSheet(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (subtitlePage > 1) {
-            IconButton(onClick = { currentSubPage = 1 }) {
+        if (subtitlePage > 0) {
+            IconButton(onClick = { currentSubPage = 0 }) {
                 Icon(Icons.Default.ArrowBack, "رجوع")
             }
         }
         Text(
             text = when (subtitlePage) {
+                0 -> "اختيار مصدر الترجمة"
                 1 -> "بحث MovieBox"
                 2 -> "Subdl"
                 3 -> "OpenSubtitles"
@@ -113,6 +116,55 @@ fun SubtitleSourceSheet(
         modifier = Modifier.weight(1f).fillMaxWidth()
     ) { page ->
         when (page) {
+            // ===== PAGE 0: Source Picker =====
+            0 -> {
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "اختر مصدر الترجمة",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // MovieBox
+                    OutlinedButton(
+                        onClick = { currentSubPage = 1 },
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("بحث MovieBox", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Subdl
+                    OutlinedButton(
+                        onClick = { currentSubPage = 2 },
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color(0xFF4A90D9))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Subdl", fontWeight = FontWeight.Bold, color = Color(0xFF4A90D9))
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // OpenSubtitles
+                    OutlinedButton(
+                        onClick = { currentSubPage = 3 },
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color(0xFF7CB342))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("OpenSubtitles", fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
+                    }
+                }
+            }
+
             // ===== PAGE 1: MovieBox Search Results =====
             1 -> {
                 val movieScope = rememberCoroutineScope()

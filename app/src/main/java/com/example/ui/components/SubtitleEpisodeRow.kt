@@ -26,7 +26,7 @@ import com.example.data.remote.TmdbEpisode
  * NOT tied to DownloadEntity — works with plain TmdbEpisode data.
  */
 @Composable
-fun CompactEpisodeRow(
+fun SubtitleEpisodeRow(
     episode: TmdbEpisode,
     seasonNumber: Int,
     onPlay: () -> Unit = {},
