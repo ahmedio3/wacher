@@ -49,7 +49,8 @@ fun SubtitleSourceSheet(
     initialPage: Int = 0,
     context: Context = LocalContext.current,
     onNavigateBack: () -> Unit = {},
-    onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String, name: String, matchedEpisode: Int) -> Unit = { _, _, _, _, _, _ -> },
+    onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String, name: String, matchedEpisode: Int, batchId: String) -> Unit = { _, _, _, _, _, _, _ -> },
+    onBatchComplete: (batchId: String, count: Int, releaseName: String) -> Unit = { _, _, _ -> },
     customDownload: (suspend (downloadUrl: String) -> List<Pair<File, Int>>)? = null
 ) {
     // All state is internal — completely isolated per instance
@@ -228,10 +229,14 @@ fun SubtitleSourceSheet(
                                             IconButton(onClick = {
                                                 movieScope.launch {
                                                     currentlyDownloadingUrl = sub.url
+                                                    val batchId = UUID.randomUUID().toString()
                                                     val files = downloadFn(sub.url)
+                                                    var savedCount = 0
                                                     for ((file, matchedEp) in files) {
-                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
+                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
+                                                        savedCount++
                                                     }
+                                                    if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
                                                     currentlyDownloadingUrl = null
                                                 }
                                             }) {
@@ -312,10 +317,14 @@ fun SubtitleSourceSheet(
                                         SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
                                             sourceScope.launch {
                                                 currentlyDownloadingSourceUrl = sub.url
+                                                val batchId = UUID.randomUUID().toString()
                                                 val files = downloadFn(sub.url)
+                                                var savedCount = 0
                                                 for ((file, matchedEp) in files) {
-                                                    onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
+                                                    onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
+                                                    savedCount++
                                                 }
+                                                if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
                                                 currentlyDownloadingSourceUrl = null
                                             }
                                         })
@@ -392,12 +401,16 @@ fun SubtitleSourceSheet(
                                         SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
                                             sourceScope.launch {
                                                 currentlyDownloadingSourceUrl = sub.url
+                                                val batchId = UUID.randomUUID().toString()
                                                 val downloadUrl = if (sub.fileId != null) SubtitleHelper.getOpenSubtitleDownloadUrl(sub.fileId) ?: sub.url else sub.url
                                                 if (downloadUrl.isNotEmpty()) {
                                                     val files = downloadFn(downloadUrl)
+                                                    var savedCount = 0
                                                     for ((file, matchedEp) in files) {
-                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
+                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
+                                                        savedCount++
                                                     }
+                                                    if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
                                                 }
                                                 currentlyDownloadingSourceUrl = null
                                             }

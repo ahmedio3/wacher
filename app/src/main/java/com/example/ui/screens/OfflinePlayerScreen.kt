@@ -59,6 +59,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.MainActivity
 import com.example.data.local.DownloadEntity
+import com.example.ui.components.DownloadedSubtitleBrowser
+import com.example.ui.components.SubtitleBatchCard
+import com.example.ui.components.SubtitleDownloadViewType
 import com.example.ui.components.SubtitleSourceSheet
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.SubtitleHelper
@@ -928,14 +931,16 @@ fun OfflinePlayerScreen(
                                         Icon(Icons.Default.ArrowBack, "رجوع")
                                     }
                                 }
-                                Text(
-                                    when (subtitlePage) {
-                                        0 -> "الترجمة"
-                                        1 -> "بحث MovieBox"
-                                        2 -> "Subdl"
-                                        3 -> "OpenSubtitles"
-                                        else -> "الترجمة"
-                                    },
+                                    Text(
+                                        when (subtitlePage) {
+                                            0 -> "الترجمة"
+                                            1 -> "بحث MovieBox"
+                                            2 -> "Subdl"
+                                            3 -> "OpenSubtitles"
+                                            4 -> "الترجمات المحملة"
+                                            5 -> "إدارة الباتشات"
+                                            else -> "الترجمة"
+                                        },
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                     modifier = Modifier.weight(1f)
                                 )
@@ -1128,6 +1133,30 @@ fun OfflinePlayerScreen(
                                                 Text("OpenSubtitles", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
                                             }
 
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            // ترجمات محملة button → page 4
+                                            OutlinedButton(
+                                                onClick = { subtitlePage = 4 },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.LibraryBooks, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("الترجمات المحملة", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            // إدارة الباتشات button → page 5
+                                            OutlinedButton(
+                                                onClick = { subtitlePage = 5 },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("إدارة الباتشات", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+
                                             Spacer(modifier = Modifier.height(16.dp))
                                         }
                                     }
@@ -1145,7 +1174,7 @@ fun OfflinePlayerScreen(
                                             titleFallback = activeTitle,
                                             initialPage = page,
                                             onNavigateBack = { subtitlePage = 0 },
-                                            onSubtitleLoaded = { file, _, _, _, _, _ ->
+                                            onSubtitleLoaded = { file, _, _, _, _, _, _ ->
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
                                                 showSubtitleDrawer = false
                                             },
@@ -1154,6 +1183,107 @@ fun OfflinePlayerScreen(
                                                 if (file != null) listOf(Pair(file, 0)) else emptyList()
                                             }
                                         )
+                                    }
+
+                                    // ===== PAGE 4: Downloaded subtitle browser (selection mode) =====
+                                    4 -> {
+                                        val batchGroups by viewModel.subtitleBatchGroups.collectAsState(initial = emptyList())
+                                        DownloadedSubtitleBrowser(
+                                            batchGroups = batchGroups,
+                                            viewType = SubtitleDownloadViewType.PLAYER_SELECTION,
+                                            onExportFile = { item ->
+                                                try {
+                                                    val srcFile = File(item.localFilePath)
+                                                    if (srcFile.exists()) {
+                                                        val cacheFile = File(context.cacheDir, "exported_${item.id}.srt")
+                                                        srcFile.copyTo(cacheFile, overwrite = true)
+                                                        Toast.makeText(context, "تم نسخ الترجمة", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (_: Exception) { }
+                                            },
+                                            onDeleteFile = { item ->
+                                                viewModel.deleteSubtitleDownload(item.id)
+                                            },
+                                            onSelectActive = { item ->
+                                                val file = File(item.localFilePath)
+                                                if (file.exists()) {
+                                                    parsedSubtitles = SubtitleParser.parseBlock(file)
+                                                    showSubtitleDrawer = false
+                                                    subtitlePage = 0
+                                                    Toast.makeText(context, "تم تفعيل ترجمة ${item.language}", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            activeFilePath = null
+                                        )
+                                    }
+
+                                    // ===== PAGE 5: Batch management overview =====
+                                    5 -> {
+                                        val batchGroups by viewModel.subtitleBatchGroups.collectAsState(initial = emptyList())
+                                        val scrollState = rememberScrollState()
+                                        Column(
+                                            modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(4.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (batchGroups.isEmpty()) {
+                                                Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+                                                    Text("لا توجد باتشات", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                                }
+                                            } else {
+                                                batchGroups.forEach { batch ->
+                                                    SubtitleBatchCard(
+                                                        batchGroup = batch,
+                                                        expanded = false,
+                                                        onToggle = { },
+                                                        onExportAll = {
+                                                            batch.items.forEach { item ->
+                                                                try {
+                                                                    val srcFile = File(item.localFilePath)
+                                                                    if (srcFile.exists()) {
+                                                                        val cacheFile = File(context.cacheDir, "exported_${item.id}.srt")
+                                                                        srcFile.copyTo(cacheFile, overwrite = true)
+                                                                    }
+                                                                } catch (_: Exception) { }
+                                                            }
+                                                            Toast.makeText(context, "تم نسخ ${batch.items.size} ترجمة", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        onDeleteAll = {
+                                                            batch.items.forEach { viewModel.deleteSubtitleDownload(it.id) }
+                                                        },
+                                                        onExportOne = { index ->
+                                                            val item = batch.items[index]
+                                                            try {
+                                                                val srcFile = File(item.localFilePath)
+                                                                if (srcFile.exists()) {
+                                                                    val cacheFile = File(context.cacheDir, "exported_${item.id}.srt")
+                                                                    srcFile.copyTo(cacheFile, overwrite = true)
+                                                                    Toast.makeText(context, "تم نسخ الترجمة", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            } catch (_: Exception) { }
+                                                        },
+                                                        onDeleteOne = { index ->
+                                                            viewModel.deleteSubtitleDownload(batch.items[index].id)
+                                                        },
+                                                        onClickOne = { index ->
+                                                            val item = batch.items[index]
+                                                            val file = File(item.localFilePath)
+                                                            if (file.exists()) {
+                                                                parsedSubtitles = SubtitleParser.parseBlock(file)
+                                                                showSubtitleDrawer = false
+                                                                subtitlePage = 0
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(
+                                                    text = "المجموع: ${batchGroups.sumOf { it.items.size }} ترجمة",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }

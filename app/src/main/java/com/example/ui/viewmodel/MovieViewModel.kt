@@ -63,6 +63,7 @@ class MovieViewModel(
     val watchlist: StateFlow<List<WatchlistEntity>>
     val downloads: StateFlow<List<DownloadEntity>>
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
+    val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
 
     // Home items states
     private val _popularMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
@@ -93,6 +94,16 @@ class MovieViewModel(
 
     private val _showDownloadErrorDialog = MutableStateFlow(false)
     val showDownloadErrorDialog: StateFlow<Boolean> = _showDownloadErrorDialog.asStateFlow()
+
+    data class SubtitleBatchGroup(
+        val batchId: String,
+        val title: String,
+        val fileName: String,
+        val tmdbId: String,
+        val mediaType: String,
+        val count: Int,
+        val items: List<SubtitleDownloadEntity>
+    )
 
     data class BackgroundQueueItem(
         val downloadId: String,
@@ -141,6 +152,22 @@ class MovieViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         subtitleDownloads = repository.subtitleDownloads
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        subtitleBatchGroups = repository.subtitleDownloads
+            .map { list ->
+                list.groupBy { it.batchId }.map { (batchId, items) ->
+                    SubtitleBatchGroup(
+                        batchId = batchId,
+                        title = items.first().title,
+                        fileName = items.first().fileName,
+                        tmdbId = items.first().tmdbId,
+                        mediaType = items.first().mediaType,
+                        count = items.size,
+                        items = items.sortedBy { it.episode }
+                    )
+                }.sortedByDescending { group -> group.items.maxOf { it.downloadedAt } }
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         // Fetch Home content on startup
@@ -444,12 +471,11 @@ class MovieViewModel(
         mediaType: String = "movie",
         season: Int = 0,
         episode: Int = 0,
-        fileName: String = ""
+        fileName: String = "",
+        batchId: String = ""
     ) {
         viewModelScope.launch {
-            // ID includes episode to avoid collision between different episodes
             val baseId = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
-            // Add a uniqueness suffix to handle multiple files per episode
             val id = if (baseId.endsWith("_$languageCode")) "${baseId}_${System.currentTimeMillis()}" else baseId
             val entity = SubtitleDownloadEntity(
                 id = id,
@@ -464,10 +490,11 @@ class MovieViewModel(
                 season = season,
                 episode = episode,
                 fileName = fileName,
+                batchId = batchId,
                 downloadedAt = System.currentTimeMillis()
             )
             repository.addSubtitleDownload(entity)
-            Toast.makeText(getApplication(), "تم تحميل الترجمة ($language)", Toast.LENGTH_SHORT).show()
+            // Toast removed: unified batch toast is shown via onBatchComplete
         }
     }
 

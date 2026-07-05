@@ -104,6 +104,7 @@ data class SubtitleDownloadEntity(
     val source: String,                      // "Subdl" / "MovieBox" / "OpenSubtitles"
     val localFilePath: String,               // path inside app storage
     val fileName: String = "",               // original file name / release name from search result
+    val batchId: String = "",                // UUID grouping all files from one download operation
     val originalUrl: String = "",            // original download URL
     val downloadedAt: Long = System.currentTimeMillis()
 )

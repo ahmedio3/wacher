@@ -269,7 +269,7 @@ fun DetailScreen(
                         episode = subtitleSheetEpisode,
                         titleFallback = subtitleSheetTitle,
                         onNavigateBack = { showSubtitleSheet = false },
-                        onSubtitleLoaded = { file, language, langCode, source, name, matchedEpisode ->
+                        onSubtitleLoaded = { file, language, langCode, source, name, matchedEpisode, batchId ->
                             viewModel.saveSubtitleDownload(
                                 tmdbId = subtitleSheetTmdbId,
                                 title = subtitleSheetTitle,
@@ -281,9 +281,15 @@ fun DetailScreen(
                                 mediaType = if (subtitleSheetIsTv) "tv" else "movie",
                                 season = subtitleSheetSeason,
                                 episode = if (matchedEpisode > 0) matchedEpisode else subtitleSheetEpisode,
-                                fileName = name
+                                fileName = name,
+                                batchId = batchId
                             )
                             // Keep sheet open so user can download more subtitles
+                        },
+                        onBatchComplete = { batchId, count, releaseName ->
+                            val msg = if (count > 1) "تم تحميل $count ترجمة ($releaseName)"
+                                      else "تم تحميل الترجمة ($releaseName)"
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
