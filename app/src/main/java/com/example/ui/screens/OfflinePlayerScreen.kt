@@ -1145,12 +1145,13 @@ fun OfflinePlayerScreen(
                                             titleFallback = activeTitle,
                                             initialPage = page,
                                             onNavigateBack = { subtitlePage = 0 },
-                                            onSubtitleLoaded = { file, _, _, _ ->
+                                            onSubtitleLoaded = { file, _, _, _, _, _ ->
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
                                                 showSubtitleDrawer = false
                                             },
                                             customDownload = { downloadUrl: String ->
-                                                SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId)
+                                                val file = SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId)
+                                                if (file != null) listOf(Pair(file, 0)) else emptyList()
                                             }
                                         )
                                     }

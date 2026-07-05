@@ -284,10 +284,14 @@ object SubtitleHelper {
 
     /**
      * Downloads subtitle to a standalone directory (not tied to a video download).
-     * Uses a UUID-based filename to avoid collisions with mediaId-based naming.
-     * Returns the local file or null on failure.
+     * Extracts ALL .srt/.vtt files from ZIP archives and matches each to an episode
+     * number using filename regex. For raw or gzip downloads, returns a single-file list.
+     *
+     * @return List of (File, matchedEpisodeNumber) pairs. matchedEpisodeNumber = 0
+     *         when the episode could not be determined from the filename.
      */
-    suspend fun downloadSubtitleStandalone(context: Context, downloadUrlPath: String, subtitleId: String): File? = withContext(Dispatchers.IO) {
+    suspend fun downloadSubtitleStandalone(context: Context, downloadUrlPath: String, subtitleId: String): List<Pair<File, Int>> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<Pair<File, Int>>()
         try {
             val isDirectUrl = downloadUrlPath.startsWith("http")
             val downloadUrl = if (isDirectUrl) downloadUrlPath else "https://dl.subdl.com$downloadUrlPath"
@@ -317,7 +321,8 @@ object SubtitleHelper {
                     fos.close()
                     rawInput.close()
                     conn.disconnect()
-                    return@withContext file
+                    results.add(Pair(file, 0))
+                    return@withContext results
                 }
 
                 if (isGzip) {
@@ -328,48 +333,54 @@ object SubtitleHelper {
                     fos.close()
                     gzInput.close()
                     conn.disconnect()
-                    return@withContext file
+                    results.add(Pair(file, 0))
+                    return@withContext results
                 }
 
-                // ZIP file — extract first .srt/.vtt
+                // ZIP file — extract ALL .srt/.vtt and match episode numbers
                 val input = BufferedInputStream(conn.inputStream)
                 val zis = ZipInputStream(input)
                 var zipEntry = zis.nextEntry
-                var bestMatch: File? = null
+
+                val epPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)\\b")
+                var fileIndex = 0
 
                 while (zipEntry != null) {
                     if (!zipEntry.isDirectory && (zipEntry.name.endsWith(".srt") || zipEntry.name.endsWith(".vtt"))) {
                         val tmpName = File(zipEntry.name).name
-                        val tmpFile = File(subsDir, "${subtitleId}_$tmpName")
-                        val fos = FileOutputStream(tmpFile)
+                        val ext = if (tmpName.endsWith(".vtt")) ".vtt" else ".srt"
+                        // Use unique filename per extracted file
+                        val finalName = "${subtitleId}_f${fileIndex}$ext"
+                        val finalFile = File(subsDir, finalName)
+                        val fos = FileOutputStream(finalFile)
                         val buffer = ByteArray(2048)
                         var bytesRead: Int
                         while (zis.read(buffer).also { bytesRead = it } != -1) {
                             fos.write(buffer, 0, bytesRead)
                         }
                         fos.close()
-                        if (bestMatch == null) bestMatch = tmpFile
-                        else tmpFile.delete()
+
+                        // Match episode number from filename
+                        val matcher = epPattern.matcher(tmpName)
+                        val matchedEp = if (matcher.find()) {
+                            matcher.group(1).toIntOrNull() ?: 0
+                        } else 0
+
+                        results.add(Pair(finalFile, matchedEp))
+                        fileIndex++
                     }
                     zipEntry = zis.nextEntry
                 }
                 zis.close()
                 conn.disconnect()
 
-                bestMatch?.let { file ->
-                    val ext = if (file.name.endsWith(".srt")) ".srt" else ".vtt"
-                    val finalFile = File(subsDir, "$subtitleId$ext")
-                    if (finalFile.exists()) finalFile.delete()
-                    file.renameTo(finalFile)
-                    return@withContext finalFile
-                }
-                return@withContext null
+                return@withContext results
             }
             conn.disconnect()
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        null
+        results
     }
 
     // ===== NEW: Direct Subdl API =====

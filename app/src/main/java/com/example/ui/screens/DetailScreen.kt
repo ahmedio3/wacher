@@ -245,10 +245,14 @@ fun DetailScreen(
 
         // SUBTITLE DOWNLOAD BOTTOM SHEET
         if (showSubtitleSheet) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            val sheetState = rememberModalBottomSheetState(
+                skipPartiallyExpanded = true,
+                confirmValueChange = { it != SheetValue.Hidden }  // Block swipe-to-dismiss; close only via X button
+            )
             ModalBottomSheet(
-                onDismissRequest = { showSubtitleSheet = false },
+                onDismissRequest = { },
                 sheetState = sheetState,
+                dragHandle = null,  // Remove default drag handle to avoid scroll conflicts
                 containerColor = MaterialTheme.colorScheme.background
             ) {
                 Box(
@@ -265,7 +269,7 @@ fun DetailScreen(
                         episode = subtitleSheetEpisode,
                         titleFallback = subtitleSheetTitle,
                         onNavigateBack = { showSubtitleSheet = false },
-                        onSubtitleLoaded = { file, language, langCode, source ->
+                        onSubtitleLoaded = { file, language, langCode, source, name, matchedEpisode ->
                             viewModel.saveSubtitleDownload(
                                 tmdbId = subtitleSheetTmdbId,
                                 title = subtitleSheetTitle,
@@ -276,9 +280,10 @@ fun DetailScreen(
                                 localFilePath = file.absolutePath,
                                 mediaType = if (subtitleSheetIsTv) "tv" else "movie",
                                 season = subtitleSheetSeason,
-                                episode = subtitleSheetEpisode
+                                episode = if (matchedEpisode > 0) matchedEpisode else subtitleSheetEpisode,
+                                fileName = name
                             )
-                            showSubtitleSheet = false
+                            // Keep sheet open so user can download more subtitles
                         }
                     )
                 }

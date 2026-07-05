@@ -151,6 +151,15 @@ private fun SubtitleDownloadCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (item.fileName.isNotEmpty()) {
+                    Text(
+                        text = item.fileName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = "${item.language} • ${item.source}",
                     style = MaterialTheme.typography.bodySmall,

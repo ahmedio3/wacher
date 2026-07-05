@@ -443,10 +443,14 @@ class MovieViewModel(
         localFilePath: String,
         mediaType: String = "movie",
         season: Int = 0,
-        episode: Int = 0
+        episode: Int = 0,
+        fileName: String = ""
     ) {
         viewModelScope.launch {
-            val id = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
+            // ID includes episode to avoid collision between different episodes
+            val baseId = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
+            // Add a uniqueness suffix to handle multiple files per episode
+            val id = if (baseId.endsWith("_$languageCode")) "${baseId}_${System.currentTimeMillis()}" else baseId
             val entity = SubtitleDownloadEntity(
                 id = id,
                 tmdbId = tmdbId,
@@ -459,6 +463,7 @@ class MovieViewModel(
                 localFilePath = localFilePath,
                 season = season,
                 episode = episode,
+                fileName = fileName,
                 downloadedAt = System.currentTimeMillis()
             )
             repository.addSubtitleDownload(entity)

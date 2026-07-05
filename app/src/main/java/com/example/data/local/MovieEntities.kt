@@ -92,7 +92,7 @@ object LocalPlaylistList {
 
 @Entity(tableName = "subtitle_downloads")
 data class SubtitleDownloadEntity(
-    @PrimaryKey val id: String,              // UUID
+    @PrimaryKey val id: String,              // tmdbId_s{season}e{matchedEpisode}_{languageCode}[_{unique}]
     val tmdbId: String,                      // TMDB ID
     val title: String,                       // "Inception" or "Breaking Bad S1E3"
     val mediaType: String,                   // "movie" or "tv"
@@ -103,6 +103,7 @@ data class SubtitleDownloadEntity(
     val languageCode: String,                // "ar"
     val source: String,                      // "Subdl" / "MovieBox" / "OpenSubtitles"
     val localFilePath: String,               // path inside app storage
+    val fileName: String = "",               // original file name / release name from search result
     val originalUrl: String = "",            // original download URL
     val downloadedAt: Long = System.currentTimeMillis()
 )

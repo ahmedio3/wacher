@@ -34,10 +34,10 @@ import java.util.UUID
  * Shows 3 pages (MovieBox, Subdl, OpenSubtitles) via AnimatedContent.
  * Does NOT assume any container — works inside a drawer OR a ModalBottomSheet.
  *
- * @param customDownload Optional download override signature: (downloadUrl) -> File?.
- *   When provided, replaces default standalone download. Used by OfflinePlayerScreen
- *   which needs downloadAndExtractSubtitle for player integration.
+ * @param customDownload Optional download override. When provided, replaces default standalone
+ *   download. Used by OfflinePlayerScreen which needs downloadAndExtractSubtitle for player.
  * @param onSubtitleLoaded Called after download succeeds with the local file.
+ *   matchedEpisode = 0 means episode could not be determined (show "غير محدد").
  */
 @Composable
 fun SubtitleSourceSheet(
@@ -49,16 +49,16 @@ fun SubtitleSourceSheet(
     initialPage: Int = 0,
     context: Context = LocalContext.current,
     onNavigateBack: () -> Unit = {},
-    onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String) -> Unit = { _, _, _, _ -> },
-    customDownload: (suspend (downloadUrl: String) -> File?)? = null
+    onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String, name: String, matchedEpisode: Int) -> Unit = { _, _, _, _, _, _ -> },
+    customDownload: (suspend (downloadUrl: String) -> List<Pair<File, Int>>)? = null
 ) {
     // All state is internal — completely isolated per instance
     var subtitlePage by remember { mutableIntStateOf(1) }
     var searchSubsList by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
     var subdlSources by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
     var openSubSources by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>?>(null) }
-    var isDownloadingSub by remember { mutableStateOf(false) }
-    var isDownloadingSourceSub by remember { mutableStateOf(false) }
+    var currentlyDownloadingUrl by remember { mutableStateOf<String?>(null) }
+    var currentlyDownloadingSourceUrl by remember { mutableStateOf<String?>(null) }
     var isLoadingSources by remember { mutableStateOf(false) }
     var currentSubPage by remember { mutableIntStateOf(initialPage) }
 
@@ -66,7 +66,7 @@ fun SubtitleSourceSheet(
     subtitlePage = currentSubPage
 
     // Default download: standalone to standalone_subtitles/
-    val defaultDownload: suspend (String) -> File? = { url ->
+    val defaultDownload: suspend (String) -> List<Pair<File, Int>> = { url ->
         SubtitleHelper.downloadSubtitleStandalone(context, url, UUID.randomUUID().toString())
     }
     val downloadFn = customDownload ?: defaultDownload
@@ -171,11 +171,11 @@ fun SubtitleSourceSheet(
 
                 // Auto-fetch on entry
                 LaunchedEffect(Unit) {
-                    isDownloadingSub = true
+                    currentlyDownloadingUrl = "__loading__"
                     searchSubsList = withContext(Dispatchers.IO) {
                         SubtitleHelper.fetchSubtitles(tmdbId, isTv, season, episode, titleFallback)
                     }
-                    isDownloadingSub = false
+                    currentlyDownloadingUrl = null
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -184,17 +184,17 @@ fun SubtitleSourceSheet(
                         OutlinedButton(
                             onClick = {
                                 movieScope.launch {
-                                    isDownloadingSub = true
+                                    currentlyDownloadingUrl = "__loading__"
                                     searchSubsList = withContext(Dispatchers.IO) {
                                         SubtitleHelper.fetchSubtitles(tmdbId, isTv, season, episode, titleFallback)
                                     }
-                                    isDownloadingSub = false
+                                    currentlyDownloadingUrl = null
                                 }
                             },
-                            enabled = !isDownloadingSub,
+                            enabled = currentlyDownloadingUrl == null,
                             modifier = Modifier.weight(1f)
                         ) {
-                            if (isDownloadingSub) {
+                            if (currentlyDownloadingUrl != null) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -227,15 +227,15 @@ fun SubtitleSourceSheet(
                                             }
                                             IconButton(onClick = {
                                                 movieScope.launch {
-                                                    isDownloadingSub = true
-                                                    val file = downloadFn(sub.url)
-                                                    if (file != null) {
-                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source)
+                                                    currentlyDownloadingUrl = sub.url
+                                                    val files = downloadFn(sub.url)
+                                                    for ((file, matchedEp) in files) {
+                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
                                                     }
-                                                    isDownloadingSub = false
+                                                    currentlyDownloadingUrl = null
                                                 }
                                             }) {
-                                                if (isDownloadingSub) {
+                                                if (currentlyDownloadingUrl == sub.url) {
                                                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                                                 } else {
                                                     Icon(Icons.Default.Download, "تحميل وتفعيل", tint = MaterialTheme.colorScheme.primary)
@@ -309,14 +309,14 @@ fun SubtitleSourceSheet(
                                 if (subs.isNotEmpty()) {
                                     item { SectionHeader(title = "Subdl", count = subs.size, color = Color(0xFF4A90D9)) }
                                     items(subs) { sub ->
-                                        SourceSubtitleCard(item = sub, isDownloading = isDownloadingSourceSub, onDownload = {
+                                        SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
                                             sourceScope.launch {
-                                                isDownloadingSourceSub = true
-                                                val file = downloadFn(sub.url)
-                                                if (file != null) {
-                                                    onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source)
+                                                currentlyDownloadingSourceUrl = sub.url
+                                                val files = downloadFn(sub.url)
+                                                for ((file, matchedEp) in files) {
+                                                    onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
                                                 }
-                                                isDownloadingSourceSub = false
+                                                currentlyDownloadingSourceUrl = null
                                             }
                                         })
                                     }
@@ -389,17 +389,17 @@ fun SubtitleSourceSheet(
                                 if (subs.isNotEmpty()) {
                                     item { SectionHeader(title = "OpenSubtitles", count = subs.size, color = Color(0xFF7CB342)) }
                                     items(subs) { sub ->
-                                        SourceSubtitleCard(item = sub, isDownloading = isDownloadingSourceSub, onDownload = {
+                                        SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
                                             sourceScope.launch {
-                                                isDownloadingSourceSub = true
+                                                currentlyDownloadingSourceUrl = sub.url
                                                 val downloadUrl = if (sub.fileId != null) SubtitleHelper.getOpenSubtitleDownloadUrl(sub.fileId) ?: sub.url else sub.url
                                                 if (downloadUrl.isNotEmpty()) {
-                                                    val file = downloadFn(downloadUrl)
-                                                    if (file != null) {
-                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source)
+                                                    val files = downloadFn(downloadUrl)
+                                                    for ((file, matchedEp) in files) {
+                                                        onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp)
                                                     }
                                                 }
-                                                isDownloadingSourceSub = false
+                                                currentlyDownloadingSourceUrl = null
                                             }
                                         })
                                     }
