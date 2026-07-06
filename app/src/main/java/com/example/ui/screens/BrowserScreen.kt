@@ -474,7 +474,7 @@ fun BrowserScreen(
 // ====================================================================
 // Saved Images Grid (displayed inside BrowserScreen when toggled)
 // ====================================================================
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun SavedImagesGrid(
     savedImages: List<SavedImageEntity>,
