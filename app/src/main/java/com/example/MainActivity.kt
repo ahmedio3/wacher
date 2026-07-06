@@ -42,11 +42,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.ui.navigation.isForwardNavigation
+import com.example.ui.navigation.slideIn
+import com.example.ui.navigation.slideOut
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MovieViewModel
@@ -272,12 +277,33 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 }
             }
         ) { innerPadding ->
+            val layoutDirection = LocalLayoutDirection.current
             NavHost(
                 navController = navController,
                 startDestination = "splash",
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                enterTransition = {
+                    val forward = isForwardNavigation(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                        isPopTransition = false
+                    )
+                    slideIn(forward, layoutDirection)
+                },
+                exitTransition = {
+                    val forward = isForwardNavigation(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                        isPopTransition = false
+                    )
+                    slideOut(forward, layoutDirection)
+                },
+                popEnterTransition = { slideIn(false, layoutDirection) },
+                popExitTransition = { slideOut(false, layoutDirection) }
             ) {
-            composable("splash") {
+            composable("splash",
+                    enterTransition = { fadeIn() },
+                    exitTransition = { fadeOut() }) {
                 SplashScreen(
                     onSplashFinished = {
                         navController.navigate("home") {
@@ -481,6 +507,8 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             // Dedicated Offline Native Video Player (Optimized for Downloads without interference)
             composable(
                 route = "offline_player/{mediaId}/{title}?localFilePath={localFilePath}",
+                enterTransition = { fadeIn() },
+                exitTransition = { fadeOut() },
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
                     navArgument("title") { type = NavType.StringType },
@@ -508,6 +536,8 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             // Dedicated Native Video Player Cinema View (Supports online playing)
             composable(
                 route = "player/{mediaId}/{title}?localFilePath={localFilePath}",
+                enterTransition = { fadeIn() },
+                exitTransition = { fadeOut() },
                 arguments = listOf(
                     navArgument("mediaId") { type = NavType.StringType },
                     navArgument("title") { type = NavType.StringType },
