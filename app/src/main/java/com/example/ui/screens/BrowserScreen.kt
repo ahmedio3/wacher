@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -10,30 +9,37 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -48,11 +54,13 @@ import com.example.data.local.SavedImageEntity
 import com.example.ui.viewmodel.MovieViewModel
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrowserScreen(
     viewModel: MovieViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    isBottomBarHidden: Boolean = false,
+    onToggleBottomBar: () -> Unit = {}
 ) {
     // ---- WebView state ----
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -62,13 +70,14 @@ fun BrowserScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var pageTitle by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var loadProgress by remember { mutableFloatStateOf(0f) }
 
     // ---- UI state ----
-    var showToolsMenu by remember { mutableStateOf(false) }
     var showSavedImages by remember { mutableStateOf(false) }
     var showSaveImageDialog by remember { mutableStateOf(false) }
     var pendingImageUrl by remember { mutableStateOf("") }
     var saveImageFailed by remember { mutableStateOf(false) }
+    var viewerIndex by remember { mutableIntStateOf(-1) }
 
     val context = LocalContext.current
     val savedImages by viewModel.savedImages.collectAsState()
@@ -77,6 +86,8 @@ fun BrowserScreen(
     BackHandler(enabled = true) {
         if (showSavedImages) {
             showSavedImages = false
+        } else if (viewerIndex >= 0) {
+            viewerIndex = -1
         } else if (webViewRef?.canGoBack() == true) {
             webViewRef?.goBack()
         } else {
@@ -108,11 +119,29 @@ fun BrowserScreen(
     }
 
     // ---- Saved images mode ----
-    if (showSavedImages) {
+    if (showSavedImages && viewerIndex < 0) {
         SavedImagesGrid(
             savedImages = savedImages,
             onDeleteImage = { viewModel.deleteSavedImage(it) },
-            onBack = { showSavedImages = false }
+            onBack = { showSavedImages = false },
+            onImageClick = { index -> viewerIndex = index }
+        )
+        return
+    }
+
+    // ---- Full-screen image viewer ----
+    if (viewerIndex >= 0 && viewerIndex < savedImages.size) {
+        FullScreenImageViewer(
+            images = savedImages,
+            initialIndex = viewerIndex,
+            onDeleteImage = { id ->
+                viewModel.deleteSavedImage(id)
+                if (savedImages.size <= 1) {
+                    viewerIndex = -1
+                    showSavedImages = false
+                }
+            },
+            onClose = { viewerIndex = -1 }
         )
         return
     }
@@ -161,139 +190,36 @@ fun BrowserScreen(
 
     // ---- Main browser UI ----
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
         topBar = {
             Column {
-                // Address bar row
+                // ---- Single compact header row ----
                 Surface(
                     tonalElevation = 2.dp,
-                    color = MaterialTheme.colorScheme.surface
+                    color = Color(0xFFEFECE4)  // Same beige as ModernBottomNavBar
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                            .padding(horizontal = 2.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Back (system / close)
-                        IconButton(onClick = {
-                            if (webViewRef?.canGoBack() == true) {
-                                webViewRef?.goBack()
-                            } else {
-                                onBackClick()
-                            }
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "رجوع"
-                            )
-                        }
-
-                        // URL TextField
-                        OutlinedTextField(
-                            value = urlInput,
-                            onValueChange = { urlInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            singleLine = true,
-                            placeholder = {
-                                Text(
-                                    "ابحث أو أدخل رابطاً",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodySmall,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                            keyboardActions = KeyboardActions(onGo = { navigateTo(urlInput) }),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
-                        )
-
-                        // Tools menu (⋮)
-                        Box {
-                            IconButton(onClick = { showToolsMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "أدوات")
-                            }
-                            DropdownMenu(
-                                expanded = showToolsMenu,
-                                onDismissRequest = { showToolsMenu = false }
-                            ) {
-                                // Share current link
-                                DropdownMenuItem(
-                                    text = { Text("مشاركة الرابط") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, currentUrl)
-                                        }
-                                        context.startActivity(
-                                            Intent.createChooser(shareIntent, "مشاركة الرابط")
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null)
-                                    }
-                                )
-                                // Saved images
-                                DropdownMenuItem(
-                                    text = { Text("الصور المحفوظة") },
-                                    onClick = {
-                                        showToolsMenu = false
-                                        showSavedImages = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Navigation controls row
-                Surface(
-                    tonalElevation = 1.dp,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Page title (centered) or loading indicator
-                        if (pageTitle.isNotBlank()) {
-                            Text(
-                                text = pageTitle,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // Back (page history)
+                        // [←] History back
                         IconButton(
                             onClick = { webViewRef?.goBack() },
                             enabled = canGoBack,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                Icons.Default.ArrowBack,
+                                Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "الصفحة السابقة",
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // Forward (page history)
+                        // [→] History forward
                         IconButton(
                             onClick = { webViewRef?.goForward() },
                             enabled = canGoForward,
@@ -306,7 +232,7 @@ fun BrowserScreen(
                             )
                         }
 
-                        // Refresh / Stop
+                        // [↻/✕] Refresh / Stop
                         IconButton(
                             onClick = {
                                 if (isLoading) {
@@ -332,15 +258,69 @@ fun BrowserScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        // URL TextField (expands to fill space)
+                        OutlinedTextField(
+                            value = urlInput,
+                            onValueChange = { urlInput = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            singleLine = true,
+                            placeholder = {
+                                Text(
+                                    "ابحث أو أدخل رابطاً",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            },
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { navigateTo(urlInput) }),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                            )
+                        )
 
-                        // Spacer for symmetry
-                        Spacer(modifier = Modifier.weight(1f))
+                        // [🖼️] Saved images (direct, no menu)
+                        IconButton(
+                            onClick = { showSavedImages = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.PhotoLibrary,
+                                contentDescription = "الصور المحفوظة",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // [⛶] Toggle bottom bar
+                        IconButton(
+                            onClick = onToggleBottomBar,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                if (isBottomBarHidden) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                contentDescription = if (isBottomBarHidden) "إظهار الشريط" else "إخفاء الشريط",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
+
+                // ---- Loading progress bar (A5) ----
+                AnimatedVisibility(visible = isLoading, enter = fadeIn(), exit = fadeOut()) {
+                    LinearProgressIndicator(
+                        progress = { loadProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
             }
-        },
-        modifier = Modifier.fillMaxSize()
+        }
     ) { paddingValues ->
         // ---- WebView ----
         AndroidView(
@@ -351,7 +331,7 @@ fun BrowserScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
-                    // WebSettings — exactly as specified in the architecture plan
+                    // WebSettings
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -416,7 +396,7 @@ fun BrowserScreen(
                         }
                     }
 
-                    // WebChromeClient
+                    // WebChromeClient with loading progress
                     webChromeClient = object : WebChromeClient() {
                         override fun onReceivedTitle(view: WebView?, title: String?) {
                             super.onReceivedTitle(view, title)
@@ -425,11 +405,11 @@ fun BrowserScreen(
 
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
                             super.onProgressChanged(view, newProgress)
-                            // Could show progress in the future
+                            loadProgress = newProgress / 100f
                         }
                     }
 
-                    // ---- Long-press to save images ----
+                    // Long-press to save images
                     setOnLongClickListener { v ->
                         val wv = v as? WebView ?: return@setOnLongClickListener false
                         val result = wv.hitTestResult
@@ -440,13 +420,13 @@ fun BrowserScreen(
                                 if (!imgUrl.isNullOrBlank()) {
                                     pendingImageUrl = imgUrl
                                     showSaveImageDialog = true
-                                    true // Consume — prevent default context menu
+                                    true
                                 } else {
                                     saveImageFailed = true
                                     true
                                 }
                             }
-                            else -> false // Let default behavior handle it
+                            else -> false
                         }
                     }
 
@@ -455,11 +435,9 @@ fun BrowserScreen(
                 }
             },
             update = { webView ->
-                // Store reference for BackHandler
                 if (webViewRef == null) {
                     webViewRef = webView
                 }
-                // If URL was changed externally (e.g. navigateTo called), load it
                 if (webView.url.isNullOrEmpty()) {
                     webView.loadUrl(currentUrl)
                 }
@@ -472,29 +450,39 @@ fun BrowserScreen(
 }
 
 // ====================================================================
-// Saved Images Grid (displayed inside BrowserScreen when toggled)
+// Saved Images Grid (with aspect ratio toggle — B2)
 // ====================================================================
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun SavedImagesGrid(
     savedImages: List<SavedImageEntity>,
     onDeleteImage: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onImageClick: (Int) -> Unit
 ) {
+    // Default: real dimensions (square = false)
+    var useSquareAspect by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "الصور المحفوظة",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("الصور المحفوظة", fontWeight = FontWeight.Bold)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "رجوع"
+                        )
+                    }
+                },
+                actions = {
+                    // Aspect ratio toggle
+                    IconButton(onClick = { useSquareAspect = !useSquareAspect }) {
+                        Icon(
+                            if (useSquareAspect) Icons.Default.CropSquare else Icons.Default.FitScreen,
+                            contentDescription = if (useSquareAspect) "عرض بالأبعاد الحقيقية" else "عرض مربع"
                         )
                     }
                 }
@@ -515,103 +503,144 @@ private fun SavedImagesGrid(
                 )
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 120.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(savedImages, key = { it.id }) { image ->
-                    var showDeleteConfirm by remember { mutableStateOf(false) }
-
-                    Card(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .combinedClickable(
-                                onClick = { /* Preview — future enhancement */ },
-                                onLongClick = { showDeleteConfirm = true }
-                            ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            if (useSquareAspect) {
+                // === Mode A: Square grid (fixed aspect ratio) ===
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 120.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(savedImages, key = { it.id }) { image ->
+                        ImageGridItem(
+                            image = image,
+                            aspectRatio = 1f,
+                            contentScale = ContentScale.Crop,
+                            onClick = { onImageClick(savedImages.indexOf(image)) },
+                            onDeleteImage = onDeleteImage
                         )
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            val file = File(image.localFilePath)
-                            if (file.exists()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(file)
-                                        .crossfade(200)
-                                        .build(),
-                                    contentDescription = "صورة محفوظة",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                // File deleted but DB still has record — show placeholder
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "غير متوفرة",
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                    )
-                                }
-                            }
-
-                            // File size badge (bottom-right)
-                            if (image.fileSizeBytes > 0) {
-                                Surface(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(4.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = formatFileSize(image.fileSizeBytes),
-                                        fontSize = 9.sp,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
                     }
-
-                    // Delete confirmation dialog
-                    if (showDeleteConfirm) {
-                        AlertDialog(
-                            onDismissRequest = { showDeleteConfirm = false },
-                            title = { Text("حذف الصورة") },
-                            text = { Text("هل أنت متأكد من حذف هذه الصورة؟\nلا يمكن التراجع عن هذا الإجراء.") },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    onDeleteImage(image.id)
-                                    showDeleteConfirm = false
-                                }) {
-                                    Text(
-                                        "حذف",
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showDeleteConfirm = false }) {
-                                    Text("إلغاء")
-                                }
-                            }
+                }
+            } else {
+                // === Mode B: Real dimensions (staggered grid, no fixed aspect) ===
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(minSize = 120.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(savedImages, key = { it.id }) { image ->
+                        val index = savedImages.indexOf(image)
+                        ImageGridItem(
+                            image = image,
+                            aspectRatio = null,  // natural height
+                            contentScale = ContentScale.Fit,
+                            onClick = { onImageClick(index) },
+                            onDeleteImage = onDeleteImage
                         )
                     }
                 }
             }
         }
+    }
+}
+
+// ====================================================================
+// Single image grid item (shared by both grid modes)
+// ====================================================================
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ImageGridItem(
+    image: SavedImageEntity,
+    aspectRatio: Float?,
+    contentScale: ContentScale,
+    onClick: () -> Unit,
+    onDeleteImage: (String) -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .then(if (aspectRatio != null) Modifier.aspectRatio(aspectRatio) else Modifier)
+            .clip(RoundedCornerShape(8.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showDeleteConfirm = true }
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val file = File(image.localFilePath)
+            if (file.exists()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(file)
+                        .crossfade(200)
+                        .build(),
+                    contentDescription = "صورة محفوظة",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "غير متوفرة",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
+            }
+
+            // File size badge (bottom-right)
+            if (image.fileSizeBytes > 0) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = formatFileSize(image.fileSizeBytes),
+                        fontSize = 9.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Delete confirmation dialog
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("حذف الصورة") },
+            text = { Text("هل أنت متأكد من حذف هذه الصورة؟\nلا يمكن التراجع عن هذا الإجراء.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteImage(image.id)
+                    showDeleteConfirm = false
+                }) {
+                    Text("حذف", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("إلغاء")
+                }
+            }
+        )
     }
 }
 

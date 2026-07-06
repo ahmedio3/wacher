@@ -152,11 +152,19 @@ fun MainAppContainer(startWithChat: Boolean = false) {
         )
     )
 
-    // Hide Bottom bar on Detail, Settings, Player, Splash, and Adult views
-    val shouldShowBottomBar = currentRoute in listOf("home", "browser", "explore", "downloads", "settings")
+    // State for manual bottom bar hide (BrowserScreen fullscreen toggle)
+    var isBottomBarManuallyHidden by remember { mutableStateOf(false) }
 
+    // Hide Bottom bar on non-tab routes OR when manually hidden in browser
+    val shouldShowBottomBar = (currentRoute in listOf("home", "browser", "explore", "downloads", "settings"))
+        && !isBottomBarManuallyHidden
+ 
     LaunchedEffect(currentRoute) {
         MainActivity.isChatForeground = currentRoute == "chat/global"
+        // Auto-restore bottom bar when leaving browser route
+        if (currentRoute != "browser") {
+            isBottomBarManuallyHidden = false
+        }
     }
 
     LaunchedEffect(startWithChat) {
@@ -339,7 +347,9 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             composable("browser") {
                 BrowserScreen(
                     viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    isBottomBarHidden = isBottomBarManuallyHidden,
+                    onToggleBottomBar = { isBottomBarManuallyHidden = !isBottomBarManuallyHidden }
                 )
             }
 
@@ -436,7 +446,25 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 )
             }
 
-            composable("downloads") {
+            composable(
+                route = "downloads",
+                enterTransition = {
+                    val forward = isForwardNavigation(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                        isPopTransition = false
+                    )
+                    slideIn(forward, layoutDirection)
+                },
+                exitTransition = {
+                    val forward = isForwardNavigation(
+                        initialState.destination.route,
+                        targetState.destination.route,
+                        isPopTransition = false
+                    )
+                    slideOut(forward, layoutDirection)
+                }
+            ) {
                 DownloadsScreen(
                     viewModel = movieViewModel,
                     onNavigateToPlayer = { id, title, localPath ->
