@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.TmdbSeasonDetails
+import com.example.data.remote.TmdbTvDetails
 import com.example.ui.components.SeasonEpisodeSheet
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
@@ -49,13 +50,39 @@ fun WatchlistScreen(
     var selectedItem by remember { mutableStateOf<WatchlistEntity?>(null) }
     var selectedSeason by remember { mutableIntStateOf(1) }
     var selectedSeasonDetails by remember { mutableStateOf<TmdbSeasonDetails?>(null) }
+    var availableSeasons by remember { mutableStateOf<List<Int>>(listOf(1)) }
 
-    // Load season details when sheet opens
+    // Observe tvDetails to extract season numbers
+    val tvDetailsMap by viewModel.tvDetails.collectAsState()
+
+    // Load season details + fetch TV details (for season list) when sheet opens
     LaunchedEffect(showEpisodeSheet, selectedItem, selectedSeason) {
         if (showEpisodeSheet && selectedItem != null && selectedItem!!.mediaType == "tv") {
             val tmdbId = selectedItem!!.id.toIntOrNull()
             if (tmdbId != null) {
+                // Fetch TV details if not already cached (to get season numbers)
+                viewModel.fetchTvDetails(tmdbId)
+                // Fetch current season episodes
                 viewModel.fetchSeasonDetails(tmdbId, selectedSeason)
+            }
+        }
+    }
+
+    // Extract available seasons from cached tvDetails
+    LaunchedEffect(selectedItem, tvDetailsMap) {
+        if (selectedItem != null && selectedItem!!.mediaType == "tv") {
+            val tmdbId = selectedItem!!.id.toIntOrNull()
+            if (tmdbId != null) {
+                val tvState = tvDetailsMap[tmdbId]
+                if (tvState is RequestState.Success) {
+                    val seasons = tvState.data.seasons
+                        ?.map { it.seasonNumber }
+                        ?.filter { it > 0 } // exclude season 0 (specials)
+                        ?.sorted()
+                    if (!seasons.isNullOrEmpty()) {
+                        availableSeasons = seasons
+                    }
+                }
             }
         }
     }
@@ -70,7 +97,7 @@ fun WatchlistScreen(
         }
     }
 
-    // Episode statuses for current season
+    // Episode statuses for current season — cached StateFlow
     val episodeStatuses = if (showEpisodeSheet && selectedItem != null)
         viewModel.getEpisodeWatchStatusForSeason(selectedItem!!.id, selectedSeason).collectAsState().value
     else emptyList()
@@ -203,6 +230,7 @@ fun WatchlistScreen(
             watchedCount = watchedCount,
             totalEpisodes = totalEps,
             seasonNumber = selectedSeason,
+            availableSeasons = availableSeasons,
             onSeasonSelected = { s ->
                 selectedSeason = s
                 selectedSeasonDetails = null
@@ -210,9 +238,16 @@ fun WatchlistScreen(
             onToggleEpisode = { episodeNum ->
                 viewModel.toggleEpisodeWatchStatus(selectedItem!!.id, selectedSeason, episodeNum)
             },
+            onMarkAllWatched = {
+                viewModel.markAllEpisodesAsWatched(selectedItem!!.id, selectedSeason)
+            },
+            onMarkAllUnwatched = {
+                viewModel.markAllEpisodesAsUnwatched(selectedItem!!.id, selectedSeason)
+            },
             onDismiss = {
                 showEpisodeSheet = false
                 selectedItem = null
+                availableSeasons = listOf(1)
             }
         )
     }

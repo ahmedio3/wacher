@@ -75,12 +75,20 @@ class MovieRepository(private val movieDao: MovieDao) {
         return movieDao.getEpisodeWatchStatusForSeason(tmdbId, season)
     }
 
+    suspend fun getEpisodeWatchStatus(tmdbId: String, season: Int, episode: Int): EpisodeWatchStatusEntity? {
+        return movieDao.getEpisodeWatchStatus(tmdbId, season, episode)
+    }
+
     fun getWatchedCountForTvShow(tmdbId: String): Flow<Int> {
         return movieDao.getWatchedCountForTvShow(tmdbId)
     }
 
     suspend fun getAllEpisodeWatchStatus(): List<EpisodeWatchStatusEntity> {
         return movieDao.getAllEpisodeWatchStatus()
+    }
+
+    suspend fun upsertEpisodeWatchStatusBatch(items: List<EpisodeWatchStatusEntity>) {
+        movieDao.upsertEpisodeWatchStatusBatch(items)
     }
 
     // ---- REMOTE TMDB APIS ----

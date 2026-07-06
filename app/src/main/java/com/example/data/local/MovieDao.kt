@@ -64,9 +64,15 @@ interface MovieDao {
     @Query("SELECT * FROM episode_watch_status WHERE tmdbId = :tmdbId AND season = :season")
     fun getEpisodeWatchStatusForSeason(tmdbId: String, season: Int): Flow<List<EpisodeWatchStatusEntity>>
 
+    @Query("SELECT * FROM episode_watch_status WHERE tmdbId = :tmdbId AND season = :season AND episode = :episode LIMIT 1")
+    suspend fun getEpisodeWatchStatus(tmdbId: String, season: Int, episode: Int): EpisodeWatchStatusEntity?
+
     @Query("SELECT COUNT(*) FROM episode_watch_status WHERE tmdbId = :tmdbId AND watched = 1")
     fun getWatchedCountForTvShow(tmdbId: String): Flow<Int>
 
     @Query("SELECT * FROM episode_watch_status ORDER BY tmdbId, season, episode")
     suspend fun getAllEpisodeWatchStatus(): List<EpisodeWatchStatusEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEpisodeWatchStatusBatch(items: List<EpisodeWatchStatusEntity>)
 }

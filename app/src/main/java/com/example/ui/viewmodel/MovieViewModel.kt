@@ -91,10 +91,14 @@ class MovieViewModel(
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
     val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
 
-    // Episode watch tracking
+    // Episode watch tracking — MUST cache to prevent infinite recomposition loop
+    private val episodeStatusMap = mutableMapOf<String, StateFlow<List<EpisodeWatchStatusEntity>>>()
     fun getEpisodeWatchStatusForSeason(tmdbId: String, season: Int): StateFlow<List<EpisodeWatchStatusEntity>> {
-        return repository.getEpisodeWatchStatusForSeason(tmdbId, season)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        val key = "$tmdbId-$season"
+        return episodeStatusMap.getOrPut(key) {
+            repository.getEpisodeWatchStatusForSeason(tmdbId, season)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
     }
 
     val watchedCountMap = mutableMapOf<String, StateFlow<Int>>()
@@ -415,6 +419,48 @@ class MovieViewModel(
                     updatedAt = now
                 )
             )
+            // Auto-mark all episodes as watched when TV show set to COMPLETED
+            if (status == "COMPLETED" && mediaType == "tv") {
+                try {
+                    val tvId = id.toIntOrNull()
+                    if (tvId != null) {
+                        markAllTvEpisodesWatched(tvId, currentLang)
+                    }
+                } catch (_: Exception) {
+                    // Silent fail — user still gets COMPLETED status even if auto-mark fails
+                }
+            }
+        }
+    }
+
+    private suspend fun markAllTvEpisodesWatched(tvId: Int, lang: String) {
+        // 1. Get TV details for seasons list
+        val tvDetails = repository.getTvDetails(tvId, lang)
+        val seasons = tvDetails.seasons?.map { it.seasonNumber }?.filter { it > 0 } ?: return
+        val now = System.currentTimeMillis()
+        val allItems = mutableListOf<EpisodeWatchStatusEntity>()
+        // 2. For each season, get episodes and create watched entries
+        for (s in seasons) {
+            try {
+                val seasonDetails = repository.getSeasonDetails(tvId, s, lang)
+                val episodes = seasonDetails.episodes ?: continue
+                for (ep in episodes) {
+                    allItems.add(
+                        EpisodeWatchStatusEntity(
+                            tmdbId = tvId.toString(),
+                            season = s,
+                            episode = ep.episodeNumber,
+                            watched = true,
+                            updatedAt = now
+                        )
+                    )
+                }
+            } catch (_: Exception) {
+                // Skip seasons that fail to load
+            }
+        }
+        if (allItems.isNotEmpty()) {
+            repository.upsertEpisodeWatchStatusBatch(allItems)
         }
     }
 
@@ -431,16 +477,41 @@ class MovieViewModel(
     // EPISODE WATCH STATUS
     fun toggleEpisodeWatchStatus(tmdbId: String, season: Int, episode: Int) {
         viewModelScope.launch {
+            val current = repository.getEpisodeWatchStatus(tmdbId, season, episode)
             val now = System.currentTimeMillis()
             repository.upsertEpisodeWatchStatus(
                 EpisodeWatchStatusEntity(
                     tmdbId = tmdbId,
                     season = season,
                     episode = episode,
-                    watched = true,
+                    watched = current?.watched != true, // true → false flip
                     updatedAt = now
                 )
             )
+        }
+    }
+
+    fun markAllEpisodesAsWatched(tmdbId: String, season: Int) {
+        viewModelScope.launch {
+            val existingForSeason = withContext(Dispatchers.IO) {
+                repository.getEpisodeWatchStatusForSeason(tmdbId, season).first()
+            }
+            if (existingForSeason.isNotEmpty()) {
+                val updated = existingForSeason.map { it.copy(watched = true, updatedAt = System.currentTimeMillis()) }
+                repository.upsertEpisodeWatchStatusBatch(updated)
+            }
+        }
+    }
+
+    fun markAllEpisodesAsUnwatched(tmdbId: String, season: Int) {
+        viewModelScope.launch {
+            val existingForSeason = withContext(Dispatchers.IO) {
+                repository.getEpisodeWatchStatusForSeason(tmdbId, season).first()
+            }
+            if (existingForSeason.isNotEmpty()) {
+                val updated = existingForSeason.map { it.copy(watched = false, updatedAt = System.currentTimeMillis()) }
+                repository.upsertEpisodeWatchStatusBatch(updated)
+            }
         }
     }
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.EpisodeWatchStatusEntity
@@ -35,8 +36,11 @@ fun SeasonEpisodeSheet(
     watchedCount: Int,
     totalEpisodes: Int,
     seasonNumber: Int,
+    availableSeasons: List<Int> = listOf(seasonNumber),
     onSeasonSelected: (Int) -> Unit,
-    onToggleEpisode: (Int) -> Unit, // episode number
+    onToggleEpisode: (Int) -> Unit,
+    onMarkAllWatched: () -> Unit = {},
+    onMarkAllUnwatched: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -69,14 +73,58 @@ fun SeasonEpisodeSheet(
                 )
             }
 
-            // Season selector
-            // Note: seasons list is passed implicitly via onSeasonSelected.
-            // For brevity, we show the current season number as a label.
-            Text(
-                text = "الموسم $seasonNumber",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            // Season selector — horizontal scrollable row
+            if (availableSeasons.size > 1) {
+                Text(
+                    text = "اختر الموسم",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    items(availableSeasons) { sNum ->
+                        val isSelected = sNum == seasonNumber
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { if (!isSelected) onSeasonSelected(sNum) },
+                            label = { Text("الموسم $sNum", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
+            } else {
+                // Single season — just show label
+                Text(
+                    text = "الموسم $seasonNumber",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            // Mark all row
+            if (totalEpisodes > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onMarkAllWatched) {
+                        Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("تحديد الكل", fontSize = 13.sp)
+                    }
+                    TextButton(onClick = onMarkAllUnwatched) {
+                        Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("إلغاء الكل", fontSize = 13.sp)
+                    }
+                }
+            }
 
             // Episodes list
             val episodes = seasonDetails?.episodes ?: emptyList()
@@ -143,9 +191,8 @@ fun SeasonEpisodeSheet(
                                         text = episode.name ?: "الحلقة $epNum",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    // runtime not available on TmdbEpisode model
                                 }
 
                                 // Watched toggle
