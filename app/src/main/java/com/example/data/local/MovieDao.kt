@@ -75,4 +75,17 @@ interface MovieDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEpisodeWatchStatusBatch(items: List<EpisodeWatchStatusEntity>)
+
+    // ---- Saved Images (Browser) ----
+    @Query("SELECT * FROM saved_images ORDER BY downloadedAt DESC")
+    fun getSavedImages(): Flow<List<SavedImageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSavedImage(item: SavedImageEntity)
+
+    @Query("DELETE FROM saved_images WHERE id = :id")
+    suspend fun deleteSavedImage(id: String)
+
+    @Query("SELECT * FROM saved_images WHERE id = :id LIMIT 1")
+    suspend fun getSavedImageById(id: String): SavedImageEntity?
 }

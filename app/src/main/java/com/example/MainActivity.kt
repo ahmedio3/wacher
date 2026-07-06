@@ -127,6 +127,12 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             outlinedIcon = Icons.Outlined.Home
         ),
         NavigationTabItem(
+            route = "browser",
+            label = "المتصفح",
+            filledIcon = Icons.Default.Public,
+            outlinedIcon = Icons.Outlined.Public
+        ),
+        NavigationTabItem(
             route = "explore",
             label = "استكشاف",
             filledIcon = Icons.Default.ChatBubble,
@@ -147,7 +153,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
     )
 
     // Hide Bottom bar on Detail, Settings, Player, Splash, and Adult views
-    val shouldShowBottomBar = currentRoute in listOf("home", "explore", "downloads", "settings")
+    val shouldShowBottomBar = currentRoute in listOf("home", "browser", "explore", "downloads", "settings")
 
     LaunchedEffect(currentRoute) {
         MainActivity.isChatForeground = currentRoute == "chat/global"
@@ -330,6 +336,13 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 )
             }
             
+            composable("browser") {
+                BrowserScreen(
+                    viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+
             composable("explore") {
                 ExploreScreen(
                     onNavigateToAdultContent = { queries ->
@@ -585,12 +598,21 @@ fun ModernBottomNavBar(
                     selected = isSelected,
                     onClick = {
                         if (currentRoute != tab.route) {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
+                            if (tab.route == "home") {
+                                // الخيار ج: home بدون restoreState لتفعيل transition
+                                navController.navigate("home") {
+                                    popUpTo(0) { saveState = true }
+                                    launchSingleTop = true
+                                    // NO restoreState — entry جديد لتفعيل AnimatedContent transition
                                 }
-                                launchSingleTop = true
-                                restoreState = true
+                            } else {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         }
                     },

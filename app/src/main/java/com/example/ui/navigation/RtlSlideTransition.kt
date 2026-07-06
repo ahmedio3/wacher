@@ -13,7 +13,7 @@ import androidx.navigation.NavBackStackEntry
  * ترتيب التابات الأربعة (لحساب اتجاه slide بينهم).
  * كلما زاد index = تقدّم (مثلاً من home=0 إلى explore=1).
  */
-val TAB_ROUTES = listOf("home", "explore", "downloads", "settings")
+val TAB_ROUTES = listOf("home", "browser", "explore", "downloads", "settings")
 
 /**
  * يحسب إذا كان الانتقال "تقدّماً" (forward) أم "رجوعاً" (back).

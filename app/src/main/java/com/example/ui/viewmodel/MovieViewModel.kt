@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.DownloadEntity
 import com.example.data.local.EpisodeWatchStatusEntity
 import com.example.data.local.MovieDatabase
+import com.example.data.local.SavedImageEntity
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
@@ -90,6 +91,7 @@ class MovieViewModel(
     val downloads: StateFlow<List<DownloadEntity>>
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
     val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
+    val savedImages: StateFlow<List<SavedImageEntity>>
 
     // Episode watch tracking — MUST cache to prevent infinite recomposition loop
     private val episodeStatusMap = mutableMapOf<String, StateFlow<List<EpisodeWatchStatusEntity>>>()
@@ -202,6 +204,9 @@ class MovieViewModel(
                     )
                 }.sortedByDescending { group -> group.items.maxOf { it.downloadedAt } }
             }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        savedImages = repository.savedImages
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         // Fetch Home content on startup
@@ -779,6 +784,58 @@ class MovieViewModel(
                 }
             }
         )
+    }
+
+    // ---- SAVED IMAGES (Browser) ----
+    fun saveImageFromBrowser(sourceUrl: String, pageUrl: String, pageTitle: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val hashBytes = digest.digest(sourceUrl.toByteArray(Charsets.UTF_8))
+            val imageId = hashBytes.joinToString("") { "%02x".format(it) }
+            val fileName = "browser_img_${imageId.take(16)}.jpg"
+            val outputDir = File(getApplication<Application>().filesDir, "saved_images")
+            outputDir.mkdirs()
+            val outputFile = File(outputDir, fileName)
+            val now = System.currentTimeMillis()
+
+            val entity = SavedImageEntity(
+                id = imageId,
+                sourceUrl = sourceUrl,
+                pageUrl = pageUrl,
+                pageTitle = pageTitle,
+                localFilePath = outputFile.absolutePath,
+                fileSizeBytes = 0L,
+                downloadedAt = now
+            )
+            // Insert immediately (pending download)
+            repository.addSavedImage(entity)
+
+            com.example.utils.MultiThreadDownloader.startDownload(
+                downloadId = "saved_img_$imageId",
+                url = sourceUrl,
+                outputFile = outputFile,
+                scope = viewModelScope,
+                onProgress = { _, _, _, _ -> },
+                onComplete = { success ->
+                    viewModelScope.launch(Dispatchers.IO) {
+                        if (success) {
+                            repository.addSavedImage(entity.copy(fileSizeBytes = outputFile.length()))
+                        } else {
+                            repository.removeSavedImage(imageId)
+                            outputFile.delete()
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    fun deleteSavedImage(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val image = repository.getSavedImageById(id) ?: return@launch
+            File(image.localFilePath).delete()
+            repository.removeSavedImage(id)
+        }
     }
 
     // Resume any pending downloads on startup
