@@ -533,7 +533,7 @@ private fun SavedImagesGrid(
                         .padding(paddingValues),
                     contentPadding = PaddingValues(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalItemSpacing = 8.dp
                 ) {
                     items(savedImages, key = { it.id }) { image ->
                         val index = savedImages.indexOf(image)
