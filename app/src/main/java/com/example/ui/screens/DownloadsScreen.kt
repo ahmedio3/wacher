@@ -4,6 +4,12 @@ import android.app.Application
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,8 +32,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -531,6 +540,7 @@ fun PlaylistFolderCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
             .clickable { onClick() }
     ) {
         Row(
@@ -992,6 +1002,17 @@ fun CompactEpisodeRow(
     val isCompleted = item.status == "completed"
     val isPaused = item.status == "paused"
     val isDownloading = !isCompleted && !isPaused && item.status != "queued"
+    // Pulse animation for active downloading thumbnail overlay
+    val infiniteTransition = rememberInfiniteTransition(label = "downloadPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
     // Use stillPath for episode thumbnail, fall back to posterPath
     val thumbUrl = if (item.stillPath.isNotEmpty()) {
         if (item.stillPath.startsWith("http")) item.stillPath else "https://image.tmdb.org/t/p/w300${item.stillPath}"
@@ -1048,6 +1069,15 @@ fun CompactEpisodeRow(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+                // Pulse overlay during active download
+                if (isDownloading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(pulseAlpha)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    )
+                }
                 // Gradient progress bar at bottom of thumbnail
                 if (isCompleted && progress > 0f) {
                     Box(
@@ -1125,12 +1155,17 @@ fun CompactEpisodeRow(
                             val posSecs = lastPos / 1000
                             val durMins = durationSecs / 60
                             val durSecs = durationSecs % 60
-                            // Watched time in green, then dash, then file size
+                            // Watched time (green) / total time (faded)
                             Text(
-                                text = "${posSecs / 60}:${String.format("%02d", posSecs % 60)}/$durMins:${String.format("%02d", durSecs)}",
-                                fontSize = 10.sp,
-                                color = Color(0xFF4CAF50),
-                                fontWeight = FontWeight.Bold
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
+                                        append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
+                                    }
+                                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
+                                        append("/$durMins:${String.format("%02d", durSecs)}")
+                                    }
+                                },
+                                fontSize = 10.sp
                             )
                             Text(
                                 text = "—",
@@ -1166,21 +1201,22 @@ fun CompactEpisodeRow(
                 }
             }
 
-            // Play/Pause button (always visible)
-            IconButton(
-                onClick = {
-                    if (isCompleted) onPlayClick(item.localFilePath)
-                    else if (isPaused) viewModel.resumeDownload(item.id)
-                    else if (!isCompleted) viewModel.pauseDownload(item.id)
-                },
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = if (isPaused || !isCompleted) Icons.Default.PlayArrow else Icons.Default.Pause,
-                    contentDescription = if (isPaused || !isCompleted) "استئناف" else "إيقاف",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
+            // Play/Pause button — hidden when completed (whole card is clickable)
+            if (!isCompleted) {
+                IconButton(
+                    onClick = {
+                        if (isPaused) viewModel.resumeDownload(item.id)
+                        else viewModel.pauseDownload(item.id)
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        contentDescription = if (isPaused) "استئناف" else "إيقاف مؤقت",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             // Three-dot menu

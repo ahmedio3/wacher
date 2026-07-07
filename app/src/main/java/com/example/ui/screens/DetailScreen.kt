@@ -219,6 +219,16 @@ fun DetailScreen(
                                             pendingDownloadYear = tv.firstAirDate?.take(4)?.toIntOrNull()
                                             showMovieBoxSheet = true
                                         },
+                                        onDownloadFullSeries = {
+                                            pendingDownloadId = tv.id.toString()
+                                            pendingDownloadTitle = tv.name ?: ""
+                                            pendingDownloadPoster = tv.posterPath ?: ""
+                                            pendingDownloadMediaType = "tv"
+                                            pendingDownloadSeason = 0
+                                            pendingDownloadEpisode = 0
+                                            pendingDownloadYear = tv.firstAirDate?.take(4)?.toIntOrNull()
+                                            showMovieBoxSheet = true
+                                        },
                                         onSubtitleDownloadClick = { id, title, poster, season, episode ->
                                             subtitleSheetTmdbId = id
                                             subtitleSheetIsTv = true
@@ -617,6 +627,7 @@ fun TvDetailContent(
     isPlayerPlaying: Boolean,
     onPlayEpisode: (Int, Int) -> Unit,
     onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit,
+    onDownloadFullSeries: () -> Unit = {},
     onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     onLongPressWatchlist: () -> Unit = {}
 ) {
@@ -736,16 +747,44 @@ fun TvDetailContent(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Action bars
+            // Action bar: Download series / Bookmark / Subtitles
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Add Watchlist Action Circle (tap = save/delete, long-press = status picker)
+                // Download full series button (main action, weight 1)
+                Button(
+                    onClick = onDownloadFullSeries,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            "تحميل المسلسل كاملًا",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                // Bookmark icon button (with long-press for status picker)
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
+                        .size(52.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                         .combinedClickable(
@@ -762,50 +801,34 @@ fun TvDetailContent(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
-                            contentDescription = null,
-                            tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            if (isFavorited) "تم الحفظ بالمفضلة" else "حفظ للمشاهدة لاحقاً",
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                }
-            }
-
-            // Subtitle download button
-            Button(
-                onClick = {
-                    onSubtitleDownloadClick(
-                        tv.id.toString(),
-                        tv.name ?: "",
-                        tv.posterPath ?: "",
-                        selectedSeasonNumber,
-                        1
+                    Icon(
+                        imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                        contentDescription = "قائمة المشاهدة",
+                        tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
                     )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                }
+
+                // Subtitle download icon button
+                IconButton(
+                    onClick = {
+                        onSubtitleDownloadClick(
+                            tv.id.toString(),
+                            tv.name ?: "",
+                            tv.posterPath ?: "",
+                            selectedSeasonNumber,
+                            1
+                        )
+                    },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Icon(imageVector = Icons.Default.Subtitles, contentDescription = null)
-                    Text("تحميل ترجمة", fontWeight = FontWeight.SemiBold)
+                    Icon(
+                        imageVector = Icons.Default.Subtitles,
+                        contentDescription = "تحميل ترجمة",
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
                 }
             }
 

@@ -211,6 +211,22 @@ class MovieViewModel(
 
         // Fetch Home content on startup
         fetchHomeContent()
+
+        // Debounced auto-search: waits 300ms after user stops typing, min 3 chars
+        viewModelScope.launch {
+            _searchQuery
+                .debounce(300)
+                .filter { it.length >= 3 }
+                .distinctUntilChanged()
+                .collect { query ->
+                    _searchResults.value = RequestState.Loading
+                    if (_isMovieBoxSearchMode.value) {
+                        searchMovieBox(query.trim())
+                    } else {
+                        searchMedia(query.trim())
+                    }
+                }
+        }
     }
 
     private val _isMovieBoxSearchMode = MutableStateFlow(false)
@@ -239,20 +255,6 @@ class MovieViewModel(
             searchMovieBox(query)
         } else {
             searchMedia(query)
-        }
-    }
-
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-        if (query.trim().isEmpty()) {
-            _searchResults.value = RequestState.Idle
-            _movieBoxSearchResults.value = RequestState.Idle
-        } else {
-            if (_isMovieBoxSearchMode.value) {
-                searchMovieBox(query.trim())
-            } else {
-                searchMedia(query.trim())
-            }
         }
     }
     

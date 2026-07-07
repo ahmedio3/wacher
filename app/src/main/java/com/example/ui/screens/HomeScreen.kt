@@ -82,11 +82,20 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
                 placeholder = { Text(if (isMovieBoxSearch) "ابحث في MovieBox..." else "ابحث عن الأفلام أو المسلسلات...", fontSize = 14.sp) },
                 leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    IconButton(
+                        onClick = { viewModel.triggerSearch() },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "بحث",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -109,22 +118,6 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            IconButton(
-                onClick = { viewModel.triggerSearch() },
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "بحث",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
             IconButton(
                 onClick = { viewModel.updateSearchMode(!isMovieBoxSearch) },
                 modifier = Modifier

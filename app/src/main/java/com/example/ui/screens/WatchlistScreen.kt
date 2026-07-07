@@ -271,6 +271,7 @@ fun WatchlistPosterCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
     ) {
         Box(

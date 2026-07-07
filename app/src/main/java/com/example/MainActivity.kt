@@ -42,8 +42,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -221,7 +224,11 @@ fun MainAppContainer(startWithChat: Boolean = false) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
-                if (shouldShowBottomBar) {
+                AnimatedVisibility(
+                    visible = shouldShowBottomBar,
+                    enter = slideInVertically { it },
+                    exit = slideOutVertically { it }
+                ) {
                     ModernBottomNavBar(
                         navController = navController,
                         tabs = tabItems,
