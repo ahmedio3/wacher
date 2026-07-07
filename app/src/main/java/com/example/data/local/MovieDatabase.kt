@@ -5,7 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [WatchlistEntity::class, DownloadEntity::class, ChatEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class], version = 9, exportSchema = false)
+@Database(entities = [WatchlistEntity::class, DownloadEntity::class, ChatEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class], version = 9, exportSchema = true)
 abstract class MovieDatabase : RoomDatabase() {
     abstract val movieDao: MovieDao
 
@@ -19,7 +19,7 @@ abstract class MovieDatabase : RoomDatabase() {
                     context.applicationContext,
                     MovieDatabase::class.java,
                     "cinemios_database"
-                ).fallbackToDestructiveMigration().build()
+                ).addMigrations().build()
                 INSTANCE = instance
                 instance
             }

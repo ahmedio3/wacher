@@ -58,10 +58,7 @@ fun HomeScreen(
     val popularMoviesState by viewModel.popularMovies.collectAsState()
     val popularTvState by viewModel.popularTvShows.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResultsState by viewModel.searchResults.collectAsState()
     val isMovieBoxSearch by viewModel.isMovieBoxSearchMode.collectAsState()
-    val movieBoxSearchResults by viewModel.movieBoxSearchResults.collectAsState()
-    val customSectionItems by com.example.data.remote.CustomSectionManager.getItems().collectAsState(initial = emptyList())
 
     Column(
         modifier = modifier
@@ -147,7 +144,8 @@ fun HomeScreen(
 
         // 3. Conditional Layout: Empty Search (Standard Feed) vs Search Results
         if (searchQuery.isEmpty()) {
-            // New Custom Section "بتاع"
+            // New Custom Section "بتاع" — collect only inside this branch
+            val customSectionItems by com.example.data.remote.CustomSectionManager.getItems().collectAsState(initial = emptyList())
             if (customSectionItems.isNotEmpty()) {
                 Text(
                     text = "بتاع",
@@ -218,7 +216,9 @@ fun HomeScreen(
                 onItemClick = { onNavigateToDetails(it.id, "tv") }
             )
         } else {
-            // B. Show Search Results Grid (Support Skeletal UI loader)
+            // B. Show Search Results Grid — collect only inside this branch
+            val searchResultsState by viewModel.searchResults.collectAsState()
+            val movieBoxSearchResults by viewModel.movieBoxSearchResults.collectAsState()
             Text(
                 text = "نتائج البحث عن: $searchQuery",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -249,7 +249,7 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(mbList) { item ->
+                                items(mbList, key = { it.subjectId }) { item ->
                                     MovieBoxSearchGridCard(
                                         item = item,
                                         onClick = { 
@@ -311,7 +311,7 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(list) { item ->
+                                items(list, key = { it.id }) { item ->
                                     SearchGridCard(
                                         item = item,
                                         onClick = { onNavigateToDetails(item.id, item.mediaType ?: "movie") }
@@ -430,8 +430,8 @@ fun FeaturedCarousel(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(items) { item ->
-                val backdropUrl = "https://image.tmdb.org/t/p/w500${item.backdropPath ?: item.posterPath}"
+            items(items, key = { it.id }) { item ->
+                val backdropUrl = remember(item) { "https://image.tmdb.org/t/p/w500${item.backdropPath ?: item.posterPath}" }
                 
                 Box(
                     modifier = Modifier
@@ -502,7 +502,7 @@ fun FeaturedCarousel(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = String.format("%.1f", item.voteAverage ?: 0.0),
+                                text = remember(item) { String.format("%.1f", item.voteAverage ?: 0.0) },
                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.8f))
                             )
                             Spacer(modifier = Modifier.width(12.dp))
@@ -552,7 +552,7 @@ fun MediaCategoryCarousel(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(state.data) { item ->
+                    items(state.data, key = { it.id }) { item ->
                         MediaCompactPosterCard(item = item, onClick = { onItemClick(item) })
                     }
                 }
@@ -592,7 +592,7 @@ fun MediaCompactPosterCard(
     item: TmdbMediaItem,
     onClick: () -> Unit
 ) {
-    val posterUrl = "https://image.tmdb.org/t/p/w342${item.posterPath}"
+    val posterUrl = remember(item) { "https://image.tmdb.org/t/p/w342${item.posterPath}" }
     
     Column(
         modifier = Modifier
@@ -631,7 +631,7 @@ fun MediaCompactPosterCard(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
-                        text = String.format("%.1f", item.voteAverage ?: 0.0),
+                        text = remember(item) { String.format("%.1f", item.voteAverage ?: 0.0) },
                         color = Color.White,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
@@ -782,7 +782,7 @@ fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onCli
 @Composable
 fun SearchGridCard(item: TmdbMediaItem, onClick: () -> Unit) {
 
-    val posterUrl = "https://image.tmdb.org/t/p/w342${item.posterPath}"
+    val posterUrl = remember(item) { "https://image.tmdb.org/t/p/w342${item.posterPath}" }
     
     Column(
         modifier = Modifier
