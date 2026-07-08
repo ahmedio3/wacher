@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -71,6 +72,9 @@ import com.example.ui.viewmodel.SubtitleParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
+import kotlin.math.sqrt
 
 import java.io.File
 import java.text.SimpleDateFormat
@@ -439,47 +443,241 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Gesture handler: single detectTapGestures for tap + long-press + double-tap
+        // Unified gesture handler: awaitEachGesture for tap, double-tap, long-press, volume/brightness drag
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
-                            showControls = !showControls
-                        },
-                        onDoubleTap = { offset ->
-                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
-                                val width = this.size.width
-                                if (offset.x > width / 2) {
-                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                                } else {
-                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                                }
-                            }
-                        },
-                        onLongPress = {
-                            if (!showSubtitleDrawer && !showEpisodesDrawer) {
-                                wasLongPress = true
-                                exoPlayer.setPlaybackSpeed(2f)
-                                isSpeedUp = true
-                                showControls = false
-                            }
-                        }
-                    )
-                }
-                // Finger-up detector: resets 2x speed when finger lifts after long-press
-                .pointerInput(Unit) {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = true)
+
+                        // TASK 5 — Drawer guard: if either drawer is open, ignore this gesture entirely
+                        if (showSubtitleDrawer || showEpisodesDrawer) {
+                            down.consume()
+                            return@awaitEachGesture
+                        }
+
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        val startNanos = System.nanoTime()
+                        val isRightSide = startX > size.width / 2f
+                        val pointerId = down.id
+                        val doubleTapTimeoutMs = 300L
+                        val longPressMs = 400L
+
+                        var gestureKind = "DOWN" // DOWN | LONG_PRESS | DRAG_VOLUME | DRAG_BRIGHTNESS
+                        var lastY = startY
+                        var volumeCommitNanos = 0L
+
+                        // ─── Primary pointer tracking loop ──────────────────────────
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
-                            if (event.changes.all { !it.pressed }) break
+                            val change = event.changes.firstOrNull { it.id == pointerId }
+                            if (change == null || change.isConsumed) continue
+
+                            val isUp = !change.pressed
+                            val elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L
+                            val dy = change.position.y - startY
+                            val dx = change.position.x - startX
+                            val totalDist = sqrt(dy * dy + dx * dx)
+                            val touchSlop = viewConfiguration.touchSlop
+
+                            when (gestureKind) {
+                                "DOWN" -> {
+                                    if (isUp) {
+                                        gestureKind = "TAP1"
+                                        break
+                                    }
+
+                                    // Long-press: finger stayed still for ~400ms
+                                    if (elapsedMs > longPressMs && totalDist < touchSlop) {
+                                        gestureKind = "LONG_PRESS"
+                                        exoPlayer.setPlaybackSpeed(2f)
+                                        isSpeedUp = true
+                                        showControls = false
+                                        wasLongPress = true
+                                    }
+                                    // Vertical drag: moved beyond slop, vertical dominates
+                                    else if (abs(dy) > touchSlop && abs(dy) > abs(dx)) {
+                                        gestureKind = if (isRightSide) "DRAG_VOLUME" else "DRAG_BRIGHTNESS"
+                                        if (isRightSide) {
+                                            showVolumeOverlay = true
+                                            showBrightnessOverlay = false
+                                        } else {
+                                            showBrightnessOverlay = true
+                                            showVolumeOverlay = false
+                                        }
+                                        lastY = change.position.y
+                                        change.consume()
+                                    }
+                                }
+
+                                "LONG_PRESS" -> {
+                                    if (isUp) {
+                                        exoPlayer.setPlaybackSpeed(1f)
+                                        isSpeedUp = false
+                                        wasLongPress = false
+                                        break
+                                    }
+                                    // All movement ignored while locked in long-press
+                                }
+
+                                "DRAG_VOLUME" -> {
+                                    if (isUp) {
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
+                                        break
+                                    }
+                                    val dragDy = change.position.y - lastY
+                                    if (abs(dragDy) > 0f) {
+                                        lastY = change.position.y
+                                        val step = -dragDy / size.height * maxVolume
+                                        val newVol = (currentVolume + step).toInt().coerceIn(0, maxVolume)
+                                        currentVolume = newVol
+
+                                        // Throttle actual audioManager calls to ~80ms
+                                        val now = System.nanoTime()
+                                        if (now - volumeCommitNanos > 80_000_000) {
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                            volumeCommitNanos = now
+                                        }
+                                        change.consume()
+                                    }
+                                }
+
+                                "DRAG_BRIGHTNESS" -> {
+                                    if (isUp) break
+                                    val dragDy = change.position.y - lastY
+                                    if (abs(dragDy) > 0f) {
+                                        lastY = change.position.y
+                                        val delta = -dragDy / size.height
+                                        val newB = (currentBrightness + delta).coerceIn(0f, 1f)
+                                        currentBrightness = newB
+                                        activity?.window?.let { w ->
+                                            w.attributes = w.attributes.apply { screenBrightness = newB }
+                                        }
+                                        change.consume()
+                                    }
+                                }
+                            }
                         }
-                        if (isSpeedUp) {
-                            exoPlayer.setPlaybackSpeed(1f)
-                            isSpeedUp = false
-                            wasLongPress = false
+
+                        // ─── After first pointer up: first-tap candidate ───────────
+                        if (gestureKind != "TAP1") return@awaitEachGesture
+
+                        // Wait for a possible second tap within the double-tap window
+                        val secondDown = withTimeoutOrNull(doubleTapTimeoutMs) {
+                            awaitFirstDown(requireUnconsumed = true)
+                        }
+
+                        if (secondDown != null) {
+                            // ── Second tap arrived — track it like the first ──
+                            if (showSubtitleDrawer || showEpisodesDrawer) {
+                                secondDown.consume()
+                                return@awaitEachGesture
+                            }
+
+                            val secondId = secondDown.id
+                            val secondStartX = secondDown.position.x
+                            val secondStartY = secondDown.position.y
+                            val secondStartNanos = System.nanoTime()
+                            var secondKind = "DOWN"
+                            var secondLastY = secondStartY
+                            var secondVolumeCommitNanos = 0L
+
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val change = event.changes.firstOrNull { it.id == secondId }
+                                if (change == null || change.isConsumed) continue
+
+                                val isUp2 = !change.pressed
+                                val elapsed2 = (System.nanoTime() - secondStartNanos) / 1_000_000L
+                                val dy2 = change.position.y - secondStartY
+                                val dx2 = change.position.x - secondStartX
+                                val dist2 = sqrt(dy2 * dy2 + dx2 * dx2)
+                                val ts = viewConfiguration.touchSlop
+
+                                when (secondKind) {
+                                    "DOWN" -> {
+                                        if (isUp2) {
+                                            // Clean second tap → fire double-tap seek
+                                            val tapX = change.position.x
+                                            if (tapX > size.width / 2f) {
+                                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
+                                            } else {
+                                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                            }
+                                            break
+                                        }
+
+                                        if (elapsed2 > longPressMs && dist2 < ts) {
+                                            secondKind = "LONG_PRESS"
+                                            exoPlayer.setPlaybackSpeed(2f)
+                                            isSpeedUp = true
+                                            showControls = false
+                                            wasLongPress = true
+                                        } else if (abs(dy2) > ts && abs(dy2) > abs(dx2)) {
+                                            val isSecondRight = secondStartX > size.width / 2f
+                                            secondKind = if (isSecondRight) "DRAG_VOLUME" else "DRAG_BRIGHTNESS"
+                                            if (isSecondRight) {
+                                                showVolumeOverlay = true
+                                                showBrightnessOverlay = false
+                                            } else {
+                                                showBrightnessOverlay = true
+                                                showVolumeOverlay = false
+                                            }
+                                            secondLastY = change.position.y
+                                            change.consume()
+                                        }
+                                    }
+
+                                    "LONG_PRESS" -> {
+                                        if (isUp2) {
+                                            exoPlayer.setPlaybackSpeed(1f)
+                                            isSpeedUp = false
+                                            wasLongPress = false
+                                            break
+                                        }
+                                    }
+
+                                    "DRAG_VOLUME" -> {
+                                        if (isUp2) {
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
+                                            break
+                                        }
+                                        val dragDy2 = change.position.y - secondLastY
+                                        if (abs(dragDy2) > 0f) {
+                                            secondLastY = change.position.y
+                                            val step = -dragDy2 / size.height * maxVolume
+                                            val newVol2 = (currentVolume + step).toInt().coerceIn(0, maxVolume)
+                                            currentVolume = newVol2
+                                            val now = System.nanoTime()
+                                            if (now - secondVolumeCommitNanos > 80_000_000) {
+                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol2, 0)
+                                                secondVolumeCommitNanos = now
+                                            }
+                                            change.consume()
+                                        }
+                                    }
+
+                                    "DRAG_BRIGHTNESS" -> {
+                                        if (isUp2) break
+                                        val dragDy2 = change.position.y - secondLastY
+                                        if (abs(dragDy2) > 0f) {
+                                            secondLastY = change.position.y
+                                            val delta = -dragDy2 / size.height
+                                            val newB2 = (currentBrightness + delta).coerceIn(0f, 1f)
+                                            currentBrightness = newB2
+                                            activity?.window?.let { w ->
+                                                w.attributes = w.attributes.apply { screenBrightness = newB2 }
+                                            }
+                                            change.consume()
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // ── Second tap timeout → single tap ──
+                            showControls = !showControls
                         }
                     }
                 }
@@ -919,13 +1117,25 @@ fun OfflinePlayerScreen(
                     exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(360.dp),
-                        shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                    ) {
+                    Box(Modifier.fillMaxSize()) {
+                        // Scrim: tapping outside the Card closes the drawer
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    showSubtitleDrawer = false
+                                }
+                        )
+                        Card(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(360.dp),
+                            shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                        ) {
                         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                             // Dynamic header with back button
                             Row(
@@ -1295,6 +1505,7 @@ fun OfflinePlayerScreen(
                             }
                         }
                     }
+                    }
                 }
 
                 // ===== EPISODES DRAWER =====
@@ -1304,7 +1515,19 @@ fun OfflinePlayerScreen(
                     exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
                     modifier = Modifier.align(Alignment.TopEnd)
                 ) {
-                    Card(
+                    Box(Modifier.fillMaxSize()) {
+                        // Scrim: tapping outside the Card closes the drawer
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    showEpisodesDrawer = false
+                                }
+                        )
+                        Card(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(340.dp),
@@ -1391,6 +1614,7 @@ fun OfflinePlayerScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
