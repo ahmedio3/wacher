@@ -1542,10 +1542,13 @@ fun OfflinePlayerScreen(
                                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                                     modifier = Modifier.padding(horizontal = 8.dp)
                                                 )
-}
+                                            }
+                                        }
+                                    }
 
                                     // ===== PAGE 6: In-drawer subtitle file browser (SAF-based) =====
                                     6 -> {
+                                        val scope = rememberCoroutineScope()
                                         val treeUriString = remember {
                                             prefs.getString("subtitle_tree_uri", null)
                                         }
