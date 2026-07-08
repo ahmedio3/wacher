@@ -282,9 +282,14 @@ fun OfflinePlayerScreen(
     // Load Media
     LaunchedEffect(activeLocalFilePath) {
         if (activeLocalFilePath.isNotEmpty()) {
-            val file = File(activeLocalFilePath)
-            if (file.exists()) {
-                val mediaItemBuilder = MediaItem.Builder().setUri(Uri.fromFile(file))
+            val isContentUri = activeLocalFilePath.startsWith("content://")
+            val file = if (isContentUri) null else File(activeLocalFilePath)
+            if (isContentUri || (file != null && file.exists())) {
+                val mediaItemBuilder = if (isContentUri) {
+                    MediaItem.Builder().setUri(Uri.parse(activeLocalFilePath))
+                } else {
+                    MediaItem.Builder().setUri(Uri.fromFile(file!!))
+                }
 
                 val srtFile = File(context.filesDir, "downloads/$activeId.srt")
                 val vttFile = File(context.filesDir, "downloads/$activeId.vtt")

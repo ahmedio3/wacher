@@ -1421,14 +1421,33 @@ fun LocalFilesTab(
         } catch (_: Exception) {}
         // Add user-picked files
         userPicked.forEach { path ->
-            val f = java.io.File(path)
-            if (f.exists()) {
+            if (path.startsWith("content://")) {
+                // content:// URI from file picker — query display name from content resolver
+                val displayName = try {
+                    val cursor = context.contentResolver.query(android.net.Uri.parse(path), null, null, null, null)
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (idx >= 0) it.getString(idx) ?: "فيديو محلي" else "فيديو محلي"
+                        } else "فيديو محلي"
+                    } ?: "فيديو محلي"
+                } catch (_: Exception) { "فيديو محلي" }
                 files.add(com.example.data.local.LocalVideoFile(
-                    id = f.absolutePath,
-                    name = f.nameWithoutExtension,
-                    filePath = f.absolutePath,
-                    size = f.length()
+                    id = path,
+                    name = displayName,
+                    filePath = path,
+                    size = 0L
                 ))
+            } else {
+                val f = java.io.File(path)
+                if (f.exists()) {
+                    files.add(com.example.data.local.LocalVideoFile(
+                        id = f.absolutePath,
+                        name = f.nameWithoutExtension,
+                        filePath = f.absolutePath,
+                        size = f.length()
+                    ))
+                }
             }
         }
         localFiles = files.distinctBy { it.id }

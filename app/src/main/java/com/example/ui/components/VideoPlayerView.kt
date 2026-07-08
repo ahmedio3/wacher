@@ -34,7 +34,7 @@ fun VideoPlayerView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isLocal = localFilePath.isNotEmpty() && File(localFilePath).exists()
+    val isLocal = localFilePath.isNotEmpty() && (localFilePath.startsWith("content://") || File(localFilePath).exists())
     val mediaUrl = if (isLocal) localFilePath else url
 
     Box(

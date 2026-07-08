@@ -209,7 +209,10 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                                     item = item,
                                     viewModel = movieViewModel,
                                     onPlayClick = {
-                                        navController.navigate("offline_player/${item.id}/${Uri.encode(item.title)}")
+                                        val encodedId = Uri.encode(item.id)
+                                        val encodedTitle = Uri.encode(item.title)
+                                        val encodedPath = Uri.encode(item.localFilePath)
+                                        navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
                                         showActiveDownloadsSheet = false
                                     }
                                 )
@@ -475,9 +478,10 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                 DownloadsScreen(
                     viewModel = movieViewModel,
                     onNavigateToPlayer = { id, title, localPath ->
-                        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
-                        val encodedPath = java.net.URLEncoder.encode(localPath, "UTF-8")
-                        navController.navigate("offline_player/$id/$encodedTitle?localFilePath=$encodedPath")
+                        val encodedId = Uri.encode(id)
+                        val encodedTitle = Uri.encode(title)
+                        val encodedPath = Uri.encode(localPath)
+                        navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
                     }
                 )
             }
@@ -513,12 +517,13 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     viewModel = movieViewModel,
                     onBackClick = { navController.popBackStack() },
                     onNavigateToPlayer = { id, title, localPath ->
-                        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
-                        val encodedPath = java.net.URLEncoder.encode(localPath, "UTF-8")
+                        val encodedId = Uri.encode(id)
+                        val encodedTitle = Uri.encode(title)
+                        val encodedPath = Uri.encode(localPath)
                         if (localPath.isNotEmpty()) {
-                            navController.navigate("offline_player/$id/$encodedTitle?localFilePath=$encodedPath")
+                            navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
                         } else {
-                            navController.navigate("player/$id/$encodedTitle?localFilePath=")
+                            navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
                         }
                     }
                 )
@@ -563,10 +568,11 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     navArgument("localFilePath") { type = NavType.StringType; defaultValue = "" }
                 )
             ) { backStackEntry ->
-                val mediaId = backStackEntry.arguments?.getString("mediaId") ?: ""
+                val rawMediaId = backStackEntry.arguments?.getString("mediaId") ?: ""
                 val rawTitle = backStackEntry.arguments?.getString("title") ?: ""
                 val rawPath = backStackEntry.arguments?.getString("localFilePath") ?: ""
                 
+                val mediaId = java.net.URLDecoder.decode(rawMediaId, "UTF-8")
                 val decodedTitle = java.net.URLDecoder.decode(rawTitle, "UTF-8")
                 val decodedPath = java.net.URLDecoder.decode(rawPath, "UTF-8")
 
