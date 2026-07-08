@@ -1619,7 +1619,7 @@ fun OfflinePlayerScreen(
                                             // Determine current DocumentFile from folderNavStack
                                             val currentFolderUri = folderNavStack.lastOrNull() ?: treeUri
                                             val currentFolder = remember(currentFolderUri) {
-                                                DocumentFile.fromTreeUri(context, currentFolderUri)
+                                                currentFolderUri?.let { DocumentFile.fromTreeUri(context, it) }
                                             }
 
                                             if (currentFolder == null || !currentFolder.exists()) {
