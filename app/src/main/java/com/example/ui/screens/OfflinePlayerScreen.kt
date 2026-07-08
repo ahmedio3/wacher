@@ -14,6 +14,7 @@ import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.documentfile.provider.DocumentFile
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -179,6 +180,9 @@ fun OfflinePlayerScreen(
     
     // Subtitle sources page
     var subtitlePage by remember { mutableIntStateOf(0) }
+    
+    // Folder navigation state for in-drawer file browser (page 6)
+    var folderNavStack by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
     // Active media tracking (allows switching episodes without leaving screen)
     var activeId by remember { mutableStateOf(mediaId) }
@@ -1189,7 +1193,15 @@ fun OfflinePlayerScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (subtitlePage != 0) {
-                                    IconButton(onClick = { subtitlePage = 0 }) {
+                                    IconButton(onClick = {
+                                        if (subtitlePage == 6 && folderNavStack.size > 1) {
+                                            // Pop one folder level in the file browser
+                                            folderNavStack = folderNavStack.dropLast(1)
+                                        } else {
+                                            subtitlePage = 0
+                                            folderNavStack = emptyList()
+                                        }
+                                    }) {
                                         Icon(Icons.Default.ArrowBack, "رجوع")
                                     }
                                 }
@@ -1201,6 +1213,7 @@ fun OfflinePlayerScreen(
                                             3 -> "OpenSubtitles"
                                             4 -> "الترجمات المحملة"
                                             5 -> "إدارة الباتشات"
+                                            6 -> "متصفح الملفات"
                                             else -> "الترجمة"
                                         },
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -1331,24 +1344,9 @@ fun OfflinePlayerScreen(
 
                                             Spacer(modifier = Modifier.height(8.dp))
 
-                                            // Local file picker
-                                            val subtitleFilePickerLauncher = rememberLauncherForActivityResult(
-                                                contract = ActivityResultContracts.OpenDocument()
-                                            ) { uri ->
-                                                if (uri != null) {
-                                                    scope.launch {
-                                                        try {
-                                                            val inputStream = context.contentResolver.openInputStream(uri)
-                                                            val tempFile = java.io.File(context.cacheDir, "picked_sub.srt")
-                                                            inputStream?.use { input -> tempFile.outputStream().use { output -> input.copyTo(output) } }
-                                                            parsedSubtitles = SubtitleParser.parseBlock(tempFile)
-                                                            if (parsedSubtitles.isNotEmpty()) showSubtitleDrawer = false
-                                                        } catch (_: Exception) { }
-                                                    }
-                                                }
-                                            }
+                                            // Local file picker — opens in-drawer file explorer (page 6)
                                             OutlinedButton(
-                                                onClick = { subtitleFilePickerLauncher.launch(arrayOf("text/*", "application/octet-stream")) },
+                                                onClick = { subtitlePage = 6 },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1544,6 +1542,193 @@ fun OfflinePlayerScreen(
                                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                                     modifier = Modifier.padding(horizontal = 8.dp)
                                                 )
+}
+
+                                    // ===== PAGE 6: In-drawer subtitle file browser (SAF-based) =====
+                                    6 -> {
+                                        val treeUriString = remember {
+                                            prefs.getString("subtitle_tree_uri", null)
+                                        }
+                                        var treeUri by remember { mutableStateOf(treeUriString?.let { Uri.parse(it) }) }
+
+                                        // SAF tree-grant launcher (one-time setup)
+                                        val treeLauncher = rememberLauncherForActivityResult(
+                                            contract = ActivityResultContracts.OpenDocumentTree()
+                                        ) { uri ->
+                                            if (uri != null) {
+                                                try {
+                                                    val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                                    context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                                                    prefs.edit().putString("subtitle_tree_uri", uri.toString()).apply()
+                                                    treeUri = uri
+                                                    folderNavStack = listOf(uri)
+                                                } catch (_: Exception) { }
+                                            }
+                                        }
+
+                                        // Launcher for back-up: pick any folder as an alternative
+                                        val pickFolderLauncher = rememberLauncherForActivityResult(
+                                            contract = ActivityResultContracts.OpenDocumentTree()
+                                        ) { uri ->
+                                            if (uri != null) {
+                                                try {
+                                                    val takeP = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                                    context.contentResolver.takePersistableUriPermission(uri, takeP)
+                                                    prefs.edit().putString("subtitle_tree_uri", uri.toString()).apply()
+                                                    treeUri = uri
+                                                    folderNavStack = listOf(uri)
+                                                } catch (_: Exception) { }
+                                            }
+                                        }
+
+                                        if (treeUri == null) {
+                                            // No tree granted yet — show grant prompt
+                                            Column(
+                                                modifier = Modifier.fillMaxSize().padding(16.dp),
+                                                verticalArrangement = Arrangement.Center,
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Folder,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(48.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(Modifier.height(12.dp))
+                                                Text(
+                                                    "للوصول إلى ملفات الترجمة على جهازك، يرجى منح الإذن بالوصول إلى المجلد الجذر",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                                Spacer(Modifier.height(16.dp))
+                                                OutlinedButton(
+                                                    onClick = { treeLauncher.launch(null) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text("منح الوصول إلى المجلد")
+                                                }
+                                            }
+                                        } else {
+                                            // Determine current DocumentFile from folderNavStack
+                                            val currentFolderUri = folderNavStack.lastOrNull() ?: treeUri
+                                            val currentFolder = remember(currentFolderUri) {
+                                                DocumentFile.fromTreeUri(context, currentFolderUri)
+                                            }
+
+                                            if (currentFolder == null || !currentFolder.exists()) {
+                                                Text(
+                                                    "تعذر الوصول إلى المجلد. الرجاء منح الوصول مرة أخرى.",
+                                                    modifier = Modifier.padding(16.dp),
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Spacer(Modifier.height(8.dp))
+                                                OutlinedButton(
+                                                    onClick = { pickFolderLauncher.launch(null) },
+                                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text("إعادة منح الوصول")
+                                                }
+                                            } else {
+                                                val entries = remember(currentFolderUri, folderNavStack) {
+                                                    currentFolder.listFiles()
+                                                        .filter { entry ->
+                                                            entry.isDirectory ||
+                                                                entry.name?.let { name ->
+                                                                    val lower = name.lowercase()
+                                                                    lower.endsWith(".srt") || lower.endsWith(".ass") || lower.endsWith(".ssa") || lower.endsWith(".vtt")
+                                                                } == true
+                                                        }
+                                                        .sortedBy { entry ->
+                                                            // Folders first (0), then files (1), sorted by name
+                                                            val prefix = if (entry.isDirectory) "0_" else "1_"
+                                                            prefix + (entry.name?.lowercase() ?: "")
+                                                        }
+                                                }
+
+                                                LazyColumn(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    items(entries) { entry ->
+                                                        val isDir = entry.isDirectory()
+                                                        val fileName = entry.name ?: "(بدون اسم)"
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .clip(RoundedCornerShape(8.dp))
+                                                                .clickable(
+                                                                    interactionSource = remember { MutableInteractionSource() },
+                                                                    indication = null,
+                                                                    onClick = {
+                                                                        if (isDir) {
+                                                                            folderNavStack = folderNavStack + entry.uri
+                                                                        }
+                                                                    }
+                                                                )
+                                                                .padding(12.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (isDir) Icons.Default.Folder else Icons.Default.Description,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(20.dp),
+                                                                tint = if (isDir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                            )
+                                                            Spacer(Modifier.width(8.dp))
+                                                            Text(
+                                                                text = fileName,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                            if (!isDir) {
+                                                                TextButton(
+                                                                    onClick = {
+                                                                        scope.launch {
+                                                                            try {
+                                                                                val originalName = entry.name ?: "subtitle.srt"
+                                                                                val ext = originalName.substringAfterLast('.')
+                                                                                val tempFile = File(context.cacheDir, "browser_sub.$ext")
+                                                                                context.contentResolver.openInputStream(entry.uri)?.use { input ->
+                                                                                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                                                                                }
+                                                                                parsedSubtitles = SubtitleParser.parseBlock(tempFile)
+                                                                                if (parsedSubtitles.isNotEmpty()) {
+                                                                                    showSubtitleDrawer = false
+                                                                                    subtitlePage = 0
+                                                                                }
+                                                                            } catch (_: Exception) { }
+                                                                        }
+                                                                    }
+                                                                ) {
+                                                                    Text("اختيار", fontSize = 11.sp)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Empty state
+                                                    if (entries.isEmpty()) {
+                                                        item {
+                                                            Box(
+                                                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Text(
+                                                                    "لا توجد ملفات ترجمة (.srt/.ass/.vtt) في هذا المجلد",
+                                                                    style = MaterialTheme.typography.bodyMedium,
+                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                                    textAlign = TextAlign.Center
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
