@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
         val openChat = intent.getBooleanExtra("open_chat", false)
         
         enableEdgeToEdge()
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
         setContent {
             MyApplicationTheme {
                 MainAppContainer(startWithChat = openChat)
@@ -350,6 +353,9 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     },
                     onNavigateToSettings = {
                         navController.navigate("settings")
+                    },
+                    onNavigateToWatchlist = {
+                        navController.navigate("watchlist")
                     }
                 )
             }

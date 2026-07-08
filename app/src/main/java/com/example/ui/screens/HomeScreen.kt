@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.local.WatchlistEntity
 import com.example.data.remote.TmdbMediaItem
 import com.example.ui.components.SkeletonItem
 import com.example.ui.components.shimmerBrush
@@ -51,6 +52,7 @@ fun HomeScreen(
     onNavigateToDetails: (Int, String) -> Unit,
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToWatchlist: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -59,6 +61,7 @@ fun HomeScreen(
     val popularTvState by viewModel.popularTvShows.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isMovieBoxSearch by viewModel.isMovieBoxSearchMode.collectAsState()
+    val watchlistItems by viewModel.watchlist.collectAsState()
 
     Column(
         modifier = modifier
@@ -79,7 +82,7 @@ fun HomeScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.setSearchQueryOnly(it) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).height(56.dp),
                 placeholder = { Text(if (isMovieBoxSearch) "ابحث في MovieBox..." else "ابحث عن الأفلام أو المسلسلات...", fontSize = 14.sp) },
                 leadingIcon = {
                     IconButton(
@@ -99,7 +102,10 @@ fun HomeScreen(
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQueryOnly("") }) {
+                        IconButton(
+                            onClick = { viewModel.setSearchQueryOnly("") },
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(imageVector = Icons.Default.Close, contentDescription = "مسح البحث")
                         }
                     }
@@ -121,7 +127,7 @@ fun HomeScreen(
             IconButton(
                 onClick = { viewModel.updateSearchMode(!isMovieBoxSearch) },
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(44.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (isMovieBoxSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
             ) {
@@ -190,6 +196,43 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // C+. Watchlist Section (قائمتي) — between Featured and Popular Movies
+            if (watchlistItems.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "قائمتي",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    TextButton(onClick = onNavigateToWatchlist) {
+                        Text("عرض الكل", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(watchlistItems, key = { it.id }) { item ->
+                        WatchlistPosterCard(
+                            item = item,
+                            onClick = {
+                                val type = if (item.mediaType == "tv") "tv" else "movie"
+                                try { onNavigateToDetails(item.id.split("-")[0].toInt(), type) }
+                                catch (_: Exception) { onNavigateToDetails(item.id.hashCode(), type) }
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             // B. TMDB Popular Movies Carousel (الأفلام الأكثر شعبية)
             MediaCategoryCarousel(
@@ -840,6 +883,76 @@ fun SearchGridCard(item: TmdbMediaItem, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun WatchlistPosterCard(
+    item: WatchlistEntity,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(110.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 110.dp, height = 165.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (item.posterPath.isNotEmpty()) {
+                AsyncImage(
+                    model = "https://image.tmdb.org/t/p/w185${item.posterPath}",
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.title.take(2),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
+            }
+            // Status badge
+            Box(
+                modifier = Modifier
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .align(Alignment.TopStart)
+            ) {
+                Text(
+                    text = when (item.status) {
+                        "WATCHING" -> "مشاهدة"
+                        "COMPLETED" -> "تم"
+                        else -> "لاحقاً"
+                    },
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
     }
