@@ -75,6 +75,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.sqrt
+import kotlin.math.roundToInt
 
 import java.io.File
 import java.text.SimpleDateFormat
@@ -146,6 +147,7 @@ fun OfflinePlayerScreen(
     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
     var currentVolume by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
+    var volumeFraction by remember { mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()) }
     val initialBrightness = activity?.window?.attributes?.screenBrightness?.let { if (it < 0f) 0.5f else it } ?: 0.5f
     var currentBrightness by remember { mutableFloatStateOf(initialBrightness) }
     var showVolumeOverlay by remember { mutableStateOf(false) }
@@ -471,7 +473,27 @@ fun OfflinePlayerScreen(
 
                         // ─── Primary pointer tracking loop ──────────────────────────
                         while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            // FIX 1: In DOWN state, race a 50ms timeout against awaitPointerEvent
+                            // so long-press fires even with a completely motionless finger
+                            val event = if (gestureKind == "DOWN") {
+                                withTimeoutOrNull(50L) { awaitPointerEvent(PointerEventPass.Main) }
+                            } else {
+                                awaitPointerEvent(PointerEventPass.Main)
+                            }
+
+                            if (event == null) {
+                                // Timeout occurred (only possible in DOWN state — motionless finger)
+                                val elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L
+                                if (elapsedMs > longPressMs) {
+                                    gestureKind = "LONG_PRESS"
+                                    exoPlayer.setPlaybackSpeed(2f)
+                                    isSpeedUp = true
+                                    showControls = false
+                                    wasLongPress = true
+                                }
+                                continue
+                            }
+
                             val change = event.changes.firstOrNull { it.id == pointerId }
                             if (change == null || change.isConsumed) continue
 
@@ -503,6 +525,8 @@ fun OfflinePlayerScreen(
                                         if (isRightSide) {
                                             showVolumeOverlay = true
                                             showBrightnessOverlay = false
+                                            // FIX 2: resync volumeFraction from live AudioManager on drag entry
+                                            volumeFraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()
                                         } else {
                                             showBrightnessOverlay = true
                                             showVolumeOverlay = false
@@ -524,14 +548,15 @@ fun OfflinePlayerScreen(
 
                                 "DRAG_VOLUME" -> {
                                     if (isUp) {
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume), 0)
                                         break
                                     }
                                     val dragDy = change.position.y - lastY
                                     if (abs(dragDy) > 0f) {
                                         lastY = change.position.y
-                                        val step = -dragDy / size.height * maxVolume
-                                        val newVol = (currentVolume + step).toInt().coerceIn(0, maxVolume)
+                                        // FIX 2: continuous Float accumulator, no per-frame truncation
+                                        volumeFraction = (volumeFraction - dragDy / size.height).coerceIn(0f, 1f)
+                                        val newVol = (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
                                         currentVolume = newVol
 
                                         // Throttle actual audioManager calls to ~80ms
@@ -585,8 +610,26 @@ fun OfflinePlayerScreen(
                             var secondVolumeCommitNanos = 0L
 
                             while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Main)
-                                val change = event.changes.firstOrNull { it.id == secondId }
+                                // FIX 1: same polling pattern for second-tap DOWN state
+                                val secondEvent = if (secondKind == "DOWN") {
+                                    withTimeoutOrNull(50L) { awaitPointerEvent(PointerEventPass.Main) }
+                                } else {
+                                    awaitPointerEvent(PointerEventPass.Main)
+                                }
+
+                                if (secondEvent == null) {
+                                    val elapsed2 = (System.nanoTime() - secondStartNanos) / 1_000_000L
+                                    if (elapsed2 > longPressMs) {
+                                        secondKind = "LONG_PRESS"
+                                        exoPlayer.setPlaybackSpeed(2f)
+                                        isSpeedUp = true
+                                        showControls = false
+                                        wasLongPress = true
+                                    }
+                                    continue
+                                }
+
+                                val change = secondEvent.changes.firstOrNull { it.id == secondId }
                                 if (change == null || change.isConsumed) continue
 
                                 val isUp2 = !change.pressed
@@ -621,6 +664,8 @@ fun OfflinePlayerScreen(
                                             if (isSecondRight) {
                                                 showVolumeOverlay = true
                                                 showBrightnessOverlay = false
+                                                // FIX 2: resync volumeFraction on second-tap drag entry
+                                                volumeFraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()
                                             } else {
                                                 showBrightnessOverlay = true
                                                 showVolumeOverlay = false
@@ -641,14 +686,15 @@ fun OfflinePlayerScreen(
 
                                     "DRAG_VOLUME" -> {
                                         if (isUp2) {
-                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume), 0)
                                             break
                                         }
                                         val dragDy2 = change.position.y - secondLastY
                                         if (abs(dragDy2) > 0f) {
                                             secondLastY = change.position.y
-                                            val step = -dragDy2 / size.height * maxVolume
-                                            val newVol2 = (currentVolume + step).toInt().coerceIn(0, maxVolume)
+                                            // FIX 2: continuous Float accumulator
+                                            volumeFraction = (volumeFraction - dragDy2 / size.height).coerceIn(0f, 1f)
+                                            val newVol2 = (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume)
                                             currentVolume = newVol2
                                             val now = System.nanoTime()
                                             if (now - secondVolumeCommitNanos > 80_000_000) {
