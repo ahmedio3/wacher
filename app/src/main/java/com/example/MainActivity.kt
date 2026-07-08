@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
         
         enableEdgeToEdge()
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
         setContent {
             MyApplicationTheme {
                 MainAppContainer(startWithChat = openChat)
