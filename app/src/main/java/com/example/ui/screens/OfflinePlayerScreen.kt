@@ -83,12 +83,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-
 /** Which value the unified center overlay is currently displaying. */
 private enum class AdjustMode { VOLUME, BRIGHTNESS }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun OfflinePlayerScreen(
     mediaId: String,
