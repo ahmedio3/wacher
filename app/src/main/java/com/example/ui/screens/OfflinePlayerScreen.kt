@@ -85,6 +85,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
+/** Which value the unified center overlay is currently displaying. */
+private enum class AdjustMode { VOLUME, BRIGHTNESS }
+
 @Composable
 fun OfflinePlayerScreen(
     mediaId: String,
@@ -151,15 +155,18 @@ fun OfflinePlayerScreen(
     var volumeFraction by remember { mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()) }
     val initialBrightness = activity?.window?.attributes?.screenBrightness?.let { if (it < 0f) 0.5f else it } ?: 0.5f
     var currentBrightness by remember { mutableFloatStateOf(initialBrightness) }
-    var showVolumeOverlay by remember { mutableStateOf(false) }
-    var showBrightnessOverlay by remember { mutableStateOf(false) }
-
-    // Separate auto-hide timers for volume & brightness
-    LaunchedEffect(showVolumeOverlay) {
-        if (showVolumeOverlay) { delay(2000); showVolumeOverlay = false }
-    }
-    LaunchedEffect(showBrightnessOverlay) {
-        if (showBrightnessOverlay) { delay(1500); showBrightnessOverlay = false }
+    // Unified volume/brightness overlay state
+    // mode == null means "overlay not shown"; AdjustMode.VOLUME/BRIGHTNESS picks icon + bar fill source
+    var showAdjustOverlay by remember { mutableStateOf(false) }
+    var adjustMode by remember { mutableStateOf<AdjustMode?>(null) }
+    // overlayHideTrigger increments on every pointer-up of a DRAG_VOLUME/DRAG_BRIGHTNESS gesture.
+    // The LaunchedEffect keyed on it auto-cancels the prior coroutine and starts a fresh 2s countdown.
+    var overlayHideTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(overlayHideTrigger) {
+        if (overlayHideTrigger > 0) {
+            delay(2000)
+            showAdjustOverlay = false
+        }
     }
 
     // Overlays
@@ -392,60 +399,75 @@ fun OfflinePlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Volume & Brightness Overlay Indicators
-        if (showVolumeOverlay) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 20.dp)
-                    .width(48.dp)
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                val volFraction = currentVolume.toFloat() / maxVolume.toFloat()
-                Box(
+        // Unified centered Volume/Brightness Overlay Pill
+        // - Centered horizontally, positioned near the top of the video (top padding 32dp)
+        // - Dark semi-transparent capsule with leading icon + horizontal level bar + percentage
+        // - Visibility tied to showAdjustOverlay; auto-hide is driven by overlayHideTrigger (FIX 1)
+        AnimatedVisibility(
+            visible = showAdjustOverlay && adjustMode != null,
+            enter = fadeIn(animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(250)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 32.dp)
+        ) {
+            val mode = adjustMode
+            if (mode != null) {
+                val fraction = when (mode) {
+                    AdjustMode.VOLUME -> volumeFraction
+                    AdjustMode.BRIGHTNESS -> currentBrightness
+                }.coerceIn(0f, 1f)
+                val icon = when (mode) {
+                    AdjustMode.VOLUME -> when {
+                        fraction <= 0f -> Icons.Default.VolumeOff
+                        fraction < 0.5f -> Icons.Default.VolumeDown
+                        else -> Icons.Default.VolumeUp
+                    }
+                    AdjustMode.BRIGHTNESS -> Icons.Default.WbSunny
+                }
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(volFraction.coerceIn(0f, 1f))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-                Text(
-                    text = "${(volFraction * 100).toInt()}%",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-        }
-        if (showBrightnessOverlay) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 20.dp)
-                    .width(48.dp)
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(currentBrightness.coerceIn(0f, 1f))
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.White.copy(alpha = 0.8f))
-                )
-                Text(
-                    text = "${(currentBrightness * 100).toInt()}%",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    // Horizontal rounded level bar — Box-based track + filled portion
+                    Box(
+                        modifier = Modifier
+                            .width(140.dp)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.25f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(fraction)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    when (mode) {
+                                        AdjustMode.VOLUME -> MaterialTheme.colorScheme.primary
+                                        AdjustMode.BRIGHTNESS -> Color.White.copy(alpha = 0.9f)
+                                    }
+                                )
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "${(fraction * 100).roundToInt()}%",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -527,13 +549,13 @@ fun OfflinePlayerScreen(
                                     else if (abs(dy) > touchSlop && abs(dy) > abs(dx)) {
                                         gestureKind = if (isRightSide) "DRAG_VOLUME" else "DRAG_BRIGHTNESS"
                                         if (isRightSide) {
-                                            showVolumeOverlay = true
-                                            showBrightnessOverlay = false
+                                            adjustMode = AdjustMode.VOLUME
+                                            showAdjustOverlay = true
                                             // FIX 2: resync volumeFraction from live AudioManager on drag entry
                                             volumeFraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()
                                         } else {
-                                            showBrightnessOverlay = true
-                                            showVolumeOverlay = false
+                                            adjustMode = AdjustMode.BRIGHTNESS
+                                            showAdjustOverlay = true
                                         }
                                         lastY = change.position.y
                                         change.consume()
@@ -553,6 +575,7 @@ fun OfflinePlayerScreen(
                                 "DRAG_VOLUME" -> {
                                     if (isUp) {
                                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume), 0)
+                                        overlayHideTrigger++
                                         break
                                     }
                                     val dragDy = change.position.y - lastY
@@ -574,7 +597,10 @@ fun OfflinePlayerScreen(
                                 }
 
                                 "DRAG_BRIGHTNESS" -> {
-                                    if (isUp) break
+                                    if (isUp) {
+                                        overlayHideTrigger++
+                                        break
+                                    }
                                     val dragDy = change.position.y - lastY
                                     if (abs(dragDy) > 0f) {
                                         lastY = change.position.y
@@ -666,13 +692,13 @@ fun OfflinePlayerScreen(
                                             val isSecondRight = secondStartX > size.width / 2f
                                             secondKind = if (isSecondRight) "DRAG_VOLUME" else "DRAG_BRIGHTNESS"
                                             if (isSecondRight) {
-                                                showVolumeOverlay = true
-                                                showBrightnessOverlay = false
+                                                adjustMode = AdjustMode.VOLUME
+                                                showAdjustOverlay = true
                                                 // FIX 2: resync volumeFraction on second-tap drag entry
                                                 volumeFraction = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume.toFloat()
                                             } else {
-                                                showBrightnessOverlay = true
-                                                showVolumeOverlay = false
+                                                adjustMode = AdjustMode.BRIGHTNESS
+                                                showAdjustOverlay = true
                                             }
                                             secondLastY = change.position.y
                                             change.consume()
@@ -691,6 +717,7 @@ fun OfflinePlayerScreen(
                                     "DRAG_VOLUME" -> {
                                         if (isUp2) {
                                             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (volumeFraction * maxVolume).roundToInt().coerceIn(0, maxVolume), 0)
+                                            overlayHideTrigger++
                                             break
                                         }
                                         val dragDy2 = change.position.y - secondLastY
@@ -710,7 +737,10 @@ fun OfflinePlayerScreen(
                                     }
 
                                     "DRAG_BRIGHTNESS" -> {
-                                        if (isUp2) break
+                                        if (isUp2) {
+                                            overlayHideTrigger++
+                                            break
+                                        }
                                         val dragDy2 = change.position.y - secondLastY
                                         if (abs(dragDy2) > 0f) {
                                             secondLastY = change.position.y
@@ -1764,7 +1794,8 @@ fun OfflinePlayerScreen(
                         Card(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(340.dp),
+                            .width(340.dp)
+                            .align(Alignment.TopEnd),
                         shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
