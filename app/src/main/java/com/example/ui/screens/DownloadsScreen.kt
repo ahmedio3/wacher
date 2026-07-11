@@ -12,6 +12,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -290,6 +293,10 @@ fun SeriesDetailBottomSheet(
 ) {
     var selectedSeasonNumber by remember { mutableIntStateOf(1) }
     var showDownloadNewSheet by remember { mutableStateOf(false) }
+    var selectedForContextMenu by remember { mutableStateOf<String?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     // Load TMDB Series Details to fetch seasons list and correct total episodes count from server
     LaunchedEffect(seriesId) {
@@ -455,8 +462,67 @@ fun SeriesDetailBottomSheet(
                                 if (path != null) {
                                     onNavigateToPlayer(item.id, item.title, path)
                                 }
+                            },
+                            isSelected = item.id in selectedIds,
+                            isSelectionMode = selectionMode,
+                            isContextMenuDimmed = selectedForContextMenu != null && selectedForContextMenu != item.id,
+                            isContextMenuTarget = selectedForContextMenu == item.id,
+                            onLongClick = { selectedForContextMenu = item.id },
+                            onCheckedChange = { checked ->
+                                selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                            },
+                            onDismissContextMenu = { selectedForContextMenu = null },
+                            onEnterMultiSelect = {
+                                selectedForContextMenu = null
+                                selectionMode = true
+                                selectedIds = setOf(item.id)
                             }
                         )
+                    }
+                }
+            }
+
+            // Batch action bar for multi-select mode
+            if (selectionMode) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 2.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${selectedIds.size} مختارة",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = {
+                                selectionMode = false
+                                selectedIds = emptySet()
+                            }) {
+                                Text("إلغاء التحديد", fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = { showBatchDeleteConfirm = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                enabled = selectedIds.isNotEmpty(),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("حذف", fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -517,6 +583,29 @@ fun SeriesDetailBottomSheet(
                         customUrl = url
                     )
                     showDownloadNewSheet = false
+                }
+            )
+        }
+
+        // Batch delete confirmation dialog
+        if (showBatchDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showBatchDeleteConfirm = false },
+                title = { Text("حذف ${selectedIds.size} عنصر؟") },
+                text = { Text("سيتم حذف الحلقات المختارة بشكل دائم من التخزين.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            selectedIds.forEach { id -> viewModel.deleteDownload(id) }
+                            showBatchDeleteConfirm = false
+                            selectionMode = false
+                            selectedIds = emptySet()
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) { Text("حذف الكل") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBatchDeleteConfirm = false }) { Text("إلغاء") }
                 }
             )
         }
@@ -991,12 +1080,20 @@ fun DownloadItemRow(
 }
 
 // Compact row for bottom sheet episode list (no card background, larger thumb, gradient progress bar)
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CompactEpisodeRow(
     item: DownloadEntity,
     viewModel: MovieViewModel,
-    onPlayClick: (String?) -> Unit
+    onPlayClick: (String?) -> Unit,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
+    isContextMenuDimmed: Boolean = false,
+    isContextMenuTarget: Boolean = false,
+    onLongClick: () -> Unit = {},
+    onCheckedChange: (Boolean) -> Unit = {},
+    onDismissContextMenu: () -> Unit = {},
+    onEnterMultiSelect: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isCompleted = item.status == "completed"
@@ -1042,203 +1139,305 @@ fun CompactEpisodeRow(
         (lastPos.toFloat() / 1000f / durationSecs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // Main content
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    if (isCompleted) onPlayClick(item.localFilePath)
-                    else if (isPaused) viewModel.resumeDownload(item.id)
-                    else if (!isCompleted) viewModel.pauseDownload(item.id)
-                }
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .then(if (isContextMenuDimmed) Modifier.alpha(0.35f) else Modifier)
+                .then(if (isContextMenuTarget) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else Modifier)
         ) {
-            // Thumbnail with gradient progress bar at bottom
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(width = 80.dp, height = 50.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier)
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {
+                            if (isSelectionMode) {
+                                onCheckedChange(!isSelected)
+                            } else {
+                                if (isCompleted) onPlayClick(item.localFilePath)
+                                else if (isPaused) viewModel.resumeDownload(item.id)
+                                else if (!isCompleted) viewModel.pauseDownload(item.id)
+                            }
+                        },
+                        onLongClick = {
+                            if (isSelectionMode) {
+                                onCheckedChange(!isSelected)
+                            } else {
+                                onLongClick()
+                            }
+                        }
+                    )
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                AsyncImage(
-                    model = thumbUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                // Pulse overlay during active download
-                if (isDownloading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .alpha(pulseAlpha)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                // Checkbox in selection mode
+                if (isSelectionMode) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = onCheckedChange,
+                        modifier = Modifier.size(20.dp),
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                        )
                     )
                 }
-                // Gradient progress bar at bottom of thumbnail
-                if (isCompleted && progress > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .align(Alignment.BottomCenter)
-                    ) {
-                        // Track background
+
+                // Thumbnail with gradient progress bar at bottom
+                Box(
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 50.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier)
+                ) {
+                    AsyncImage(
+                        model = thumbUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    // Pulse overlay during active download
+                    if (isDownloading) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f))
+                                .alpha(pulseAlpha)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                         )
-                        // Active progress with gradient
+                    }
+                    // Gradient progress bar at bottom of thumbnail
+                    if (isCompleted && progress > 0f) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(progress)
-                                .fillMaxHeight()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(Color.Cyan, Color.Green)
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            // Track background
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                            )
+                            // Active progress with gradient
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progress)
+                                    .fillMaxHeight()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(Color.Cyan, Color.Green)
+                                        )
                                     )
-                                )
-                        )
+                            )
+                        }
                     }
                 }
-            }
 
-            // Details
-            Column(
-                modifier = Modifier.weight(1f)
-                    .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                // Episode number + quality
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // Details
+                Column(
+                    modifier = Modifier.weight(1f)
+                        .then(if (!isCompleted) Modifier.alpha(0.55f) else Modifier),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = "الحلقة ${item.episode}",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = item.quality,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
-                if (isCompleted) {
-                    val fileSizeText = runCatching {
-                        formatBytes(File(item.localFilePath).length())
-                    }.getOrDefault("...")
-
+                    // Episode number + quality
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        if (durationSecs > 0 && lastPos > 0) {
-                            val posSecs = lastPos / 1000
-                            val durMins = durationSecs / 60
-                            val durSecs = durationSecs % 60
-                            // Watched time (green) / total time (faded)
+                        Text(
+                            text = "الحلقة ${item.episode}",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
                             Text(
-                                text = buildAnnotatedString {
-                                    withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
-                                        append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
-                                    }
-                                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
-                                        append("/$durMins:${String.format("%02d", durSecs)}")
-                                    }
-                                },
-                                fontSize = 10.sp
-                            )
-                            Text(
-                                text = "—",
+                                text = item.quality,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
+                    }
+
+                    if (isCompleted) {
+                        val fileSizeText = runCatching {
+                            formatBytes(File(item.localFilePath).length())
+                        }.getOrDefault("...")
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (durationSecs > 0 && lastPos > 0) {
+                                val posSecs = lastPos / 1000
+                                val durMins = durationSecs / 60
+                                val durSecs = durationSecs % 60
+                                // Watched time (green) / total time (faded)
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
+                                            append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
+                                        }
+                                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
+                                            append("/$durMins:${String.format("%02d", durSecs)}")
+                                        }
+                                    },
+                                    fontSize = 10.sp
+                                )
+                                Text(
+                                    text = "—",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                )
+                            }
+                            Text(
+                                text = fileSizeText,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        // Download progress — NO transparency
+                        val formattedDownloaded = formatBytes(item.downloadedBytes)
+                        val formattedTotal = formatBytes(item.totalBytes)
                         Text(
-                            text = fileSizeText,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                            fontWeight = FontWeight.Medium
+                            text = if (item.totalBytes == item.downloadedBytes) formattedDownloaded else "$formattedDownloaded / $formattedTotal",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        LinearProgressIndicator(
+                            progress = { item.progress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
-                } else {
-                    // Download progress — NO transparency
-                    val formattedDownloaded = formatBytes(item.downloadedBytes)
-                    val formattedTotal = formatBytes(item.totalBytes)
-                    Text(
-                        text = if (item.totalBytes == item.downloadedBytes) formattedDownloaded else "$formattedDownloaded / $formattedTotal",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                    LinearProgressIndicator(
-                        progress = { item.progress / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    )
+                }
+
+                // Play/Pause button — hidden when completed (whole card is clickable)
+                if (!isCompleted) {
+                    IconButton(
+                        onClick = {
+                            if (isPaused) viewModel.resumeDownload(item.id)
+                            else viewModel.pauseDownload(item.id)
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = if (isPaused) "استئناف" else "إيقاف مؤقت",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                // Three-dot menu (hidden in multi-select mode)
+                if (!isSelectionMode) {
+                    IconButton(
+                        onClick = { showMenuDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "خيارات",
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                thickness = 0.5.dp
+            )
+        }
 
-            // Play/Pause button — hidden when completed (whole card is clickable)
+        // DropdownMenu anchored to this row when it is the long-press target
+        DropdownMenu(
+            expanded = isContextMenuTarget,
+            onDismissRequest = onDismissContextMenu
+        ) {
             if (!isCompleted) {
-                IconButton(
+                DropdownMenuItem(
+                    text = { Text("مشاهدة ما تم تحميله") },
                     onClick = {
+                        onDismissContextMenu()
+                        val partialPath = File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
+                        if (File(partialPath).exists()) {
+                            onPlayClick(partialPath)
+                        } else {
+                            android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل") },
+                    onClick = {
+                        onDismissContextMenu()
                         if (isPaused) viewModel.resumeDownload(item.id)
                         else viewModel.pauseDownload(item.id)
                     },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = if (isPaused) "استئناف" else "إيقاف مؤقت",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            // Three-dot menu
-            IconButton(
-                onClick = { showMenuDialog = true },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "خيارات",
-                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp)
+                    leadingIcon = { Icon(if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
+            if (isCompleted) {
+                DropdownMenuItem(
+                    text = { Text("حفظ الفيديو في المعرض") },
+                    onClick = {
+                        onDismissContextMenu()
+                        try {
+                            val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                            if (!destDir.exists()) destDir.mkdirs()
+                            val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                            val destFile = File(destDir, "$safeTitle.mp4")
+                            File(item.localFilePath).copyTo(destFile, overwrite = true)
+                            android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض", android.widget.Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("حذف الملف") },
+                onClick = {
+                    onDismissContextMenu()
+                    viewModel.deleteDownload(item.id)
+                },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold) },
+                onClick = {
+                    onEnterMultiSelect()
+                },
+                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
         }
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            thickness = 0.5.dp
-        )
     }
 
-    // AlertDialog instead of ModalBottomSheet
+    // AlertDialog (kept for backward compat via 3-dot button)
     if (showMenuDialog) {
         AlertDialog(
             onDismissRequest = { showMenuDialog = false },
