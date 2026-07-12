@@ -41,6 +41,18 @@ data class EpisodeWatchStatusEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(
+    tableName = "season_meta",
+    primaryKeys = ["tmdbId", "seasonNumber"]
+)
+data class SeasonMetaEntity(
+    val tmdbId: Int,
+    val seasonNumber: Int,
+    val episodeCount: Int,
+    val name: String,
+    val lastFetchedAt: Long = System.currentTimeMillis()
+)
+
 data class LocalVideoFile(
     val id: String,          // file path hash
     val name: String,        // display name

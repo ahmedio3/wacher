@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.Application
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -19,6 +20,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -34,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -49,8 +50,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
+import com.example.data.local.SeasonMetaEntity
 import com.example.ui.theme.PalettePrimary
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
@@ -61,6 +64,7 @@ import java.io.File
 fun DownloadsScreen(
     viewModel: MovieViewModel,
     onNavigateToPlayer: (String, String, String) -> Unit,
+    navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -79,7 +83,7 @@ fun DownloadsScreen(
     val individualDownloads = downloads.filter { it.mediaType == "movie" }
 
     // Active bottom sheet series tracking
-    var selectedSeriesIdForSheet by remember { mutableStateOf<String?>(null) }
+    // (Series open as a full NavHost page now — see PlaylistFolderCard.onClick)
 
     // Force Arabic Layout Direction RTL Globally on pages
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -180,7 +184,7 @@ fun DownloadsScreen(
                                         completedCount = completedCount,
                                         downloadingCount = downloadingCount,
                                         onClick = {
-                                            selectedSeriesIdForSheet = mediaId
+                                            navController.navigate("series_downloads/$mediaId")
                                         }
                                     )
                                 }
@@ -263,46 +267,49 @@ fun DownloadsScreen(
                     }
                 }
             }
-
-            // 100% HEIGHT MODAL BOTTOM SHEET FOR SERIES EPISODES LIST & SEASONS SWITCHER
-            if (!selectedSeriesIdForSheet.isNullOrEmpty()) {
-                val mediaId = selectedSeriesIdForSheet!!
-                val playlistEpisodes = playlistGroups[mediaId] ?: emptyList()
-                val parentTitle = playlistEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
-                val posterPath = playlistEpisodes.firstOrNull()?.posterPath ?: ""
-
-                SeriesDetailBottomSheet(
-                    seriesId = mediaId,
-                    seriesTitle = parentTitle,
-                    posterPath = posterPath,
-                    downloadedEpisodes = playlistEpisodes,
-                    viewModel = viewModel,
-                    onDismiss = { selectedSeriesIdForSheet = null },
-                    onNavigateToPlayer = onNavigateToPlayer
-                )
-            }
         }
     }
 }
 
-// FULL SCREEN EPISODES SELECTOR MODAL BOTTOM SHEET (100% Height)
+// FULL PAGE: per-series downloaded-episodes viewer + season switcher (replaces ModalBottomSheet)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SeriesDetailBottomSheet(
+fun SeriesDetailPage(
     seriesId: String,
-    seriesTitle: String,
-    posterPath: String,
-    downloadedEpisodes: List<DownloadEntity>,
     viewModel: MovieViewModel,
-    onDismiss: () -> Unit,
-    onNavigateToPlayer: (String, String, String) -> Unit
+    onNavigateToPlayer: (String, String, String) -> Unit,
+    onBack: () -> Unit
 ) {
-    var selectedSeasonNumber by remember { mutableIntStateOf(1) }
+    val context = LocalContext.current
+    val downloads by viewModel.downloads.collectAsState(initial = emptyList())
+    val downloadedEpisodes = remember(downloads, seriesId) {
+        downloads.filter { it.mediaType == "tv" && it.mediaId == seriesId }
+    }
+    val seriesTitle = downloadedEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
+    val posterPath = downloadedEpisodes.firstOrNull()?.posterPath ?: ""
+
+    val seasonPrefs = context.getSharedPreferences("series_season_prefs", Context.MODE_PRIVATE)
+    var selectedSeasonNumber by remember { mutableIntStateOf(seasonPrefs.getInt("season_$seriesId", 1)) }
     var showDownloadNewSheet by remember { mutableStateOf(false) }
     var selectedForContextMenu by remember { mutableStateOf<String?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Shared dimming alpha: header title, season chips and download button fade together during context-menu mode
+    val dimAlpha by animateFloatAsState(
+        targetValue = if (selectedForContextMenu != null) 0.35f else 1f,
+        animationSpec = tween(250)
+    )
+
+    // Offline season-metadata fallback (cached from prior successful network fetches)
+    var seasonMetaList by remember { mutableStateOf<List<SeasonMetaEntity>>(emptyList()) }
+    LaunchedEffect(seriesId) {
+        val parsedId = seriesId.toIntOrNull() ?: 0
+        if (parsedId > 0) {
+            runCatching { seasonMetaList = viewModel.getSeasonMeta(parsedId) }
+        }
+    }
 
     // Load TMDB Series Details to fetch seasons list and correct total episodes count from server
     LaunchedEffect(seriesId) {
@@ -316,10 +323,22 @@ fun SeriesDetailBottomSheet(
     val parsedSeriesIntId = seriesId.toIntOrNull() ?: 0
     val tvDetailsState = tvDetailsMap[parsedSeriesIntId]
 
-    // Extracted seasons list
-    val seasons = remember(tvDetailsState) {
+    // Extracted seasons list: network authoritative; else Room season_meta fallback; else downloaded-only
+    val seasons = remember(tvDetailsState, seasonMetaList) {
         if (tvDetailsState is RequestState.Success) {
             tvDetailsState.data.seasons?.filter { it.seasonNumber > 0 } ?: emptyList()
+        } else if (seasonMetaList.isNotEmpty()) {
+            seasonMetaList
+                .filter { it.tmdbId == parsedSeriesIntId }
+                .map { meta ->
+                    com.example.data.remote.TmdbSeason(
+                        id = meta.seasonNumber,
+                        seasonNumber = meta.seasonNumber,
+                        episodeCount = meta.episodeCount,
+                        name = meta.name,
+                        posterPath = null
+                    )
+                }
         } else {
             // Fallback using downloaded episodes content
             val downloadedSeasons = downloadedEpisodes.map { it.season }.distinct().sorted()
@@ -365,243 +384,222 @@ fun SeriesDetailBottomSheet(
         .filter { it.season == selectedSeasonNumber }
         .sortedBy { it.episode }
 
-    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = bottomSheetState,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxHeight(1.0f) // 100% full screen height limit
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Column(
+        // Header Info
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .navigationBarsPadding()
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Info
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "إغلاق")
-                }
-                Text(
-                    text = seriesTitle,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(48.dp))
+            IconButton(onClick = onBack) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "رجوع")
             }
-
-            Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-
-            // Active Tab bar seasons list with statistics: e.g. "الموسم 1 (1/7)"
-            LazyRow(
+            Text(
+                text = seriesTitle,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(seasons) { s ->
-                    val isSelected = selectedSeasonNumber == s.seasonNumber
-                    val downloadedCount = downloadedEpisodes.count { it.season == s.seasonNumber }
-                    
-                    // Total count mapping
-                    var totalCountText = s.episodeCount?.toString() ?: "0"
-                    if (isSelected && seasonDetailState is RequestState.Success) {
-                        totalCountText = (seasonDetailState.data.episodes?.size ?: s.episodeCount ?: 0).toString()
-                    }
+                    .weight(1f)
+                    .alpha(dimAlpha)
+            )
+            Spacer(modifier = Modifier.width(48.dp))
+        }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable { selectedSeasonNumber = s.seasonNumber }
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "الموسم ${s.seasonNumber}",
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                            Text(
-                                text = "($downloadedCount/$totalCountText)",
-                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
+        Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+
+        // Active Tab bar seasons list with statistics: e.g. "الموسم 1 (1/7)"
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(dimAlpha)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(seasons) { s ->
+                val isSelected = selectedSeasonNumber == s.seasonNumber
+                val downloadedCount = downloadedEpisodes.count { it.season == s.seasonNumber }
+
+                // Total count mapping
+                var totalCountText = s.episodeCount?.toString() ?: "0"
+                if (isSelected && seasonDetailState is RequestState.Success) {
+                    totalCountText = (seasonDetailState.data.episodes?.size ?: s.episodeCount ?: 0).toString()
                 }
-            }
 
-            // Listing current downloaded or downloading episodes in season
-            if (currentSeasonEpisodesList.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.CloudQueue, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(text = "لا توجد حلقات منزلة في هذا الموسم حالياً", color = Color.Gray, fontSize = 13.sp)
-                    }
-                }
-            } else {
-                Box(modifier = Modifier.weight(1f)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        items(currentSeasonEpisodesList, key = { it.id }) { item ->
-                            CompactEpisodeRow(
-                                item = item,
-                                viewModel = viewModel,
-                                onPlayClick = { path ->
-                                    if (path != null) {
-                                        onNavigateToPlayer(item.id, item.title, path)
-                                    }
-                                },
-                                isSelected = item.id in selectedIds,
-                                isSelectionMode = selectionMode,
-                                isContextMenuDimmed = selectedForContextMenu != null && selectedForContextMenu != item.id,
-                                isContextMenuTarget = selectedForContextMenu == item.id,
-                                onLongClick = { selectedForContextMenu = item.id },
-                                onCheckedChange = { checked ->
-                                    selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
-                                },
-                                onDismissContextMenu = { selectedForContextMenu = null },
-                                onEnterMultiSelect = {
-                                    selectedForContextMenu = null
-                                    selectionMode = true
-                                    selectedIds = setOf(item.id)
-                                }
-                            )
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable {
+                            selectedSeasonNumber = s.seasonNumber
+                            seasonPrefs.edit().putInt("season_$seriesId", s.seasonNumber).apply()
                         }
-                    }
-
-                    // Animated scrim for context-menu spotlight (sibling overlay, no alpha stacking)
-                    val scrimAlpha by animateFloatAsState(
-                        targetValue = if (selectedForContextMenu != null) 0.55f else 0f,
-                        animationSpec = tween(250)
-                    )
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .zIndex(1f)
-                            .background(Color.Black.copy(alpha = scrimAlpha))
-                            .then(
-                                if (selectedForContextMenu != null)
-                                    Modifier.clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() }
-                                    ) { selectedForContextMenu = null }
-                                else Modifier
-                            )
-                    )
-                }
-            }
-
-            // Batch action bar for multi-select mode
-            AnimatedVisibility(
-                visible = selectionMode,
-                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { it / 2 }),
-                exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { it / 2 })
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 2.dp
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "${selectedIds.size} مختارة",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "الموسم ${s.seasonNumber}",
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = {
-                                selectionMode = false
-                                selectedIds = emptySet()
-                            }) {
-                                Text("إلغاء التحديد", fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = { showBatchDeleteConfirm = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                enabled = selectedIds.isNotEmpty(),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("حذف", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Button to trigger download new episodes sheet at the bottom block
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Button(
-                    onClick = { showDownloadNewSheet = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
                         Text(
-                            text = "تنزيل باقي حلقات المسلسل",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = Color.White
+                            text = "($downloadedCount/$totalCountText)",
+                            color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 10.sp
                         )
                     }
                 }
             }
         }
 
+        // Listing current downloaded or downloading episodes in season
+        if (currentSeasonEpisodesList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.CloudQueue, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(text = "لا توجد حلقات منزلة في هذا الموسم حالياً", color = Color.Gray, fontSize = 13.sp)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(currentSeasonEpisodesList, key = { it.id }) { item ->
+                    CompactEpisodeRow(
+                        item = item,
+                        viewModel = viewModel,
+                        onPlayClick = { path ->
+                            if (path != null) {
+                                onNavigateToPlayer(item.id, item.title, path)
+                            }
+                        },
+                        isSelected = item.id in selectedIds,
+                        isSelectionMode = selectionMode,
+                        dimAlpha = dimAlpha,
+                        isContextMenuTarget = selectedForContextMenu == item.id,
+                        onLongClick = { selectedForContextMenu = item.id },
+                        onCheckedChange = { checked ->
+                            selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                        },
+                        onDismissContextMenu = { selectedForContextMenu = null },
+                        onEnterMultiSelect = {
+                            selectedForContextMenu = null
+                            selectionMode = true
+                            selectedIds = setOf(item.id)
+                        }
+                    )
+                }
+            }
+        }
+
+        // Batch action bar for multi-select mode
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { it / 2 }),
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { it / 2 })
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${selectedIds.size} مختارة",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            selectionMode = false
+                            selectedIds = emptySet()
+                        }) {
+                            Text("إلغاء التحديد", fontSize = 12.sp)
+                        }
+                        Button(
+                            onClick = { showBatchDeleteConfirm = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            enabled = selectedIds.isNotEmpty(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("حذف", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Button to trigger download new episodes sheet at the bottom block
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(dimAlpha)
+                .padding(20.dp)
+        ) {
+            Button(
+                onClick = { showDownloadNewSheet = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
+                    Text(
+                        text = "تنزيل باقي حلقات المسلسل",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
         // Secondary bottom sheet (70% Height)
         if (showDownloadNewSheet) {
-            val context = LocalContext.current.applicationContext as android.app.Application
-            val movieBoxViewModel: com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.example.ui.viewmodel.ViewModelFactory(context))
+            val appContext = context.applicationContext as android.app.Application
+            val movieBoxViewModel: com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel =
+                androidx.lifecycle.viewmodel.compose.viewModel(factory = com.example.ui.viewmodel.ViewModelFactory(appContext))
 
             com.example.ui.components.moviebox.MovieBoxDownloadSheet(
                 movieTitle = seriesTitle,
@@ -1127,7 +1125,7 @@ fun CompactEpisodeRow(
     onPlayClick: (String?) -> Unit,
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
-    isContextMenuDimmed: Boolean = false,
+    dimAlpha: Float = 1f,
     isContextMenuTarget: Boolean = false,
     onLongClick: () -> Unit = {},
     onCheckedChange: (Boolean) -> Unit = {},
@@ -1157,6 +1155,12 @@ fun CompactEpisodeRow(
     }
     var showMenuDialog by remember { mutableStateOf(false) }
 
+    // Custom press effect (replaces default ripple) — subtle scale + alpha on touch-down
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.92f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.98f else 1f, animationSpec = tween(150))
+
     // Watch progress
     val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
     val lastPos = prefs.getLong("pos_${item.id}", 0L)
@@ -1178,27 +1182,24 @@ fun CompactEpisodeRow(
         (lastPos.toFloat() / 1000f / durationSecs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    val scale by animateFloatAsState(
-        targetValue = if (isContextMenuTarget) 1.04f else 1f,
-        animationSpec = tween(250)
-    )
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .zIndex(if (isContextMenuTarget) 2f else 0f)
-            .scale(scale)
+            .scale(pressScale)
+            .alpha(pressAlpha * (if (isContextMenuTarget) 1f else dimAlpha))
+            .then(if (isContextMenuTarget) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else Modifier)
     ) {
         // Main content
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (isContextMenuTarget) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else Modifier)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
                         onClick = {
                             if (isSelectionMode) {
                                 onCheckedChange(!isSelected)

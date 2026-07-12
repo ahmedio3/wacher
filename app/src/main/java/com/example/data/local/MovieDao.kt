@@ -76,6 +76,13 @@ interface MovieDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEpisodeWatchStatusBatch(items: List<EpisodeWatchStatusEntity>)
 
+    // ---- Season metadata cache (offline fallback for totals) ----
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSeasonMeta(items: List<SeasonMetaEntity>)
+
+    @Query("SELECT * FROM season_meta WHERE tmdbId = :id")
+    suspend fun getSeasonMeta(id: Int): List<SeasonMetaEntity>
+
     // ---- Saved Images (Browser) ----
     @Query("SELECT * FROM saved_images ORDER BY downloadedAt DESC")
     fun getSavedImages(): Flow<List<SavedImageEntity>>

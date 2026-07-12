@@ -489,7 +489,8 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                         val encodedTitle = Uri.encode(title)
                         val encodedPath = Uri.encode(localPath)
                         navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
-                    }
+                    },
+                    navController = navController
                 )
             }
 
@@ -523,18 +524,39 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     mediaType = mediaType,
                     viewModel = movieViewModel,
                     onBackClick = { navController.popBackStack() },
-                    onNavigateToPlayer = { id, title, localPath ->
-                        val encodedId = Uri.encode(id)
-                        val encodedTitle = Uri.encode(title)
-                        val encodedPath = Uri.encode(localPath)
-                        if (localPath.isNotEmpty()) {
-                            navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
-                        } else {
-                            navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
-                        }
+                onNavigateToPlayer = { id, title, localPath ->
+                    val encodedId = Uri.encode(id)
+                    val encodedTitle = Uri.encode(title)
+                    val encodedPath = Uri.encode(localPath)
+                    if (localPath.isNotEmpty()) {
+                        navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
+                    } else {
+                        navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
                     }
-                )
-            }
+                }
+            )
+        }
+
+        // Per-series downloaded-episodes full page (replaces the old ModalBottomSheet)
+        composable(
+            route = "series_downloads/{seriesId}",
+            arguments = listOf(
+                navArgument("seriesId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val seriesId = backStackEntry.arguments?.getString("seriesId") ?: ""
+            SeriesDetailPage(
+                seriesId = seriesId,
+                viewModel = movieViewModel,
+                onNavigateToPlayer = { id, title, localPath ->
+                    val encodedId = Uri.encode(id)
+                    val encodedTitle = Uri.encode(title)
+                    val encodedPath = Uri.encode(localPath)
+                    navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
 
             composable(
                 route = "mb_details/{mediaId}/{mediaType}?title={title}&posterUrl={posterUrl}",

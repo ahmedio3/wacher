@@ -4,6 +4,7 @@ import com.example.data.local.DownloadEntity
 import com.example.data.local.EpisodeWatchStatusEntity
 import com.example.data.local.MovieDao
 import com.example.data.local.SavedImageEntity
+import com.example.data.local.SeasonMetaEntity
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
@@ -125,10 +126,41 @@ class MovieRepository(private val movieDao: MovieDao) {
     }
 
     suspend fun getTvDetails(tvId: Int, language: String = "ar"): TmdbTvDetails {
-        return tmdbService.getTvDetails(tvId = tvId, apiKey = tmdbApiKey, language = language)
+        val details = tmdbService.getTvDetails(tvId = tvId, apiKey = tmdbApiKey, language = language)
+        // Cache season totals locally so the sheet works offline
+        val now = System.currentTimeMillis()
+        val metas = details.seasons
+            ?.filter { it.seasonNumber > 0 }
+            ?.map { s ->
+                SeasonMetaEntity(
+                    tmdbId = tvId,
+                    seasonNumber = s.seasonNumber,
+                    episodeCount = s.episodeCount ?: 0,
+                    name = s.name ?: "الموسم ${s.seasonNumber}",
+                    lastFetchedAt = now
+                )
+            }.orEmpty()
+        if (metas.isNotEmpty()) movieDao.upsertSeasonMeta(metas)
+        return details
     }
 
     suspend fun getSeasonDetails(tvId: Int, seasonNumber: Int, language: String = "ar"): TmdbSeasonDetails {
-        return tmdbService.getSeasonDetails(tvId = tvId, seasonNumber = seasonNumber, apiKey = tmdbApiKey, language = language)
+        val details = tmdbService.getSeasonDetails(tvId = tvId, seasonNumber = seasonNumber, apiKey = tmdbApiKey, language = language)
+        movieDao.upsertSeasonMeta(
+            listOf(
+                SeasonMetaEntity(
+                    tmdbId = tvId,
+                    seasonNumber = seasonNumber,
+                    episodeCount = details.episodes?.size ?: 0,
+                    name = "الموسم $seasonNumber",
+                    lastFetchedAt = System.currentTimeMillis()
+                )
+            )
+        )
+        return details
+    }
+
+    suspend fun getSeasonMeta(tvId: Int): List<SeasonMetaEntity> {
+        return movieDao.getSeasonMeta(tvId)
     }
 }

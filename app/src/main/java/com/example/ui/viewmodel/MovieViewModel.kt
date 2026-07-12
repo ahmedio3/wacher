@@ -365,8 +365,7 @@ class MovieViewModel(
         }
     }
 
-    fun fetchSeasonDetails(tvId: Int, seasonNumber: Int) {
-        val key = "$tvId-$seasonNumber"
+    fun fetchSeasonDetails(tvId: Int, seasonNumber: Int) {        val key = "$tvId-$seasonNumber"
         if (_seasonDetails.value.containsKey(key) && _seasonDetails.value[key] is RequestState.Success) return
 
         viewModelScope.launch {
@@ -385,6 +384,11 @@ class MovieViewModel(
                 _seasonDetails.value = updatedMap
             }
         }
+    }
+
+    // Offline fallback: locally cached season totals
+    suspend fun getSeasonMeta(tvId: Int): List<com.example.data.local.SeasonMetaEntity> {
+        return repository.getSeasonMeta(tvId)
     }
 
     // WATCHLIST OPERATIONS
