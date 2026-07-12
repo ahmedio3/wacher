@@ -7,6 +7,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -15,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -46,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
+import com.example.ui.theme.PalettePrimary
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
 import java.io.File
@@ -336,6 +340,13 @@ fun SeriesDetailBottomSheet(
         }
     }
 
+    // Auto-exit selection mode when the last selected item is deselected
+    LaunchedEffect(selectedIds) {
+        if (selectionMode && selectedIds.isEmpty()) {
+            selectionMode = false
+        }
+    }
+
     // Run season loader from TMDB to dynamically retrieve remaining episodes checklist
     LaunchedEffect(seriesId, selectedSeasonNumber) {
         val tvId = seriesId.toIntOrNull() ?: 0
@@ -449,41 +460,67 @@ fun SeriesDetailBottomSheet(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    items(currentSeasonEpisodesList, key = { it.id }) { item ->
-                        CompactEpisodeRow(
-                            item = item,
-                            viewModel = viewModel,
-                            onPlayClick = { path ->
-                                if (path != null) {
-                                    onNavigateToPlayer(item.id, item.title, path)
+                Box(modifier = Modifier.weight(1f)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(currentSeasonEpisodesList, key = { it.id }) { item ->
+                            CompactEpisodeRow(
+                                item = item,
+                                viewModel = viewModel,
+                                onPlayClick = { path ->
+                                    if (path != null) {
+                                        onNavigateToPlayer(item.id, item.title, path)
+                                    }
+                                },
+                                isSelected = item.id in selectedIds,
+                                isSelectionMode = selectionMode,
+                                isContextMenuDimmed = selectedForContextMenu != null && selectedForContextMenu != item.id,
+                                isContextMenuTarget = selectedForContextMenu == item.id,
+                                onLongClick = { selectedForContextMenu = item.id },
+                                onCheckedChange = { checked ->
+                                    selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                                },
+                                onDismissContextMenu = { selectedForContextMenu = null },
+                                onEnterMultiSelect = {
+                                    selectedForContextMenu = null
+                                    selectionMode = true
+                                    selectedIds = setOf(item.id)
                                 }
-                            },
-                            isSelected = item.id in selectedIds,
-                            isSelectionMode = selectionMode,
-                            isContextMenuDimmed = selectedForContextMenu != null && selectedForContextMenu != item.id,
-                            isContextMenuTarget = selectedForContextMenu == item.id,
-                            onLongClick = { selectedForContextMenu = item.id },
-                            onCheckedChange = { checked ->
-                                selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
-                            },
-                            onDismissContextMenu = { selectedForContextMenu = null },
-                            onEnterMultiSelect = {
-                                selectedForContextMenu = null
-                                selectionMode = true
-                                selectedIds = setOf(item.id)
-                            }
-                        )
+                            )
+                        }
                     }
+
+                    // Animated scrim for context-menu spotlight (sibling overlay, no alpha stacking)
+                    val scrimAlpha by animateFloatAsState(
+                        targetValue = if (selectedForContextMenu != null) 0.55f else 0f,
+                        animationSpec = tween(250)
+                    )
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .zIndex(1f)
+                            .background(Color.Black.copy(alpha = scrimAlpha))
+                            .then(
+                                if (selectedForContextMenu != null)
+                                    Modifier.clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { selectedForContextMenu = null }
+                                else Modifier
+                            )
+                    )
                 }
             }
 
             // Batch action bar for multi-select mode
-            if (selectionMode) {
+            AnimatedVisibility(
+                visible = selectionMode,
+                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { it / 2 })
+            ) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1139,12 +1176,21 @@ fun CompactEpisodeRow(
         (lastPos.toFloat() / 1000f / durationSecs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    val scale by animateFloatAsState(
+        targetValue = if (isContextMenuTarget) 1.04f else 1f,
+        animationSpec = tween(250)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(if (isContextMenuTarget) 2f else 0f)
+            .scale(scale)
+    ) {
         // Main content
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (isContextMenuDimmed) Modifier.alpha(0.35f) else Modifier)
                 .then(if (isContextMenuTarget) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else Modifier)
         ) {
             Row(
@@ -1172,16 +1218,28 @@ fun CompactEpisodeRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Checkbox in selection mode
-                if (isSelectionMode) {
-                    Checkbox(
-                        checked = isSelected,
-                        onCheckedChange = onCheckedChange,
-                        modifier = Modifier.size(20.dp),
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
-                        )
+                // Circular selection indicator (replaces Checkbox) — animates in/out with selection mode
+                AnimatedVisibility(
+                    visible = isSelectionMode,
+                    enter = scaleIn(spring()) + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
+                    val indicatorFill by animateFloatAsState(
+                        targetValue = if (isSelected) 1f else 0f,
+                        animationSpec = tween(200)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .border(
+                                2.dp,
+                                if (isSelected) PalettePrimary
+                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                CircleShape
+                            )
+                            .background(PalettePrimary.copy(alpha = indicatorFill))
+                            .clickable { onCheckedChange(!isSelected) }
                     )
                 }
 
@@ -1373,7 +1431,12 @@ fun CompactEpisodeRow(
         // DropdownMenu anchored to this row when it is the long-press target
         DropdownMenu(
             expanded = isContextMenuTarget,
-            onDismissRequest = onDismissContextMenu
+            onDismissRequest = onDismissContextMenu,
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            shadowElevation = 8.dp,
+            tonalElevation = 0.dp
         ) {
             if (!isCompleted) {
                 DropdownMenuItem(
@@ -1428,11 +1491,11 @@ fun CompactEpisodeRow(
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold) },
+                text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = PalettePrimary) },
                 onClick = {
                     onEnterMultiSelect()
                 },
-                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PalettePrimary, modifier = Modifier.size(18.dp)) }
             )
         }
     }
