@@ -2025,7 +2025,6 @@ fun LocalFilesTab(
 
 }
 
-@Composable
 fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0.0 MB"
     val gb = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
