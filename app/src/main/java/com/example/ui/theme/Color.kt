@@ -12,6 +12,7 @@ val PaletteTertiary = Color(0xFFD6A45C)     // Warm gold rating indicator / acce
 val PaletteOnBackground = Color(0xFF2C241E) // Premium dark espresso-charcoal text
 val PaletteOnSurface = Color(0xFF352B24)    // Accent body/title text
 val PaletteOnPrimary = Color(0xFFFDFBF7)    // Cozy white/cream text on buttons
+val PaletteNeutralGray = Color(0xFFE5E5EA)  // Neutral system-gray (reference header circles/pills)
 
 // Accent colors
 val PaletteAppleBlue = Color(0xFF007AFF)    // Classic iOS style blue highlight

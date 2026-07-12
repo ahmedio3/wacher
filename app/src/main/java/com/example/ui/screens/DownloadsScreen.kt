@@ -13,6 +13,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -51,10 +52,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.data.local.SeasonMetaEntity
 import com.example.ui.theme.PalettePrimary
+import com.example.ui.theme.PaletteNeutralGray
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
 import java.io.File
@@ -271,6 +275,63 @@ fun DownloadsScreen(
     }
 }
 
+// Reusable header: circular back button (trailing/RTL-forward side) + title pill with two-tier text (leading side).
+// Parameterized so the same visual pattern can be reused on other pages later.
+@Composable
+fun PillHeader(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Back button (right side in RTL) — circular, neutral-gray background
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(PaletteNeutralGray)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "رجوع",
+                tint = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        // Title pill (left side in RTL) — two-tier text
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(PaletteNeutralGray)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
 // FULL PAGE: per-series downloaded-episodes viewer + season switcher (replaces ModalBottomSheet)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -287,6 +348,13 @@ fun SeriesDetailPage(
     }
     val seriesTitle = downloadedEpisodes.firstOrNull()?.title?.substringBefore(" - ") ?: "مسلسل"
     val posterPath = downloadedEpisodes.firstOrNull()?.posterPath ?: ""
+    // Total combined file size of all the series' downloaded episodes (for the header subtitle)
+    val totalDownloadedBytes = downloadedEpisodes.sumOf { it.totalBytes }
+    val totalSizeText = formatBytes(totalDownloadedBytes)
+
+    // Per-session caches so switching seasons back and forth doesn't re-read file metadata from disk
+    val durationCache = remember { mutableMapOf<String, Long>() }
+    val sizeCache = remember { mutableMapOf<String, String>() }
 
     val seasonPrefs = context.getSharedPreferences("series_season_prefs", Context.MODE_PRIVATE)
     var selectedSeasonNumber by remember { mutableIntStateOf(seasonPrefs.getInt("season_$seriesId", 1)) }
@@ -296,10 +364,12 @@ fun SeriesDetailPage(
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Shared dimming alpha: header title, season chips and download button fade together during context-menu mode
+    // Shared dimming alpha: header title, season chips and download button fade together during context-menu mode.
+    // Animate (tween) only when OPENING to 0.35f; snap instantly back to 1f on close to avoid the just-deselected
+    // row dipping to 0.35 and climbing back (the flash/flicker reported when dismissing the menu).
     val dimAlpha by animateFloatAsState(
         targetValue = if (selectedForContextMenu != null) 0.35f else 1f,
-        animationSpec = tween(250)
+        animationSpec = if (selectedForContextMenu != null) tween(250) else snap()
     )
 
     // Offline season-metadata fallback (cached from prior successful network fetches)
@@ -387,33 +457,16 @@ fun SeriesDetailPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .navigationBarsPadding()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header Info
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "رجوع")
-            }
-            Text(
-                text = seriesTitle,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .alpha(dimAlpha)
-            )
-            Spacer(modifier = Modifier.width(48.dp))
-        }
-
-        Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        PillHeader(
+            title = seriesTitle,
+            subtitle = totalSizeText,
+            onBack = onBack,
+            modifier = Modifier.alpha(dimAlpha)
+        )
 
         // Active Tab bar seasons list with statistics: e.g. "الموسم 1 (1/7)"
         LazyRow(
@@ -499,6 +552,8 @@ fun SeriesDetailPage(
                         isSelectionMode = selectionMode,
                         dimAlpha = dimAlpha,
                         isContextMenuTarget = selectedForContextMenu == item.id,
+                        durationCache = durationCache,
+                        sizeCache = sizeCache,
                         onLongClick = { selectedForContextMenu = item.id },
                         onCheckedChange = { checked ->
                             selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
@@ -777,6 +832,14 @@ fun DownloadItemRow(
     val episodeStillUrl = if (item.stillPath.isNotEmpty()) "https://image.tmdb.org/t/p/w300${item.stillPath}" else null
     var showMenuSheet by remember { mutableStateOf(false) }
 
+    // File size is read off the main thread (File.length() is still I/O) and shown once available
+    var fileSizeText by remember(item.id) { mutableStateOf("...") }
+    LaunchedEffect(item.id) {
+        fileSizeText = withContext(Dispatchers.IO) {
+            runCatching { formatBytes(File(item.localFilePath).length()) }.getOrDefault("...")
+        }
+    }
+
     val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
 
     Row(
@@ -1006,9 +1069,6 @@ fun DownloadItemRow(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    val fileSizeText = runCatching {
-                        formatBytes(File(item.localFilePath).length())
-                    }.getOrDefault("...")
                     Text(
                         text = "جاهز للمشاهدة بدون اتصال ($fileSizeText)",
                         fontSize = 11.sp,
@@ -1130,12 +1190,37 @@ fun CompactEpisodeRow(
     onLongClick: () -> Unit = {},
     onCheckedChange: (Boolean) -> Unit = {},
     onDismissContextMenu: () -> Unit = {},
-    onEnterMultiSelect: () -> Unit = {}
+    onEnterMultiSelect: () -> Unit = {},
+    durationCache: MutableMap<String, Long> = mutableMapOf(),
+    sizeCache: MutableMap<String, String> = mutableMapOf()
 ) {
     val context = LocalContext.current
     val isCompleted = item.status == "completed"
     val isPaused = item.status == "paused"
     val isDownloading = !isCompleted && !isPaused && item.status != "queued"
+
+    // Duration + size are loaded OFF the main thread (MediaMetadataRetriever / file stat are blocking I/O)
+    // and cached per-session so switching seasons back and forth doesn't re-read the file from disk.
+    var durationSecs by remember(item.id) { mutableStateOf(durationCache[item.id] ?: -1L) }
+    var fileSizeText by remember(item.id) { mutableStateOf(sizeCache[item.id] ?: "...") }
+    LaunchedEffect(item.id, isCompleted) {
+        if (isCompleted && (durationSecs < 0 || fileSizeText == "...")) {
+            val (secs, sizeStr) = withContext(Dispatchers.IO) {
+                val file = File(item.localFilePath)
+                val len = if (file.exists()) file.length() else 0L
+                val dur = try {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    retriever.setDataSource(file.absolutePath)
+                    val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    retriever.release()
+                    durStr?.toLongOrNull()?.let { it / 1000 } ?: 0L
+                } catch (_: Exception) { 0L }
+                dur to formatBytes(len)
+            }
+            if (durationSecs < 0) { durationCache[item.id] = secs; durationSecs = secs }
+            if (fileSizeText == "...") { sizeCache[item.id] = sizeStr; fileSizeText = sizeStr }
+        }
+    }
     // Pulse animation for active downloading thumbnail overlay
     val infiniteTransition = rememberInfiniteTransition(label = "downloadPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -1159,25 +1244,11 @@ fun CompactEpisodeRow(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val pressAlpha by animateFloatAsState(if (pressed) 0.92f else 1f, animationSpec = tween(150))
-    val pressScale by animateFloatAsState(if (pressed) 0.98f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (isContextMenuTarget) 1f else if (pressed) 0.98f else 1f, animationSpec = tween(150))
 
-    // Watch progress
+    // Watch progress (durationSecs / fileSizeText are loaded async + cached above)
     val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
     val lastPos = prefs.getLong("pos_${item.id}", 0L)
-    val durationSecs = remember(item.id, isCompleted) {
-        if (!isCompleted) 0L else {
-            try {
-                val file = File(item.localFilePath)
-                if (file.exists()) {
-                    val retriever = android.media.MediaMetadataRetriever()
-                    retriever.setDataSource(file.absolutePath)
-                    val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    retriever.release()
-                    durStr?.toLongOrNull()?.let { it / 1000 } ?: 0L
-                } else 0L
-            } catch (_: Exception) { 0L }
-        }
-    }
     val progress = if (isCompleted && durationSecs > 0 && lastPos > 0) {
         (lastPos.toFloat() / 1000f / durationSecs.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -1187,7 +1258,6 @@ fun CompactEpisodeRow(
             .fillMaxWidth()
             .scale(pressScale)
             .alpha(pressAlpha * (if (isContextMenuTarget) 1f else dimAlpha))
-            .then(if (isContextMenuTarget) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else Modifier)
     ) {
         // Main content
         Column(
@@ -1334,10 +1404,6 @@ fun CompactEpisodeRow(
                     }
 
                     if (isCompleted) {
-                        val fileSizeText = runCatching {
-                            formatBytes(File(item.localFilePath).length())
-                        }.getOrDefault("...")
-
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1962,6 +2028,8 @@ fun LocalFilesTab(
 @Composable
 fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0.0 MB"
+    val gb = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
+    if (gb >= 1.0) return String.format(java.util.Locale.US, "%.1f GB", gb)
     val mb = bytes.toDouble() / (1024.0 * 1024.0)
     return String.format(java.util.Locale.US, "%.1f MB", mb)
 }

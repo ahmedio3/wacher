@@ -49,6 +49,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.EnterTransition
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -326,7 +327,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     )
                     slideOut(forward, layoutDirection)
                 },
-                popEnterTransition = { slideIn(false, layoutDirection) },
+                popEnterTransition = { EnterTransition.None },
                 popExitTransition = { slideOut(false, layoutDirection) }
             ) {
             composable("splash",
