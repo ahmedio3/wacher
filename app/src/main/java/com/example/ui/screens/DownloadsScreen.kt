@@ -329,10 +329,9 @@ fun PillHeader(
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr),
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    textDirection = TextDirection.Ltr
+                    maxLines = 1
                 )
             }
         }
