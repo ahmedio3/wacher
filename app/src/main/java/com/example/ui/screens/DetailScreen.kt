@@ -1036,7 +1036,7 @@ fun EpisodeRowCard(
             .clickable { onPlay() }
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Thumbnail Image
         Box(
