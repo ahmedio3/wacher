@@ -1364,7 +1364,7 @@ fun CompactEpisodeRow(
                     }
                     // Gradient progress bar at bottom of thumbnail (fades in once progress is known)
                     if (isCompleted && progress > 0f) {
-                        BoxScope.AnimatedVisibility(
+                        androidx.compose.animation.AnimatedVisibility(
                             visible = true,
                             enter = fadeIn(animationSpec = tween(180)),
                             modifier = Modifier.align(Alignment.BottomCenter)
