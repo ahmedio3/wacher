@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.MovieViewModel
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -40,7 +41,7 @@ import com.example.auth.UserProfile
 @Composable
 fun SettingsScreen(
     viewModel: MovieViewModel,
-    onBackClick: () -> Unit,
+    onNavigateToHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
@@ -134,11 +135,6 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("الإعدادات", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
@@ -156,159 +152,64 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Profile Card (Firebase Auth)
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    if (user != null) {
-                        // Signed In State
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (userProfile != null && userProfile!!.avatarBase64.isNotEmpty()) {
-                                val bitmap = try {
-                                    val imageBytes = Base64.decode(userProfile!!.avatarBase64, Base64.DEFAULT)
-                                    BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
-                                } catch (e: Exception) { null }
-                                
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap,
-                                        contentDescription = "Profile avatar",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                                }
+            ProfileSection(
+                user = user,
+                userProfile = userProfile,
+                onEditClick = { showProfileDialog = true },
+                onLogoutClick = {
+                    FirebaseAuth.getInstance().signOut()
+                    user = null
+                },
+                emailInput = emailInput,
+                onEmailChange = { emailInput = it },
+                passInput = passInput,
+                onPassChange = { passInput = it },
+                isLoading = isLoading,
+                onSignInClick = {
+                    isLoading = true
+                    FirebaseAuth.getInstance().signInWithEmailAndPassword(emailInput, passInput)
+                        .addOnCompleteListener { task ->
+                            isLoading = false
+                            if (task.isSuccessful) {
+                                user = FirebaseAuth.getInstance().currentUser
                             } else {
-                                Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                            }
-                        }
-                        Text(
-                            text = if (userProfile?.name?.isNotEmpty() == true) userProfile!!.name else (user?.displayName ?: user?.email ?: "بك"),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        if (userProfile?.username?.isNotEmpty() == true) {
-                            Text(
-                                text = "@${userProfile!!.username}",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(
-                                onClick = { showProfileDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = "تعديل", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("تعديل")
-                            }
-                            
-                            Button(
-                                onClick = { 
-                                    FirebaseAuth.getInstance().signOut()
-                                    user = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("تسجيل الخروج")
-                            }
-                        }
-                    } else {
-                        // Sign Out State (Login Form)
-                        Text(
-                            text = "قم بتسجيل الدخول الان",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        
-                        OutlinedTextField(
-                            value = emailInput,
-                            onValueChange = { emailInput = it },
-                            label = { Text("البريد الإلكتروني") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        
-                        OutlinedTextField(
-                            value = passInput,
-                            onValueChange = { passInput = it },
-                            label = { Text("كلمة المرور") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    isLoading = true
-                                    FirebaseAuth.getInstance().signInWithEmailAndPassword(emailInput, passInput)
-                                        .addOnCompleteListener { task ->
-                                            isLoading = false
-                                            if (task.isSuccessful) {
-                                                user = FirebaseAuth.getInstance().currentUser
-                                            } else {
-                                                FirebaseAuth.getInstance().createUserWithEmailAndPassword(emailInput, passInput)
-                                                    .addOnCompleteListener { task2 ->
-                                                        if (task2.isSuccessful) {
-                                                            user = FirebaseAuth.getInstance().currentUser
-                                                        }
-                                                    }
-                                            }
+                                FirebaseAuth.getInstance().createUserWithEmailAndPassword(emailInput, passInput)
+                                    .addOnCompleteListener { task2 ->
+                                        if (task2.isSuccessful) {
+                                            user = FirebaseAuth.getInstance().currentUser
                                         }
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isLoading && emailInput.isNotEmpty() && passInput.isNotEmpty(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("دخول / حساب جديد")
+                                    }
                             }
                         }
-                        
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.surfaceVariant)
-                        
-                        Button(
-                            onClick = {
-                                isLoading = true
-                                coroutineScope.launch {
-                                    val resultMsg = AuthManager.signInWithGoogle(context)
-                                    if (resultMsg == "success") {
-                                        user = FirebaseAuth.getInstance().currentUser
-                                    } else {
-                                        android.widget.Toast.makeText(context, "خطأ: $resultMsg", android.widget.Toast.LENGTH_LONG).show()
-                                    }
-                                    isLoading = false
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isLoading,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("الاستمرار بواسطة Google", fontWeight = FontWeight.Bold)
+                },
+                onGoogleSignInClick = {
+                    isLoading = true
+                    coroutineScope.launch {
+                        val resultMsg = AuthManager.signInWithGoogle(context)
+                        if (resultMsg == "success") {
+                            user = FirebaseAuth.getInstance().currentUser
+                        } else {
+                            android.widget.Toast.makeText(context, "خطأ: $resultMsg", android.widget.Toast.LENGTH_LONG).show()
                         }
+                        isLoading = false
                     }
                 }
+            )
+
+            // Activity History button
+            Button(
+                onClick = onNavigateToHistory,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(imageVector = Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("سجل النشاطات", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
-            
+
             if (isAdmin) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -440,6 +341,145 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileSection(
+    user: FirebaseUser?,
+    userProfile: UserProfile?,
+    onEditClick: () -> Unit,
+    onLogoutClick: () -> Unit,
+    emailInput: String,
+    onEmailChange: (String) -> Unit,
+    passInput: String,
+    onPassChange: (String) -> Unit,
+    isLoading: Boolean,
+    onSignInClick: () -> Unit,
+    onGoogleSignInClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (user != null) {
+                // Signed In State
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (userProfile != null && userProfile.avatarBase64.isNotEmpty()) {
+                        val bitmap = try {
+                            val imageBytes = Base64.decode(userProfile.avatarBase64, Base64.DEFAULT)
+                            BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
+                        } catch (e: Exception) { null }
+
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "Profile avatar",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        }
+                    } else {
+                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                    }
+                }
+                Text(
+                    text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else (user.displayName ?: user.email ?: "بك"),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (userProfile?.username?.isNotEmpty() == true) {
+                    Text(
+                        text = "@${userProfile.username}",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = onEditClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "تعديل", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("تعديل")
+                    }
+
+                    Button(
+                        onClick = onLogoutClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("تسجيل الخروج")
+                    }
+                }
+            } else {
+                // Sign Out State (Login Form)
+                Text(
+                    text = "قم بتسجيل الدخول الان",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = onEmailChange,
+                    label = { Text("البريد الإلكتروني") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = passInput,
+                    onValueChange = onPassChange,
+                    label = { Text("كلمة المرور") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onSignInClick,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading && emailInput.isNotEmpty() && passInput.isNotEmpty(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("دخول / حساب جديد")
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.surfaceVariant)
+
+                Button(
+                    onClick = onGoogleSignInClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("الاستمرار بواسطة Google", fontWeight = FontWeight.Bold)
                 }
             }
         }

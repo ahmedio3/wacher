@@ -1,6 +1,8 @@
 package com.example.data.local
 
 import androidx.room.*
+import androidx.room.Insert
+import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -95,4 +97,14 @@ interface MovieDao {
 
     @Query("SELECT * FROM saved_images WHERE id = :id LIMIT 1")
     suspend fun getSavedImageById(id: String): SavedImageEntity?
+
+    // ---- Activity Log ----
+    @Insert
+    suspend fun insertActivityLog(entry: ActivityLogEntity)
+
+    @Query("SELECT * FROM activity_log ORDER BY timestamp DESC")
+    fun getActivityLogs(): Flow<List<ActivityLogEntity>>
+
+    @Query("DELETE FROM activity_log")
+    suspend fun clearActivityLogs()
 }

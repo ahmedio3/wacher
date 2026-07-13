@@ -506,6 +506,13 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             composable("settings") {
                 SettingsScreen(
                     viewModel = movieViewModel,
+                    onNavigateToHistory = { navController.navigate("history") }
+                )
+            }
+
+            composable("history") {
+                HistoryScreen(
+                    viewModel = movieViewModel,
                     onBackClick = { navController.popBackStack() }
                 )
             }

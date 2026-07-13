@@ -112,6 +112,22 @@ fun DetailScreen(
         }
     }
 
+    // Log OPENED activity once when the detail title becomes available
+    val detailTitle = remember(mediaType, movieDetailsMap[mediaId], tvDetailsMap[mediaId]) {
+        if (mediaType == "movie") {
+            val state = movieDetailsMap[mediaId]
+            if (state is RequestState.Success) state.data.title ?: "" else ""
+        } else {
+            val state = tvDetailsMap[mediaId]
+            if (state is RequestState.Success) state.data.name ?: "" else ""
+        }
+    }
+    LaunchedEffect(detailTitle) {
+        if (detailTitle.isNotBlank()) {
+            viewModel.logActivity("OPENED", detailTitle)
+        }
+    }
+
     val appBarTitle = remember(mediaType, mediaId, movieDetailsMap[mediaId], tvDetailsMap[mediaId]) {
         if (mediaType == "movie") {
             val state = movieDetailsMap[mediaId]

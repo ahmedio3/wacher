@@ -29,6 +29,7 @@ import com.example.data.local.WatchlistEntity
 import com.example.data.remote.TmdbSeasonDetails
 import com.example.data.remote.TmdbTvDetails
 import com.example.ui.components.SeasonEpisodeSheet
+import com.example.ui.components.WatchlistPosterCard
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
 import com.google.firebase.auth.FirebaseAuth
@@ -253,115 +254,4 @@ fun WatchlistScreen(
     }
 }
 
-@Composable
-fun WatchlistPosterCard(
-    item: WatchlistEntity,
-    onClick: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val posterUrl = "https://image.tmdb.org/t/p/w342${item.posterPath}"
 
-    // Status icon and color
-    val (statusIcon, statusColor) = when (item.status) {
-        "WATCHING" -> Pair(Icons.Default.PlayCircle, MaterialTheme.colorScheme.tertiary)
-        "COMPLETED" -> Pair(Icons.Default.CheckCircle, Color(0xFF32A852))
-        else -> Pair(Icons.Default.Bookmark, MaterialTheme.colorScheme.primary)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.71f)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-
-            // Status badge (top-end)
-            Box(
-                modifier = Modifier
-                    .padding(6.dp)
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(statusColor.copy(alpha = 0.85f))
-                    .align(Alignment.TopEnd),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = statusIcon,
-                    contentDescription = item.status,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            // Delete button
-            Box(
-                modifier = Modifier
-                    .padding(6.dp)
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .clickable { onRemove() }
-                    .align(Alignment.TopStart),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "حذف من المفضلة",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            // Rating badge
-            Box(
-                modifier = Modifier
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .align(Alignment.BottomStart)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(10.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = String.format("%.1f", item.rating),
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
-    }
-}

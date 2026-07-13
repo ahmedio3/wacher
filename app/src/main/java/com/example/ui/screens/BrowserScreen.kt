@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
+import android.net.Uri
+import android.util.Patterns
+import okhttp3.HttpUrl
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -108,14 +111,20 @@ fun BrowserScreen(
     fun navigateTo(input: String) {
         val trimmed = input.trim()
         if (trimmed.isBlank()) return
-        val fullUrl = if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-            "https://$trimmed"
+        val target = if (isLikelyUrl(trimmed)) {
+            if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) "https://$trimmed" else trimmed
         } else {
-            trimmed
+            // Smart search — properly UTF-8 encode for Google (Arabic + English safe)
+            "https://www.google.com/search".toHttpUrlOrNull()
+                ?.newBuilder()
+                ?.addQueryParameter("q", trimmed)
+                ?.build()
+                ?.toString()
+                ?: "https://www.google.com/search?q=${Uri.encode(trimmed)}"
         }
-        currentUrl = fullUrl
-        urlInput = fullUrl
-        webViewRef?.loadUrl(fullUrl)
+        currentUrl = target
+        urlInput = target
+        webViewRef?.loadUrl(target)
     }
 
     // ---- Saved images mode ----
@@ -654,4 +663,14 @@ private fun formatFileSize(bytes: Long): String {
         bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024f * 1024f))
         else -> String.format("%.1f GB", bytes / (1024f * 1024f * 1024f))
     }
+}
+
+// ====================================================================
+// Helper: detect whether typed text is a URL or a search query
+// ====================================================================
+private fun isLikelyUrl(text: String): Boolean {
+    val t = text.trim()
+    if (t.startsWith("http://") || t.startsWith("https://")) return true
+    // contains a dot and no spaces, and looks like a host/path
+    return t.contains(".") && !t.contains(" ") && Patterns.WEB_URL.matcher(t).matches()
 }

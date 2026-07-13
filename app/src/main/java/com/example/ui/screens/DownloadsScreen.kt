@@ -382,6 +382,8 @@ fun SeriesDetailPage(
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+    var seasonMenuSeason by remember { mutableStateOf<Int?>(null) }
+    var showSeasonDeleteConfirm by remember { mutableStateOf<Int?>(null) }
 
     // Shared dimming alpha: header title, season chips and download button fade together during context-menu mode.
     // Tween on BOTH open and close for a smooth feel; the just-deselected (last-target) row is held at full
@@ -501,31 +503,66 @@ fun SeriesDetailPage(
                     totalCountText = (seasonDetailState.data.episodes?.size ?: s.episodeCount ?: 0).toString()
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable {
-                            selectedSeasonNumber = s.seasonNumber
-                            seasonPrefs.edit().putInt("season_$seriesId", s.seasonNumber).apply()
-                        }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    selectedSeasonNumber = s.seasonNumber
+                                    seasonPrefs.edit().putInt("season_$seriesId", s.seasonNumber).apply()
+                                },
+                                onLongClick = { seasonMenuSeason = s.seasonNumber }
+                            )
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
-                        Text(
-                            text = "الموسم ${s.seasonNumber}",
-                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 12.sp
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "الموسم ${s.seasonNumber}",
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "($downloadedCount/$totalCountText)",
+                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = seasonMenuSeason == s.seasonNumber,
+                        onDismissRequest = { seasonMenuSeason = null },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 8.dp,
+                        tonalElevation = 0.dp
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = PalettePrimary) },
+                            onClick = {
+                                seasonMenuSeason = null
+                                selectionMode = true
+                                selectedIds = downloadedEpisodes.filter { it.season == s.seasonNumber }.map { it.id }.toSet()
+                            },
+                            leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PalettePrimary, modifier = Modifier.size(18.dp)) }
                         )
-                        Text(
-                            text = "($downloadedCount/$totalCountText)",
-                            color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 10.sp
+                        DropdownMenuItem(
+                            text = { Text("حذف جميع حلقات الموسم", color = PaletteMutedRed) },
+                            onClick = {
+                                seasonMenuSeason = null
+                                showSeasonDeleteConfirm = s.seasonNumber
+                            },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
                         )
                     }
                 }
@@ -756,6 +793,29 @@ fun SeriesDetailPage(
                 }
             )
         }
+
+        // Season delete confirmation dialog (long-press season pill → "حذف جميع حلقات الموسم")
+        if (showSeasonDeleteConfirm != null) {
+            val seasonNo = showSeasonDeleteConfirm!!
+            val count = downloadedEpisodes.count { it.season == seasonNo }
+            AlertDialog(
+                onDismissRequest = { showSeasonDeleteConfirm = null },
+                title = { Text("حذف جميع حلقات الموسم $seasonNo؟") },
+                text = { Text("سيتم حذف $count حلقة بشكل دائم من التخزين.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            downloadedEpisodes.filter { it.season == seasonNo }.forEach { viewModel.deleteDownload(it.id) }
+                            showSeasonDeleteConfirm = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) { Text("حذف الكل") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSeasonDeleteConfirm = null }) { Text("إلغاء") }
+                }
+            )
+        }
     }
 }
 
@@ -801,7 +861,7 @@ fun PlaylistFolderCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = seriesTitle,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = if (isLatinText(seriesTitle)) JetBrainsMonoFontFamily else null),
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -885,7 +945,13 @@ fun DownloadItemRow(
     val isPaused = item.status == "paused"
     val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w185${item.posterPath}"
     val episodeStillUrl = if (item.stillPath.isNotEmpty()) "https://image.tmdb.org/t/p/w300${item.stillPath}" else null
-    var showMenuSheet by remember { mutableStateOf(false) }
+    var showContextMenu by remember { mutableStateOf(false) }
+
+    // Custom press effect (replaces default ripple) — subtle scale + alpha on touch-down
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.92f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.97f else 1f, animationSpec = tween(150))
 
     // File size is read off the main thread (File.length() is still I/O) and shown once available
     var fileSizeText by remember(item.id) { mutableStateOf("...") }
@@ -897,20 +963,28 @@ fun DownloadItemRow(
 
     val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
 
+    Box(
+        modifier = Modifier.fillMaxWidth()
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable {
-                if (isCompleted) {
-                    onPlayClick(item.localFilePath)
-                } else if (isPaused) {
-                    viewModel.resumeDownload(item.id)
-                } else {
-                    viewModel.pauseDownload(item.id)
-                }
-            }
+            .scale(pressScale)
+            .alpha(pressAlpha)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    if (isCompleted) {
+                        onPlayClick(item.localFilePath)
+                    } else if (isPaused) {
+                        viewModel.resumeDownload(item.id)
+                    } else {
+                        viewModel.pauseDownload(item.id)
+                    }
+                },
+                onLongClick = { showContextMenu = true }
+            )
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -981,7 +1055,7 @@ fun DownloadItemRow(
                 // For movies: show the movie title
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = if (isLatinText(item.title)) JetBrainsMonoFontFamily else null),
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1087,16 +1161,25 @@ fun DownloadItemRow(
                     val durMins = durationSecs / 60
                     
                     Spacer(modifier = Modifier.height(4.dp))
-                    // Different style from the download progress bar (secondary color, thinner)
-                    LinearProgressIndicator(
-                        progress = { progress },
+                    // Gradient watch-progress bar (Cyan → Green)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    )
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color.Cyan, Color.Green)
+                                    )
+                                )
+                        )
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "$posMins:${String.format("%02d", posSecsRem)} / $durMins دقيقة",
@@ -1134,99 +1217,68 @@ fun DownloadItemRow(
             }
         }
 
-        // Action Buttons pause or delete
-        IconButton(
-            onClick = { showMenuSheet = true },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "خيارات",
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp)
-            )
         }
-    }
-    
-    if (showMenuSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showMenuSheet = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("خيارات التحميل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            viewModel.deleteDownload(item.id)
-                            showMenuSheet = false
-                        }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(Icons.Default.Delete, "حذف", tint = MaterialTheme.colorScheme.error)
-                    Text("حذف الملف", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                }
 
-                if (isCompleted) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                try {
-                                    val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
-                                    if (!destDir.exists()) destDir.mkdirs()
-                                    val safeTitle = item.title.replace("/", "_").replace("\\", "_")
-                                    val destFile = java.io.File(destDir, "$safeTitle.mp4")
-                                    java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
-                                    android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                }
-                                showMenuSheet = false
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Icon(Icons.Default.Share, "حفظ للمعرض", tint = MaterialTheme.colorScheme.primary)
-                        Text("حفظ الفيديو (في المعرض)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                if (java.io.File(partialFilePath).exists()) {
-                                    onPlayClick(partialFilePath)
-                                } else {
-                                    android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                                showMenuSheet = false
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, "تشغيل ما تم تحميله", tint = MaterialTheme.colorScheme.secondary)
-                        Text("مشاهدة الفيديو المكتمل (${item.progress}%)", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
+        // Long-press context menu (replaces the removed 3-dots ModalBottomSheet)
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            shadowElevation = 8.dp,
+            tonalElevation = 0.dp
+        ) {
+            if (!isCompleted) {
+                DropdownMenuItem(
+                    text = { Text("مشاهدة ما تم تحميله") },
+                    onClick = {
+                        showContextMenu = false
+                        if (java.io.File(partialFilePath).exists()) {
+                            onPlayClick(partialFilePath)
+                        } else {
+                            android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+                DropdownMenuItem(
+                    text = { Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل") },
+                    onClick = {
+                        showContextMenu = false
+                        if (isPaused) viewModel.resumeDownload(item.id)
+                        else viewModel.pauseDownload(item.id)
+                    },
+                    leadingIcon = { Icon(if (isPaused) Icons.Default.FileDownload else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
             }
+            if (isCompleted) {
+                DropdownMenuItem(
+                    text = { Text("حفظ الفيديو في المعرض") },
+                    onClick = {
+                        showContextMenu = false
+                        try {
+                            val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                            if (!destDir.exists()) destDir.mkdirs()
+                            val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                            val destFile = java.io.File(destDir, "$safeTitle.mp4")
+                            java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
+                            android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("حذف الملف", color = PaletteMutedRed) },
+                onClick = {
+                    showContextMenu = false
+                    viewModel.deleteDownload(item.id)
+                },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
+            )
         }
     }
 }

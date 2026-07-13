@@ -10,6 +10,7 @@ import com.example.data.local.DownloadEntity
 import com.example.data.local.EpisodeWatchStatusEntity
 import com.example.data.local.MovieDatabase
 import com.example.data.local.SavedImageEntity
+import com.example.data.local.ActivityLogEntity
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
@@ -57,7 +58,7 @@ class MovieViewModel(
     private val sharedPrefs = application.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
 
     // Arabic vs English posters
-    private val _isArabicPosters = MutableStateFlow(sharedPrefs.getBoolean("arabic_posters", true))
+    private val _isArabicPosters = MutableStateFlow(sharedPrefs.getBoolean("arabic_posters", false))
     val isArabicPosters: StateFlow<Boolean> = _isArabicPosters.asStateFlow()
 
     // Default watch status (used by tap in DetailScreen)
@@ -92,6 +93,9 @@ class MovieViewModel(
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
     val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
     val savedImages: StateFlow<List<SavedImageEntity>>
+
+    // Activity/History log
+    val activityLogs: StateFlow<List<ActivityLogEntity>>
 
     // Episode watch tracking — MUST cache to prevent infinite recomposition loop
     private val episodeStatusMap = mutableMapOf<String, StateFlow<List<EpisodeWatchStatusEntity>>>()
@@ -207,6 +211,9 @@ class MovieViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         savedImages = repository.savedImages
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        activityLogs = repository.getActivityLogs()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         // Fetch Home content on startup
@@ -754,14 +761,16 @@ class MovieViewModel(
                     }
                     val current = repository.getDownload(downloadId)
                     if (current != null) {
-                         if (success) {
-                             repository.addDownload(current.copy(
-                                 progress = 100,
-                                 status = "completed",
-                                 localFilePath = file.absolutePath,
-                                 downloadSpeed = "مكتمل"
-                             ))
-                             
+                          if (success) {
+                              repository.addDownload(current.copy(
+                                  progress = 100,
+                                  status = "completed",
+                                  localFilePath = file.absolutePath,
+                                  downloadSpeed = "مكتمل"
+                              ))
+                              // Log the completed download to the activity history
+                              logActivity("DOWNLOADED", current.title)
+                              
                              // Download Arabic Subtitles if available
                              viewModelScope.launch(Dispatchers.IO) {
                                  try {
@@ -841,6 +850,13 @@ class MovieViewModel(
             val image = repository.getSavedImageById(id) ?: return@launch
             File(image.localFilePath).delete()
             repository.removeSavedImage(id)
+        }
+    }
+
+    // Activity logging helper
+    fun logActivity(type: String, title: String) {
+        viewModelScope.launch {
+            repository.insertActivityLog(ActivityLogEntity(type = type, title = title))
         }
     }
 

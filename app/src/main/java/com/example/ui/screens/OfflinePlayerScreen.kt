@@ -203,6 +203,13 @@ fun OfflinePlayerScreen(
 
     val isTv = activeId.contains("-s")
 
+    // Log WATCHED activity once when the player screen is entered
+    LaunchedEffect(Unit) {
+        if (title.isNotBlank()) {
+            viewModel.logActivity("WATCHED", title)
+        }
+    }
+
     // Subtitle status info text
     val subtitleStatusText = remember(parsedSubtitles, activeId, context) {
         val episodeSubFile = File(context.filesDir, "downloads/$activeId.srt")

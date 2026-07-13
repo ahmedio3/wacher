@@ -1,7 +1,11 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -30,7 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
@@ -41,6 +48,10 @@ import coil.compose.AsyncImage
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.TmdbMediaItem
 import com.example.ui.components.SkeletonItem
+import com.example.ui.components.ShowCardContextMenu
+import com.example.ui.components.WatchlistPosterCard
+import com.example.ui.components.rememberPressState
+import com.example.ui.components.shareShow
 import com.example.ui.components.shimmerBrush
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
@@ -88,7 +99,8 @@ fun HomeScreen(
                     IconButton(
                         onClick = { viewModel.triggerSearch() },
                         modifier = Modifier
-                            .size(36.dp)
+                            .offset(x = (-4).dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
@@ -96,7 +108,7 @@ fun HomeScreen(
                             imageVector = Icons.Default.Search,
                             contentDescription = "بحث",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 },
@@ -169,7 +181,10 @@ fun HomeScreen(
                                     }
                                     // Handle other intents via LocalUriHandler or navController
                                 }
-                            }
+                            },
+                            isInMyList = { watchlistItems.any { w -> w.id == it.id } },
+                            onToggleMyList = { viewModel.toggleWatchlist(it.id, it.title, "", "movie", 0.0) },
+                            onShare = { shareShow(LocalContext.current, it.title, it.id, "movie") }
                         )
                     }
                 }
@@ -227,7 +242,10 @@ fun HomeScreen(
                                 val type = if (item.mediaType == "tv") "tv" else "movie"
                                 try { onNavigateToDetails(item.id.split("-")[0].toInt(), type) }
                                 catch (_: Exception) { onNavigateToDetails(item.id.hashCode(), type) }
-                            }
+                            },
+                            isInMyList = true,
+                            onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, item.posterPath, item.mediaType, item.rating) },
+                            onShare = { shareShow(LocalContext.current, item.title, item.id, item.mediaType) }
                         )
                     }
                 }
@@ -239,7 +257,14 @@ fun HomeScreen(
                 title = "الأفلام الأكثر شعبية",
                 icon = Icons.Default.Movie,
                 state = popularMoviesState,
-                onItemClick = { onNavigateToDetails(it.id, "movie") }
+                onItemClick = { onNavigateToDetails(it.id, "movie") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -249,7 +274,14 @@ fun HomeScreen(
                 title = "المسلسلات الأكثر شهرة",
                 icon = Icons.Default.LiveTv,
                 state = popularTvState,
-                onItemClick = { onNavigateToDetails(it.id, "tv") }
+                onItemClick = { onNavigateToDetails(it.id, "tv") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                }
             )
         } else {
             // B. Show Search Results Grid — collect only inside this branch
@@ -291,7 +323,10 @@ fun HomeScreen(
                                         onClick = { 
                                             val type = if (item.type == "series") "tv" else "movie"
                                             onNavigateToMovieBoxDetails(item.subjectId, type, item.title, item.posterUrl)
-                                        }
+                                        },
+                                        isInMyList = false,
+                                        onToggleMyList = {},
+                                        onShare = { shareShow(LocalContext.current, item.title, item.subjectId, if (item.type == "series") "tv" else "movie") }
                                     )
                                 }
                             }
@@ -350,7 +385,12 @@ fun HomeScreen(
                                 items(list, key = { it.id }) { item ->
                                     SearchGridCard(
                                         item = item,
-                                        onClick = { onNavigateToDetails(item.id, item.mediaType ?: "movie") }
+                                        onClick = { onNavigateToDetails(item.id, item.mediaType ?: "movie") },
+                                        isInMyList = watchlistItems.any { it.id == item.id.toString() },
+                                        onToggleMyList = {
+                                            viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                                        },
+                                        onShare = { shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie") }
                                     )
                                 }
                             }
@@ -559,7 +599,10 @@ fun MediaCategoryCarousel(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     state: RequestState<List<TmdbMediaItem>>,
-    onItemClick: (TmdbMediaItem) -> Unit
+    onItemClick: (TmdbMediaItem) -> Unit,
+    isInMyList: (TmdbMediaItem) -> Boolean = { false },
+    onToggleMyList: (TmdbMediaItem) -> Unit = {},
+    onShare: (TmdbMediaItem) -> Unit = {}
 ) {
     Column {
         Row(
@@ -589,7 +632,13 @@ fun MediaCategoryCarousel(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(state.data, key = { it.id }) { item ->
-                        MediaCompactPosterCard(item = item, onClick = { onItemClick(item) })
+                        MediaCompactPosterCard(
+                            item = item,
+                            onClick = { onItemClick(item) },
+                            isInMyList = isInMyList(item),
+                            onToggleMyList = { onToggleMyList(item) },
+                            onShare = { onShare(item) }
+                        )
                     }
                 }
             }
@@ -626,14 +675,30 @@ fun MediaCategoryCarousel(
 @Composable
 fun MediaCompactPosterCard(
     item: TmdbMediaItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isInMyList: Boolean = false,
+    onToggleMyList: () -> Unit = {},
+    onShare: () -> Unit = {}
 ) {
     val posterUrl = remember(item) { "https://image.tmdb.org/t/p/w342${item.posterPath}" }
-    
+
+    val (interactionSource, pressed) = rememberPressState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.75f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.97f else 1f, animationSpec = tween(150))
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .width(110.dp)
-            .clickable(onClick = onClick)
+            .scale(pressScale)
+            .alpha(pressAlpha)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            )
     ) {
         Box(
             modifier = Modifier
@@ -674,6 +739,14 @@ fun MediaCompactPosterCard(
                     )
                 }
             }
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
         
         Spacer(modifier = Modifier.height(4.dp))
@@ -691,14 +764,38 @@ fun MediaCompactPosterCard(
 }
 
 @Composable
-fun MovieBoxSearchGridCard(item: com.example.data.remote.moviebox.models.SearchResult, onClick: () -> Unit) {
+fun MovieBoxSearchGridCard(
+    item: com.example.data.remote.moviebox.models.SearchResult,
+    onClick: () -> Unit,
+    isInMyList: Boolean = false,
+    onToggleMyList: () -> Unit = {},
+    onShare: () -> Unit = {}
+) {
+    val (interactionSource, pressed) = rememberPressState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.75f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.97f else 1f, animationSpec = tween(150))
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(pressScale)
+            .alpha(pressAlpha)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            )
     ) {
-        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.7f).clip(RoundedCornerShape(12.dp))) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.7f)
+                .clip(RoundedCornerShape(12.dp))
+        ) {
             AsyncImage(
                 model = item.posterUrl,
                 contentDescription = item.title,
@@ -724,6 +821,14 @@ fun MovieBoxSearchGridCard(item: com.example.data.remote.moviebox.models.SearchR
                     Text(text = item.year, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
         
         Spacer(modifier = Modifier.height(6.dp))
@@ -739,14 +844,33 @@ fun MovieBoxSearchGridCard(item: com.example.data.remote.moviebox.models.SearchR
 }
 
 @Composable
-fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onClick: () -> Unit) {
+fun CustomSectionItemCard(
+    item: com.example.data.remote.CustomSectionItem,
+    onClick: () -> Unit,
+    isInMyList: Boolean = false,
+    onToggleMyList: () -> Unit = {},
+    onShare: () -> Unit = {}
+) {
+    val (interactionSource, pressed) = rememberPressState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.75f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.97f else 1f, animationSpec = tween(150))
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     if (item.displayType == "poster") {
         Box(
             modifier = Modifier
                 .width(130.dp)
                 .height(195.dp)
+                .scale(pressScale)
+                .alpha(pressAlpha)
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                )
         ) {
             AsyncImage(
                 model = item.imageUrl,
@@ -766,14 +890,29 @@ fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onCli
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
     } else if (item.displayType == "landscape") {
         Box(
             modifier = Modifier
                 .width(260.dp)
                 .height(150.dp)
+                .scale(pressScale)
+                .alpha(pressAlpha)
                 .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                )
         ) {
             AsyncImage(
                 model = item.imageUrl,
@@ -791,6 +930,14 @@ fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onCli
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
     } else {
         // Gradient box
@@ -798,9 +945,16 @@ fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onCli
             modifier = Modifier
                 .width(150.dp)
                 .height(100.dp)
+                .scale(pressScale)
+                .alpha(pressAlpha)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)))
-                .clickable(onClick = onClick),
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -811,19 +965,46 @@ fun CustomSectionItemCard(item: com.example.data.remote.CustomSectionItem, onCli
                 modifier = Modifier.padding(12.dp),
                 textAlign = TextAlign.Center
             )
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
     }
 }
 
 @Composable
-fun SearchGridCard(item: TmdbMediaItem, onClick: () -> Unit) {
+fun SearchGridCard(
+    item: TmdbMediaItem,
+    onClick: () -> Unit,
+    isInMyList: Boolean = false,
+    onToggleMyList: () -> Unit = {},
+    onShare: () -> Unit = {}
+) {
 
     val posterUrl = remember(item) { "https://image.tmdb.org/t/p/w342${item.posterPath}" }
-    
+
+    val (interactionSource, pressed) = rememberPressState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.75f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.97f else 1f, animationSpec = tween(150))
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .scale(pressScale)
+            .alpha(pressAlpha)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            )
     ) {
         Box(
             modifier = Modifier
@@ -872,6 +1053,14 @@ fun SearchGridCard(item: TmdbMediaItem, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            ShowCardContextMenu(
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                isInMyList = isInMyList,
+                onToggleMyList = onToggleMyList,
+                onShare = onShare
+            )
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -888,72 +1077,4 @@ fun SearchGridCard(item: TmdbMediaItem, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun WatchlistPosterCard(
-    item: WatchlistEntity,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(110.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = 110.dp, height = 165.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            if (item.posterPath.isNotEmpty()) {
-                AsyncImage(
-                    model = "https://image.tmdb.org/t/p/w185${item.posterPath}",
-                    contentDescription = item.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = item.title.take(2),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
-                    )
-                }
-            }
-            // Status badge
-            Box(
-                modifier = Modifier
-                    .padding(4.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                    .align(Alignment.TopStart)
-            ) {
-                Text(
-                    text = when (item.status) {
-                        "WATCHING" -> "مشاهدة"
-                        "COMPLETED" -> "تم"
-                        else -> "لاحقاً"
-                    },
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+

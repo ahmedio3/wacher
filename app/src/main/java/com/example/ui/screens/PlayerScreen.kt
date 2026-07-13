@@ -78,6 +78,13 @@ fun PlayerScreen(
     var isLoadingUrl by remember { mutableStateOf(true) }
     var activeSubtitles by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>>(emptyList()) }
 
+    // Log WATCHED activity once when the player screen is entered
+    LaunchedEffect(Unit) {
+        if (title.isNotBlank()) {
+            viewModel.logActivity("WATCHED", title)
+        }
+    }
+
     // --- Resolve URL + Subtitles (unchanged logic) ---
     LaunchedEffect(activeId, activeDownloadedFile) {
         if (isLocalActive) {

@@ -136,6 +136,14 @@ data class SubtitleDownloadEntity(
     val downloadedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "activity_log")
+data class ActivityLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val type: String,        // "OPENED" | "DOWNLOADED" | "WATCHED"
+    val title: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "downloads")
 data class DownloadEntity(
     @PrimaryKey val id: String, // tmdb_id + optional suffix for episodes
