@@ -347,7 +347,7 @@ fun PillHeader(
 }
 
 // FULL PAGE: per-series downloaded-episodes viewer + season switcher (replaces ModalBottomSheet)
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SeriesDetailPage(
     seriesId: String,
@@ -933,7 +933,7 @@ fun EmptyDownloadsView(message: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DownloadItemRow(
     item: DownloadEntity,

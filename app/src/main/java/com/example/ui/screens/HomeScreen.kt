@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -73,6 +74,7 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isMovieBoxSearch by viewModel.isMovieBoxSearchMode.collectAsState()
     val watchlistItems by viewModel.watchlist.collectAsState()
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
@@ -182,9 +184,9 @@ fun HomeScreen(
                                     // Handle other intents via LocalUriHandler or navController
                                 }
                             },
-                            isInMyList = { watchlistItems.any { w -> w.id == it.id } },
-                            onToggleMyList = { viewModel.toggleWatchlist(it.id, it.title, "", "movie", 0.0) },
-                            onShare = { shareShow(LocalContext.current, it.title, it.id, "movie") }
+                            isInMyList = watchlistItems.any { w -> w.id == item.id },
+                            onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, "", "movie", 0.0) },
+                            onShare = { shareShow(context, item.title, item.id, "movie") }
                         )
                     }
                 }
@@ -245,7 +247,7 @@ fun HomeScreen(
                             },
                             isInMyList = true,
                             onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, item.posterPath, item.mediaType, item.rating) },
-                            onShare = { shareShow(LocalContext.current, item.title, item.id, item.mediaType) }
+                            onShare = { shareShow(context, item.title, item.id, item.mediaType) }
                         )
                     }
                 }
@@ -263,7 +265,7 @@ fun HomeScreen(
                     viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                 },
                 onShare = { item ->
-                    shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                 }
             )
 
@@ -280,7 +282,7 @@ fun HomeScreen(
                     viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                 },
                 onShare = { item ->
-                    shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                 }
             )
         } else {
@@ -326,7 +328,7 @@ fun HomeScreen(
                                         },
                                         isInMyList = false,
                                         onToggleMyList = {},
-                                        onShare = { shareShow(LocalContext.current, item.title, item.subjectId, if (item.type == "series") "tv" else "movie") }
+                                        onShare = { shareShow(context, item.title, item.subjectId, if (item.type == "series") "tv" else "movie") }
                                     )
                                 }
                             }
@@ -390,7 +392,7 @@ fun HomeScreen(
                                         onToggleMyList = {
                                             viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                                         },
-                                        onShare = { shareShow(LocalContext.current, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie") }
+                                        onShare = { shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie") }
                                     )
                                 }
                             }
@@ -672,6 +674,7 @@ fun MediaCategoryCarousel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaCompactPosterCard(
     item: TmdbMediaItem,
@@ -763,6 +766,7 @@ fun MediaCompactPosterCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MovieBoxSearchGridCard(
     item: com.example.data.remote.moviebox.models.SearchResult,
@@ -843,6 +847,7 @@ fun MovieBoxSearchGridCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CustomSectionItemCard(
     item: com.example.data.remote.CustomSectionItem,
@@ -977,6 +982,7 @@ fun CustomSectionItemCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchGridCard(
     item: TmdbMediaItem,

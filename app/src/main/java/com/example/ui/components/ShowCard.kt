@@ -3,13 +3,15 @@ package com.example.ui.components
 import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BorderStroke
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -118,6 +120,7 @@ fun shareShow(context: Context, title: String, id: String, mediaType: String) {
     context.startActivity(android.content.Intent.createChooser(intent, "مشاركة العرض"))
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WatchlistPosterCard(
     item: WatchlistEntity,
