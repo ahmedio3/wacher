@@ -43,7 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextDirection
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -526,6 +526,7 @@ fun SeriesDetailPage(
         }
 
         // Listing current downloaded or downloading episodes in season — slide+fade between seasons
+        val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         AnimatedContent(
             targetState = selectedSeasonNumber,
             modifier = Modifier
@@ -533,7 +534,6 @@ fun SeriesDetailPage(
                 .fillMaxWidth(),
             transitionSpec = {
                 val forward = targetState > initialState
-                val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
                 val enterOffset: (Int) -> Int = { full ->
                     if (forward) { if (isRtl) -full else full } else { if (isRtl) full else -full }
                 }
