@@ -36,6 +36,7 @@ import com.example.data.remote.moviebox.models.VideoFile
 import com.example.data.remote.moviebox.viewmodel.MovieBoxState
 import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 import com.example.ui.components.CircularSelectionIndicator
+import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.PaletteSuccess
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,8 +127,7 @@ fun MovieBoxDownloadSheet(
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.weight(1f)
+                    textAlign = TextAlign.End
                 )
                 if (mediaType == "tv") {
                     Box {
@@ -143,7 +143,8 @@ fun MovieBoxDownloadSheet(
                                 text = "${selectedQuality}p",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                fontFamily = JetBrainsMonoFontFamily
                             )
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
@@ -163,7 +164,7 @@ fun MovieBoxDownloadSheet(
                         ) {
                             standardQualities.forEach { q ->
                                 DropdownMenuItem(
-                                    text = { Text("${q}p") },
+                                    text = { Text("${q}p", fontFamily = JetBrainsMonoFontFamily) },
                                     onClick = {
                                         selectedQuality = q
                                         qualityMenuExpanded = false
@@ -255,16 +256,22 @@ fun MovieBoxDownloadSheet(
                                 // Episodes list with batch selection
                                 val episodesMap = seasonLinks.groupBy { it.episode }.toSortedMap(compareBy { it })
                                 val episodeIds = episodesMap.keys.toList()
+                                val eligibleIds = episodeIds.filter { epId ->
+                                    val files = episodesMap[epId] ?: return@filter false
+                                    val exact = files.any { it.resolution == selectedQuality }
+                                    val downloaded = alreadyDownloaded(selectedSeason, epId, "${selectedQuality}p")
+                                    exact && !downloaded
+                                }
 
                                 // Toggle helpers reuse the hoisted selection set
                                 fun toggleEpisode(id: Int) {
                                     selectedEpisodeIds = if (id in selectedEpisodeIds) selectedEpisodeIds - id else selectedEpisodeIds + id
                                 }
-                                
-                                // Select All / Deselect All
-                                val allSelected = episodeIds.isNotEmpty() && selectedEpisodeIds.size == episodeIds.size
+
+                                // Select All / Deselect All — only eligible (not already downloaded, exact quality)
+                                val allSelected = eligibleIds.isNotEmpty() && selectedEpisodeIds.size == eligibleIds.size
                                 fun toggleSelectAll() {
-                                    selectedEpisodeIds = if (allSelected) emptySet() else episodeIds.toSet()
+                                    selectedEpisodeIds = if (allSelected) emptySet() else eligibleIds.toSet()
                                 }
                                 
                                 // Batch download button (shown when items selected) — animated
@@ -334,11 +341,11 @@ fun MovieBoxDownloadSheet(
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     val isDownloadedHere = alreadyDownloaded(selectedSeason, episodeId, "${selectedQuality}p")
-                                                    if (isExact) {
+                                                    if (isExact && !isDownloadedHere) {
                                                         CircularSelectionIndicator(
                                                             isSelected = isSelected,
                                                             onClick = { toggleEpisode(episodeId) },
-                                                            modifier = Modifier.padding(end = 4.dp)
+                                                            modifier = Modifier.padding(end = 12.dp)
                                                         )
                                                     } else {
                                                         Spacer(modifier = Modifier.width(44.dp))
@@ -360,7 +367,8 @@ fun MovieBoxDownloadSheet(
                                                         Text(
                                                             text = formatSize(exactFile.size),
                                                             fontSize = 11.sp,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontFamily = JetBrainsMonoFontFamily
                                                         )
                                                         Spacer(modifier = Modifier.width(8.dp))
                                                         IconButton(
@@ -480,7 +488,8 @@ private fun QualityItem(videoFile: VideoFile, onClick: () -> Unit) {
             Text(
                 text = formatSize(videoFile.size),
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = JetBrainsMonoFontFamily
             )
         }
 

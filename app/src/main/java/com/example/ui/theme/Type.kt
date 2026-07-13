@@ -28,6 +28,16 @@ val IBMPlexSansArabicFontFamily = FontFamily(
     Font(googleFont = ibmPlexArabicFont, fontProvider = fontProvider, weight = FontWeight.Bold)
 )
 
+// Declare "JetBrains Mono" font name (for Latin/numeric technical labels)
+val jetBrainsMonoFont = GoogleFont("JetBrains Mono")
+
+// Monospace family for whole-Latin labels (quality, file sizes, transfer rates)
+val JetBrainsMonoFontFamily = FontFamily(
+    Font(googleFont = jetBrainsMonoFont, fontProvider = fontProvider, weight = FontWeight.Normal),
+    Font(googleFont = jetBrainsMonoFont, fontProvider = fontProvider, weight = FontWeight.Medium),
+    Font(googleFont = jetBrainsMonoFont, fontProvider = fontProvider, weight = FontWeight.Bold)
+)
+
 // Compose M3 Typography definitions utilizing IBM Plex Sans Arabic
 val Typography = Typography(
     displayLarge = TextStyle(

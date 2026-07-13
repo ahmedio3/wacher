@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextDirection
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +59,7 @@ import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.data.local.SeasonMetaEntity
 import com.example.ui.theme.PalettePrimary
+import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.PaletteMutedRed
 import com.example.ui.components.CircularSelectionIndicator
 import com.example.ui.viewmodel.MovieViewModel
@@ -308,28 +310,31 @@ fun PillHeader(
             )
         }
         // Title pill (left side in RTL) — inline two-tier text (bold title + smaller/lighter subtitle beside it)
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color.White)
-                .then(if (onPillClick != null) Modifier.clickable { onPillClick.invoke() } else Modifier)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                maxLines = 1
-            )
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .then(if (onPillClick != null) Modifier.clickable { onPillClick.invoke() } else Modifier)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    textDirection = TextDirection.Ltr
+                )
+            }
         }
     }
 }
@@ -527,8 +532,16 @@ fun SeriesDetailPage(
                 .weight(1f)
                 .fillMaxWidth(),
             transitionSpec = {
-                slideInHorizontally(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)) togetherWith
-                    slideOutHorizontally(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+                val forward = targetState > initialState
+                val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+                val enterOffset: (Int) -> Int = { full ->
+                    if (forward) { if (isRtl) -full else full } else { if (isRtl) full else -full }
+                }
+                val exitOffset: (Int) -> Int = { full ->
+                    if (forward) { if (isRtl) full else -full } else { if (isRtl) -full else full }
+                }
+                slideInHorizontally(animationSpec = tween(250), initialOffsetX = enterOffset) + fadeIn(animationSpec = tween(250)) togetherWith
+                    slideOutHorizontally(animationSpec = tween(250), targetOffsetX = exitOffset) + fadeOut(animationSpec = tween(250))
             },
             label = "seasonList"
         ) { season ->
@@ -1268,7 +1281,6 @@ fun CompactEpisodeRow(
     } else {
         if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w300${item.posterPath}"
     }
-    var showMenuDialog by remember { mutableStateOf(false) }
 
     // Custom press effect (replaces default ripple) — subtle scale + alpha on touch-down
     val interactionSource = remember { MutableInteractionSource() }
@@ -1362,36 +1374,31 @@ fun CompactEpisodeRow(
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                         )
                     }
-                    // Gradient progress bar at bottom of thumbnail (fades in once progress is known)
+                    // Gradient progress bar at bottom of thumbnail
                     if (isCompleted && progress > 0f) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(animationSpec = tween(180)),
-                            modifier = Modifier.align(Alignment.BottomCenter)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(5.dp)
                         ) {
+                            // Track background
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(5.dp)
-                            ) {
-                                // Track background
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.5f))
-                                )
-                                // Active progress with gradient
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progress)
-                                        .fillMaxHeight()
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                colors = listOf(Color.Cyan, Color.Green)
-                                            )
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                            )
+                            // Active progress with gradient
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progress)
+                                    .fillMaxHeight()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(Color.Cyan, Color.Green)
                                         )
-                                )
-                            }
+                                    )
+                            )
                         }
                     }
                 }
@@ -1426,7 +1433,8 @@ fun CompactEpisodeRow(
                                 text = item.quality,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = JetBrainsMonoFontFamily
                             )
                         }
                     }
@@ -1437,43 +1445,36 @@ fun CompactEpisodeRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (durationSecs > 0 && lastPos > 0) {
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(animationSpec = tween(180))
-                                ) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        val posSecs = lastPos / 1000
-                                        val durMins = durationSecs / 60
-                                        val durSecs = durationSecs % 60
-                                        // Watched time (green) / total time (faded)
-                                        Text(
-                                            text = buildAnnotatedString {
-                                                withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
-                                                    append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
-                                                }
-                                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
-                                                    append("/$durMins:${String.format("%02d", durSecs)}")
-                                                }
-                                            },
-                                            fontSize = 10.sp
-                                        )
-                                        Text(
-                                            text = "—",
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                                        )
-                                    }
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val posSecs = lastPos / 1000
+                                    val durMins = durationSecs / 60
+                                    val durSecs = durationSecs % 60
+                                    // Watched time (green) / total time (faded)
+                                    Text(
+                                        text = buildAnnotatedString {
+                                            withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontFamily = JetBrainsMonoFontFamily)) {
+                                                append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
+                                            }
+                                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium, fontFamily = JetBrainsMonoFontFamily)) {
+                                                append("/$durMins:${String.format("%02d", durSecs)}")
+                                            }
+                                        },
+                                        fontSize = 10.sp
+                                    )
+                                    Text(
+                                        text = "—",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                    )
                                 }
                             }
-                            AnimatedVisibility(
-                                visible = fileSizeText != "...",
-                                enter = fadeIn(animationSpec = tween(180))
-                            ) {
+                            if (fileSizeText != "...") {
                                 Text(
                                     text = fileSizeText,
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = JetBrainsMonoFontFamily
                                 )
                             }
                         }
@@ -1484,7 +1485,8 @@ fun CompactEpisodeRow(
                         Text(
                             text = if (item.totalBytes == item.downloadedBytes) formattedDownloaded else "$formattedDownloaded / $formattedTotal",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                            fontFamily = JetBrainsMonoFontFamily
                         )
                         LinearProgressIndicator(
                             progress = { item.progress / 100f },
@@ -1516,20 +1518,6 @@ fun CompactEpisodeRow(
                     }
                 }
 
-                // Three-dot menu (hidden in multi-select mode)
-                if (!isSelectionMode) {
-                    IconButton(
-                        onClick = { showMenuDialog = true },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "خيارات",
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
             }
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -1609,125 +1597,6 @@ fun CompactEpisodeRow(
         }
     }
 
-    // AlertDialog (kept for backward compat via 3-dot button)
-    if (showMenuDialog) {
-        AlertDialog(
-            onDismissRequest = { showMenuDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Text(item.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Episode info
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (item.episode > 0) {
-                            Text("الحلقة ${item.episode}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
-                        }
-                    }
-
-                    HorizontalDivider()
-
-                    // Download progress during download
-                    if (!isCompleted) {
-                        val formattedDownloaded = formatBytes(item.downloadedBytes)
-                        val formattedTotal = formatBytes(item.totalBytes)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            LinearProgressIndicator(
-                                progress = { item.progress / 100f },
-                                modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            )
-                            Text("${item.progress}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        }
-                        Text("$formattedDownloaded / $formattedTotal", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-                    }
-
-                    // Actions
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (!isCompleted) {
-                            // Watch partially downloaded
-                            TextButton(
-                                onClick = {
-                                    val partialPath = File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
-                                    if (File(partialPath).exists()) {
-                                        onPlayClick(partialPath)
-                                    } else {
-                                        android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                    showMenuDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("مشاهدة الفيديو المكتمل")
-                            }
-                            // Pause/Resume
-                            TextButton(
-                                onClick = {
-                                    if (isPaused) viewModel.resumeDownload(item.id)
-                                    else viewModel.pauseDownload(item.id)
-                                    showMenuDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل مؤقتاً")
-                            }
-                        }
-                        if (isCompleted) {
-                            // Save to gallery
-                            TextButton(
-                                onClick = {
-                                    try {
-                                        val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
-                                        if (!destDir.exists()) destDir.mkdirs()
-                                        val safeTitle = item.title.replace("/", "_").replace("\\", "_")
-                                        val destFile = File(destDir, "$safeTitle.mp4")
-                                        File(item.localFilePath).copyTo(destFile, overwrite = true)
-                                        android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض", android.widget.Toast.LENGTH_LONG).show()
-                                    } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                                    }
-                                    showMenuDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("حفظ الفيديو (في المعرض)")
-                            }
-                        }
-                        // Delete
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteDownload(item.id)
-                                showMenuDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("حذف الملف")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showMenuDialog = false }) { Text("إغلاق") }
-            }
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
