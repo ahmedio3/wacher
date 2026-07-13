@@ -13,7 +13,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -58,7 +57,8 @@ import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.data.local.SeasonMetaEntity
 import com.example.ui.theme.PalettePrimary
-import com.example.ui.theme.PaletteNeutralGray
+import com.example.ui.theme.PaletteMutedRed
+import com.example.ui.components.CircularSelectionIndicator
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
 import java.io.File
@@ -282,7 +282,8 @@ fun PillHeader(
     title: String,
     subtitle: String,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPillClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = modifier
@@ -291,13 +292,13 @@ fun PillHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Back button (right side in RTL) — circular, neutral-gray background
+        // Back button (right side in RTL) — circular, white background
         IconButton(
             onClick = onBack,
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(PaletteNeutralGray)
+                .background(Color.White)
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronRight,
@@ -305,29 +306,29 @@ fun PillHeader(
                 tint = MaterialTheme.colorScheme.onBackground
             )
         }
-        // Title pill (left side in RTL) — two-tier text
+        // Title pill (left side in RTL) — inline two-tier text (bold title + smaller/lighter subtitle beside it)
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(PaletteNeutralGray)
+                .background(Color.White)
+                .then(if (onPillClick != null) Modifier.clickable { onPillClick.invoke() } else Modifier)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    maxLines = 1
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                maxLines = 1
+            )
         }
     }
 }
@@ -339,7 +340,8 @@ fun SeriesDetailPage(
     seriesId: String,
     viewModel: MovieViewModel,
     onNavigateToPlayer: (String, String, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onPillClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val downloads by viewModel.downloads.collectAsState(initial = emptyList())
@@ -360,16 +362,20 @@ fun SeriesDetailPage(
     var selectedSeasonNumber by remember { mutableIntStateOf(seasonPrefs.getInt("season_$seriesId", 1)) }
     var showDownloadNewSheet by remember { mutableStateOf(false) }
     var selectedForContextMenu by remember { mutableStateOf<String?>(null) }
+    // The row that was most recently the context-menu target. On close it is held at full opacity
+    // (snap, no dip) so the shared dimAlpha can safely tween back to 1 on BOTH open and close
+    // without flashing the just-deselected row.
+    var lastContextMenuTarget by remember { mutableStateOf<String?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     // Shared dimming alpha: header title, season chips and download button fade together during context-menu mode.
-    // Animate (tween) only when OPENING to 0.35f; snap instantly back to 1f on close to avoid the just-deselected
-    // row dipping to 0.35 and climbing back (the flash/flicker reported when dismissing the menu).
+    // Tween on BOTH open and close for a smooth feel; the just-deselected (last-target) row is held at full
+    // opacity via its own independent branch (see CompactEpisodeRow), eliminating the dip/flash on close.
     val dimAlpha by animateFloatAsState(
         targetValue = if (selectedForContextMenu != null) 0.35f else 1f,
-        animationSpec = if (selectedForContextMenu != null) tween(250) else snap()
+        animationSpec = if (selectedForContextMenu != null) tween(250) else tween(180)
     )
 
     // Offline season-metadata fallback (cached from prior successful network fetches)
@@ -449,11 +455,6 @@ fun SeriesDetailPage(
     val seasonDetailsStateMap by viewModel.seasonDetails.collectAsState()
     val seasonDetailState = seasonDetailsStateMap["$seriesId-$selectedSeasonNumber"]
 
-    // Sub-calculated downloaded vs total in current season (sorted by episode ascending)
-    val currentSeasonEpisodesList = downloadedEpisodes
-        .filter { it.season == selectedSeasonNumber }
-        .sortedBy { it.episode }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -465,6 +466,7 @@ fun SeriesDetailPage(
             title = seriesTitle,
             subtitle = totalSizeText,
             onBack = onBack,
+            onPillClick = onPillClick,
             modifier = Modifier.alpha(dimAlpha)
         )
 
@@ -517,54 +519,72 @@ fun SeriesDetailPage(
             }
         }
 
-        // Listing current downloaded or downloading episodes in season
-        if (currentSeasonEpisodesList.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(imageVector = Icons.Default.CloudQueue, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(text = "لا توجد حلقات منزلة في هذا الموسم حالياً", color = Color.Gray, fontSize = 13.sp)
+        // Listing current downloaded or downloading episodes in season — slide+fade between seasons
+        AnimatedContent(
+            targetState = selectedSeasonNumber,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            transitionSpec = {
+                slideInHorizontally(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)) togetherWith
+                    slideOutHorizontally(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+            },
+            label = "seasonList"
+        ) { season ->
+            val listForSeason = downloadedEpisodes
+                .filter { it.season == season }
+                .sortedBy { it.episode }
+            if (listForSeason.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(imageVector = Icons.Default.CloudQueue, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = "لا توجد حلقات منزلة في هذا الموسم حالياً", color = Color.Gray, fontSize = 13.sp)
+                    }
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(currentSeasonEpisodesList, key = { it.id }) { item ->
-                    CompactEpisodeRow(
-                        item = item,
-                        viewModel = viewModel,
-                        onPlayClick = { path ->
-                            if (path != null) {
-                                onNavigateToPlayer(item.id, item.title, path)
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(listForSeason, key = { it.id }) { item ->
+                        CompactEpisodeRow(
+                            item = item,
+                            viewModel = viewModel,
+                            onPlayClick = { path ->
+                                if (path != null) {
+                                    onNavigateToPlayer(item.id, item.title, path)
+                                }
+                            },
+                            isSelected = item.id in selectedIds,
+                            isSelectionMode = selectionMode,
+                            dimAlpha = dimAlpha,
+                            isContextMenuTarget = selectedForContextMenu == item.id,
+                            menuOpen = selectedForContextMenu != null,
+                            lastTargetId = lastContextMenuTarget,
+                            durationCache = durationCache,
+                            sizeCache = sizeCache,
+                            onLongClick = {
+                                selectedForContextMenu = item.id
+                                lastContextMenuTarget = item.id
+                            },
+                            onCheckedChange = { checked ->
+                                selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                            },
+                            onDismissContextMenu = { selectedForContextMenu = null },
+                            onEnterMultiSelect = {
+                                selectedForContextMenu = null
+                                selectionMode = true
+                                selectedIds = setOf(item.id)
                             }
-                        },
-                        isSelected = item.id in selectedIds,
-                        isSelectionMode = selectionMode,
-                        dimAlpha = dimAlpha,
-                        isContextMenuTarget = selectedForContextMenu == item.id,
-                        durationCache = durationCache,
-                        sizeCache = sizeCache,
-                        onLongClick = { selectedForContextMenu = item.id },
-                        onCheckedChange = { checked ->
-                            selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
-                        },
-                        onDismissContextMenu = { selectedForContextMenu = null },
-                        onEnterMultiSelect = {
-                            selectedForContextMenu = null
-                            selectionMode = true
-                            selectedIds = setOf(item.id)
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -663,6 +683,13 @@ fun SeriesDetailPage(
                 viewModel = movieBoxViewModel,
                 onDismissRequest = { showDownloadNewSheet = false },
                 onTryOtherMethod = { showDownloadNewSheet = false },
+                alreadyDownloaded = { season, episode, quality ->
+                    downloads.any {
+                        it.mediaId == seriesId && it.mediaType == "tv" &&
+                            it.season == season && it.episode == episode &&
+                            it.quality == quality && it.status == "completed"
+                    }
+                },
                 onDownloadClick = { url, quality, s, ep ->
                     viewModel.requestDownload(
                         mediaId = seriesId,
@@ -1187,6 +1214,8 @@ fun CompactEpisodeRow(
     isSelectionMode: Boolean = false,
     dimAlpha: Float = 1f,
     isContextMenuTarget: Boolean = false,
+    menuOpen: Boolean = false,
+    lastTargetId: String? = null,
     onLongClick: () -> Unit = {},
     onCheckedChange: (Boolean) -> Unit = {},
     onDismissContextMenu: () -> Unit = {},
@@ -1257,7 +1286,13 @@ fun CompactEpisodeRow(
         modifier = Modifier
             .fillMaxWidth()
             .scale(pressScale)
-            .alpha(pressAlpha * (if (isContextMenuTarget) 1f else dimAlpha))
+            .alpha(
+                pressAlpha * (
+                    if (isContextMenuTarget) 1f
+                    else if (!menuOpen && lastTargetId == item.id) 1f
+                    else dimAlpha
+                )
+            )
     ) {
         // Main content
         Column(
@@ -1297,22 +1332,9 @@ fun CompactEpisodeRow(
                     enter = scaleIn(spring()) + fadeIn(),
                     exit = scaleOut() + fadeOut()
                 ) {
-                    val indicatorFill by animateFloatAsState(
-                        targetValue = if (isSelected) 1f else 0f,
-                        animationSpec = tween(200)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .border(
-                                2.dp,
-                                if (isSelected) PalettePrimary
-                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                CircleShape
-                            )
-                            .background(PalettePrimary.copy(alpha = indicatorFill))
-                            .clickable { onCheckedChange(!isSelected) }
+                    CircularSelectionIndicator(
+                        isSelected = isSelected,
+                        onClick = { onCheckedChange(!isSelected) }
                     )
                 }
 
@@ -1339,31 +1361,36 @@ fun CompactEpisodeRow(
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                         )
                     }
-                    // Gradient progress bar at bottom of thumbnail
+                    // Gradient progress bar at bottom of thumbnail (fades in once progress is known)
                     if (isCompleted && progress > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .align(Alignment.BottomCenter)
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(animationSpec = tween(180)),
+                            modifier = Modifier.align(Alignment.BottomCenter)
                         ) {
-                            // Track background
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.5f))
-                            )
-                            // Active progress with gradient
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(progress)
-                                    .fillMaxHeight()
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            colors = listOf(Color.Cyan, Color.Green)
+                                    .fillMaxWidth()
+                                    .height(5.dp)
+                            ) {
+                                // Track background
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                )
+                                // Active progress with gradient
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress)
+                                        .fillMaxHeight()
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                colors = listOf(Color.Cyan, Color.Green)
+                                            )
                                         )
-                                    )
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -1409,33 +1436,45 @@ fun CompactEpisodeRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (durationSecs > 0 && lastPos > 0) {
-                                val posSecs = lastPos / 1000
-                                val durMins = durationSecs / 60
-                                val durSecs = durationSecs % 60
-                                // Watched time (green) / total time (faded)
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(180))
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        val posSecs = lastPos / 1000
+                                        val durMins = durationSecs / 60
+                                        val durSecs = durationSecs % 60
+                                        // Watched time (green) / total time (faded)
+                                        Text(
+                                            text = buildAnnotatedString {
+                                                withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
+                                                    append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
+                                                }
+                                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
+                                                    append("/$durMins:${String.format("%02d", durSecs)}")
+                                                }
+                                            },
+                                            fontSize = 10.sp
+                                        )
+                                        Text(
+                                            text = "—",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                        )
+                                    }
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = fileSizeText != "...",
+                                enter = fadeIn(animationSpec = tween(180))
+                            ) {
                                 Text(
-                                    text = buildAnnotatedString {
-                                        withStyle(SpanStyle(color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)) {
-                                            append("${posSecs / 60}:${String.format("%02d", posSecs % 60)}")
-                                        }
-                                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontWeight = FontWeight.Medium)) {
-                                            append("/$durMins:${String.format("%02d", durSecs)}")
-                                        }
-                                    },
-                                    fontSize = 10.sp
-                                )
-                                Text(
-                                    text = "—",
+                                    text = fileSizeText,
                                     fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
-                            Text(
-                                text = fileSizeText,
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
-                                fontWeight = FontWeight.Medium
-                            )
                         }
                     } else {
                         // Download progress — NO transparency
@@ -1528,7 +1567,7 @@ fun CompactEpisodeRow(
                         if (isPaused) viewModel.resumeDownload(item.id)
                         else viewModel.pauseDownload(item.id)
                     },
-                    leadingIcon = { Icon(if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(if (isPaused) Icons.Default.FileDownload else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
             if (isCompleted) {
@@ -1551,12 +1590,12 @@ fun CompactEpisodeRow(
                 )
             }
             DropdownMenuItem(
-                text = { Text("حذف الملف") },
+                text = { Text("حذف الملف", color = PaletteMutedRed) },
                 onClick = {
                     onDismissContextMenu()
                     viewModel.deleteDownload(item.id)
                 },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
             )
             HorizontalDivider()
             DropdownMenuItem(
@@ -2026,9 +2065,9 @@ fun LocalFilesTab(
 }
 
 fun formatBytes(bytes: Long): String {
-    if (bytes <= 0) return "0.0 MB"
+    if (bytes <= 0) return "0.0MB"
     val gb = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
-    if (gb >= 1.0) return String.format(java.util.Locale.US, "%.1f GB", gb)
+    if (gb >= 1.0) return String.format(java.util.Locale.US, "%.1fGB", gb)
     val mb = bytes.toDouble() / (1024.0 * 1024.0)
-    return String.format(java.util.Locale.US, "%.1f MB", mb)
+    return String.format(java.util.Locale.US, "%.1fMB", mb)
 }

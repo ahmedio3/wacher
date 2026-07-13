@@ -543,7 +543,8 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             route = "series_downloads/{seriesId}",
             arguments = listOf(
                 navArgument("seriesId") { type = NavType.StringType }
-            )
+            ),
+            popExitTransition = { EnterTransition.None }
         ) { backStackEntry ->
             val seriesId = backStackEntry.arguments?.getString("seriesId") ?: ""
             SeriesDetailPage(
@@ -555,7 +556,11 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     val encodedPath = Uri.encode(localPath)
                     navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onPillClick = {
+                    val id = seriesId.toIntOrNull() ?: 0
+                    if (id > 0) navController.navigate("detail/$id/tv")
+                }
             )
         }
 

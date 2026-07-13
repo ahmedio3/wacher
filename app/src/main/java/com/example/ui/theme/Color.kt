@@ -17,4 +17,5 @@ val PaletteNeutralGray = Color(0xFFE5E5EA)  // Neutral system-gray (reference he
 // Accent colors
 val PaletteAppleBlue = Color(0xFF007AFF)    // Classic iOS style blue highlight
 val PaletteAppleRed = Color(0xFFFF3B30)     // Classic iOS error/delete red
+val PaletteMutedRed = Color(0xFFB35447)      // Muted warm clay/brick red — less jarring delete action
 val PaletteSuccess = Color(0xFF34C759)      // Classic iOS success green

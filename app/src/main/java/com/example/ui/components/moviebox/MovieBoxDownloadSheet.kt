@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
@@ -32,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.remote.moviebox.models.VideoFile
 import com.example.data.remote.moviebox.viewmodel.MovieBoxState
 import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
+import com.example.ui.components.CircularSelectionIndicator
+import com.example.ui.theme.PaletteSuccess
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,12 +49,24 @@ fun MovieBoxDownloadSheet(
     viewModel: MovieBoxViewModel,
     onDismissRequest: () -> Unit,
     onTryOtherMethod: () -> Unit,
-    onDownloadClick: (String, String, Int, Int) -> Unit
+    onDownloadClick: (String, String, Int, Int) -> Unit,
+    alreadyDownloaded: (Int, Int, String) -> Boolean = { _, _, _ -> false }
 ) {
     val context = LocalContext.current
     val searchState by viewModel.searchResults.collectAsState()
     val downloadLinksState by viewModel.downloadLinks.collectAsState()
     val qualityPrefs = context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE)
+
+    // Quality + batch-selection state hoisted to the sheet level so the header quality
+    // dropdown and the episodes list share it (and selection can be cleared on change).
+    val standardQualities = listOf(1080, 720, 480, 360)
+    val savedQuality = qualityPrefs.getInt("q_${movieTitle.replace(" ", "_")}", 1080)
+    var selectedQuality by remember { mutableIntStateOf(if (savedQuality in standardQualities) savedQuality else 1080) }
+    var qualityMenuExpanded by remember { mutableStateOf(false) }
+    var selectedEpisodeIds by remember { mutableStateOf(setOf<Int>()) }
+    LaunchedEffect(selectedQuality) {
+        qualityPrefs.edit().putInt("q_${movieTitle.replace(" ", "_")}", selectedQuality).apply()
+    }
 
     var subjectId by remember { mutableStateOf<String?>(null) }
     var searchInitiated by remember { mutableStateOf(false) }
@@ -96,14 +113,68 @@ fun MovieBoxDownloadSheet(
                 .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = if (mediaType == "tv") "تنزيل الحلقات" else "تحميل الفيلم",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            // Header: title (right) + quality dropdown (left, TV only)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (mediaType == "tv") "تنزيل الحلقات" else "تحميل الفيلم",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f)
+                )
+                if (mediaType == "tv") {
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { qualityMenuExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "${selectedQuality}p",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = qualityMenuExpanded,
+                            onDismissRequest = { qualityMenuExpanded = false },
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                            shadowElevation = 8.dp,
+                            tonalElevation = 0.dp
+                        ) {
+                            standardQualities.forEach { q ->
+                                DropdownMenuItem(
+                                    text = { Text("${q}p") },
+                                    onClick = {
+                                        selectedQuality = q
+                                        qualityMenuExpanded = false
+                                        selectedEpisodeIds = emptySet()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             when {
                 searchState is MovieBoxState.Loading || (searchState is MovieBoxState.Success && (downloadLinksState is MovieBoxState.Loading || downloadLinksState is MovieBoxState.Idle)) -> {
@@ -152,10 +223,6 @@ fun MovieBoxDownloadSheet(
                             val availableSeasons = filteredLinks.map { it.season }.distinct().sorted()
                             var selectedSeason by remember { mutableIntStateOf(seasonInfo ?: availableSeasons.firstOrNull() ?: 1) }
                             
-                            val standardQualities = listOf(1080, 720, 480, 360)
-                            val savedQuality = qualityPrefs.getInt("q_${movieTitle.replace(" ", "_")}", 1080)
-                            var selectedQuality by remember { mutableIntStateOf(if (savedQuality in standardQualities) savedQuality else 1080) }
-                            
                             val seasonLinks = filteredLinks.filter { it.season == selectedSeason }
 
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -172,7 +239,7 @@ fun MovieBoxDownloadSheet(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(16.dp))
                                                     .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                                    .clickable { selectedSeason = s }
+                                                    .clickable { selectedSeason = s; selectedEpisodeIds = emptySet() }
                                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                                             ) {
                                                 Text(
@@ -185,41 +252,11 @@ fun MovieBoxDownloadSheet(
                                     }
                                 }
 
-                                // Save quality preference when changed
-                                LaunchedEffect(selectedQuality) {
-                                    qualityPrefs.edit().putInt("q_${movieTitle.replace(" ", "_")}", selectedQuality).apply()
-                                }
-
-                                // Quality selector
-                                LazyRow(
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 4.dp)
-                                ) {
-                                    items(standardQualities) { q ->
-                                        val isSelected = q == selectedQuality
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                                .clickable { selectedQuality = q }
-                                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = "${q}p",
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
                                 // Episodes list with batch selection
                                 val episodesMap = seasonLinks.groupBy { it.episode }.toSortedMap(compareBy { it })
                                 val episodeIds = episodesMap.keys.toList()
-                                
-                                // Track selected episodes for batch download
-                                var selectedEpisodeIds by remember { mutableStateOf(setOf<Int>()) }
+
+                                // Toggle helpers reuse the hoisted selection set
                                 fun toggleEpisode(id: Int) {
                                     selectedEpisodeIds = if (id in selectedEpisodeIds) selectedEpisodeIds - id else selectedEpisodeIds + id
                                 }
@@ -296,16 +333,12 @@ fun MovieBoxDownloadSheet(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
+                                                    val isDownloadedHere = alreadyDownloaded(selectedSeason, episodeId, "${selectedQuality}p")
                                                     if (isExact) {
-                                                        Checkbox(
-                                                            checked = isSelected,
-                                                            onCheckedChange = { toggleEpisode(episodeId) },
-                                                            modifier = Modifier.padding(end = 4.dp),
-                                                            colors = CheckboxDefaults.colors(
-                                                                checkedColor = MaterialTheme.colorScheme.primary,
-                                                                uncheckedColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                                                checkmarkColor = MaterialTheme.colorScheme.onPrimary
-                                                            )
+                                                        CircularSelectionIndicator(
+                                                            isSelected = isSelected,
+                                                            onClick = { toggleEpisode(episodeId) },
+                                                            modifier = Modifier.padding(end = 4.dp)
                                                         )
                                                     } else {
                                                         Spacer(modifier = Modifier.width(44.dp))
@@ -317,7 +350,13 @@ fun MovieBoxDownloadSheet(
                                                         fontSize = 14.sp,
                                                         modifier = Modifier.weight(1f)
                                                     )
-                                                    if (isExact) {
+                                                    if (isDownloadedHere) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(Icons.Default.CheckCircle, "تم التحميل", tint = PaletteSuccess, modifier = Modifier.size(18.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text("تم التحميل", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                                        }
+                                                    } else if (isExact) {
                                                         Text(
                                                             text = formatSize(exactFile.size),
                                                             fontSize = 11.sp,
@@ -326,7 +365,7 @@ fun MovieBoxDownloadSheet(
                                                         Spacer(modifier = Modifier.width(8.dp))
                                                         IconButton(
                                                             onClick = {
-                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId) 
+                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId)
                                                             },
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
@@ -461,9 +500,9 @@ private fun QualityItem(videoFile: VideoFile, onClick: () -> Unit) {
 private fun formatSize(size: Long): String {
     if (size <= 0) return "0 B"
     return if (size >= 1_000_000_000) {
-        String.format("%.1f GB", size / 1_000_000_000.0)
+        String.format("%.1fGB", size / 1_000_000_000.0)
     } else {
-        String.format("%d MB", size / 1_000_000)
+        String.format("%dMB", size / 1_000_000)
     }
 }
 
