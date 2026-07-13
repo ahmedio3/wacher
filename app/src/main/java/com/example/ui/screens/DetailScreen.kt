@@ -18,16 +18,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.example.data.remote.*
+import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.utils.isLatinText
 import com.example.ui.components.VideoPlayerView
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
@@ -101,40 +107,71 @@ fun DetailScreen(
         }
     }
 
+    val appBarTitle = remember(mediaType, mediaId, movieDetailsMap[mediaId], tvDetailsMap[mediaId]) {
+        if (mediaType == "movie") {
+            val state = movieDetailsMap[mediaId]
+            if (state is RequestState.Success) state.data.title ?: "تفاصيل الفيلم" else "تفاصيل الفيلم"
+        } else {
+            val state = tvDetailsMap[mediaId]
+            if (state is RequestState.Success) state.data.name ?: "تفاصيل المسلسل" else "تفاصيل المسلسل"
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
-            topBar = {
-                val appBarTitle = remember(mediaType, mediaId, movieDetailsMap[mediaId], tvDetailsMap[mediaId]) {
-                    if (mediaType == "movie") {
-                        val state = movieDetailsMap[mediaId]
-                        if (state is RequestState.Success) state.data.title ?: "تفاصيل الفيلم" else "تفاصيل الفيلم"
-                    } else {
-                        val state = tvDetailsMap[mediaId]
-                        if (state is RequestState.Success) state.data.name ?: "تفاصيل المسلسل" else "تفاصيل المسلسل"
-                    }
-                }
-
-                TopAppBar(
-                    title = { Text(appBarTitle, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground
-                    )
-                )
-            },
+            topBar = { },
             modifier = Modifier.fillMaxSize()
-        ) { innerPadding ->
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
                     .background(MaterialTheme.colorScheme.background)
             ) {
+                // Immersive floating header overlay (back button + title pill) drawn above the backdrop
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .zIndex(1f)
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "رجوع",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color.White)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = appBarTitle,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isLatinText(appBarTitle)) JetBrainsMonoFontFamily else null,
+                                    textDirection = if (isLatinText(appBarTitle)) TextDirection.Ltr else TextDirection.Rtl
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -427,7 +464,11 @@ fun MovieDetailContent(
         ) {
             Text(
                 text = movie.title ?: "فيلم سينمائي",
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = if (isLatinText(movie.title ?: "")) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(movie.title ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                ),
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
@@ -442,7 +483,10 @@ fun MovieDetailContent(
                 Text(
                     text = movie.releaseDate?.take(4) ?: "مجهول",
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = if (isLatinText(movie.releaseDate?.take(4) ?: "")) JetBrainsMonoFontFamily else null,
+                        textDirection = if (isLatinText(movie.releaseDate?.take(4) ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                    )
                 )
                 Text(
                     text = "•",
@@ -460,7 +504,10 @@ fun MovieDetailContent(
                         text = String.format("%.1f", movie.voteAverage ?: 0.0),
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = JetBrainsMonoFontFamily,
+                            textDirection = TextDirection.Ltr
+                        )
                     )
                 }
                 Text(
@@ -587,9 +634,13 @@ fun MovieDetailContent(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (movie.overview.isNullOrEmpty()) "لا يتوفر نص القصة باللغة العربية حالياً." else movie.overview,
-                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    lineHeight = 22.sp,
+                    fontFamily = if (isLatinText(movie.overview ?: "")) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(movie.overview ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                ),
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                textAlign = TextAlign.Right,
+                textAlign = if (isLatinText(movie.overview ?: "")) TextAlign.Left else TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -694,7 +745,11 @@ fun TvDetailContent(
         ) {
             Text(
                 text = tv.name ?: "مسلسل درامي",
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = if (isLatinText(tv.name ?: "")) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(tv.name ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                ),
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
@@ -709,7 +764,10 @@ fun TvDetailContent(
                 Text(
                     text = tv.firstAirDate?.take(4) ?: "مجهول",
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = if (isLatinText(tv.firstAirDate?.take(4) ?: "")) JetBrainsMonoFontFamily else null,
+                        textDirection = if (isLatinText(tv.firstAirDate?.take(4) ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                    )
                 )
                 Text(
                     text = "•",
@@ -727,7 +785,10 @@ fun TvDetailContent(
                         text = String.format("%.1f", tv.voteAverage ?: 0.0),
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = JetBrainsMonoFontFamily,
+                            textDirection = TextDirection.Ltr
+                        )
                     )
                 }
                 Text(
@@ -844,9 +905,13 @@ fun TvDetailContent(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (tv.overview.isNullOrEmpty()) "لا يتوفر نص القصة باللغة العربية لهذا المسلسل حالياً." else tv.overview,
-                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    lineHeight = 22.sp,
+                    fontFamily = if (isLatinText(tv.overview ?: "")) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(tv.overview ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                ),
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                textAlign = TextAlign.Right,
+                textAlign = if (isLatinText(tv.overview ?: "")) TextAlign.Left else TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -968,12 +1033,10 @@ fun EpisodeRowCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
             .clickable { onPlay() }
-            .padding(10.dp),
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Alignment.CenterVertically
     ) {
         // Thumbnail Image
         Box(
@@ -981,7 +1044,6 @@ fun EpisodeRowCard(
                 .width(100.dp)
                 .height(64.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (!episode.stillPath.isNullOrEmpty()) {
                 AsyncImage(
@@ -1014,7 +1076,10 @@ fun EpisodeRowCard(
             )
             Text(
                 text = episode.name ?: "بدون عنوان",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = if (isLatinText(episode.name ?: "")) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(episode.name ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                ),
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1073,7 +1138,11 @@ fun FlowGenresRow(genres: List<TmdbGenre>) {
                 Text(
                     text = genre.name ?: "",
                     color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = if (isLatinText(genre.name ?: "")) JetBrainsMonoFontFamily else null,
+                        textDirection = if (isLatinText(genre.name ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                    )
                 )
             }
         }

@@ -61,6 +61,7 @@ import com.example.data.local.SeasonMetaEntity
 import com.example.ui.theme.PalettePrimary
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.PaletteMutedRed
+import com.example.utils.isLatinText
 import com.example.ui.components.CircularSelectionIndicator
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
@@ -322,14 +323,21 @@ fun PillHeader(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = if (isLatinText(title)) JetBrainsMonoFontFamily else null,
+                        textDirection = if (isLatinText(title)) TextDirection.Ltr else TextDirection.Rtl
+                    ),
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Ltr),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        textDirection = TextDirection.Ltr,
+                        fontFamily = JetBrainsMonoFontFamily
+                    ),
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     maxLines = 1
                 )
