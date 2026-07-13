@@ -50,7 +50,8 @@ fun MovieBoxDownloadSheet(
     viewModel: MovieBoxViewModel,
     onDismissRequest: () -> Unit,
     onTryOtherMethod: () -> Unit,
-    onDownloadClick: (String, String, Int, Int) -> Unit,
+    onDownloadClick: (String, String, Int, Int, String) -> Unit,
+    episodeStillPaths: Map<Pair<Int, Int>, String> = emptyMap(),
     alreadyDownloaded: (Int, Int, String) -> Boolean = { _, _, _ -> false }
 ) {
     val context = LocalContext.current
@@ -286,7 +287,8 @@ fun MovieBoxDownloadSheet(
                                                 val file = seasonLinks.find { it.episode == epId && it.resolution == selectedQuality }
                                                     ?: seasonLinks.filter { it.episode == epId }.minByOrNull { Math.abs(it.resolution - selectedQuality) }
                                                 if (file != null) {
-                                                    onDownloadClick(file.url, "${file.resolution}p", selectedSeason, epId)
+                                                    val still = episodeStillPaths[selectedSeason to epId] ?: ""
+                                                    onDownloadClick(file.url, "${file.resolution}p", selectedSeason, epId, still)
                                                 }
                                             }
                                         },
@@ -373,7 +375,8 @@ fun MovieBoxDownloadSheet(
                                                         Spacer(modifier = Modifier.width(8.dp))
                                                         IconButton(
                                                             onClick = {
-                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId)
+                                                                val still = episodeStillPaths[selectedSeason to episodeId] ?: ""
+                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId, still)
                                                             },
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
@@ -404,7 +407,7 @@ fun MovieBoxDownloadSheet(
                                     QualityItem(
                                         videoFile = videoFile,
                                         onClick = {
-                                            onDownloadClick(videoFile.url, "${videoFile.resolution}p", 0, 0)
+                                            onDownloadClick(videoFile.url, "${videoFile.resolution}p", 0, 0, "")
                                         }
                                     )
                                 }

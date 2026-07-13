@@ -2,7 +2,11 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -10,13 +14,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
@@ -133,10 +138,10 @@ fun DetailScreen(
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
                         .zIndex(1f)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(
                         onClick = onBackClick,
@@ -146,7 +151,7 @@ fun DetailScreen(
                             .background(Color.White)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.Default.ChevronRight,
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
@@ -298,6 +303,20 @@ fun DetailScreen(
 
         // CUSTOM iOS PREMIUM QUALITY SELECTION BOTTOM SHEET / CARD DIALOG
         if (showMovieBoxSheet) {
+            val episodeStillPaths = remember(seasonDetailsMap) {
+                val map = mutableMapOf<Pair<Int, Int>, String>()
+                seasonDetailsMap.values.forEach { st ->
+                    if (st is RequestState.Success) {
+                        val seasonNum = st.data.seasonNumber
+                        st.data.episodes?.forEach { ep ->
+                            if (!ep.stillPath.isNullOrEmpty()) {
+                                map[seasonNum to ep.episodeNumber] = ep.stillPath!!
+                            }
+                        }
+                    }
+                }
+                map
+            }
             MovieBoxDownloadSheet(
                 movieTitle = if (pendingDownloadMediaType == "movie") pendingDownloadTitle else pendingDownloadTitle.split(" - ").firstOrNull()?.trim() ?: pendingDownloadTitle,
                 movieYear = pendingDownloadYear,
@@ -307,12 +326,13 @@ fun DetailScreen(
                 viewModel = movieBoxViewModel,
                 onDismissRequest = { showMovieBoxSheet = false },
                 onTryOtherMethod = { showMovieBoxSheet = false },
-                onDownloadClick = { url, quality, s, ep ->
+                episodeStillPaths = episodeStillPaths,
+                onDownloadClick = { url, quality, s, ep, still ->
                     viewModel.requestDownload(
                         mediaId = pendingDownloadId,
                         title = pendingDownloadTitle,
                         posterPath = pendingDownloadPoster,
-                        stillPath = pendingDownloadStillPath,
+                        stillPath = still,
                         mediaType = pendingDownloadMediaType,
                         season = if (pendingDownloadMediaType == "tv") s else 0,
                         episode = if (pendingDownloadMediaType == "tv") ep else 0,
@@ -419,7 +439,7 @@ fun MovieDetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(264.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -617,7 +637,7 @@ fun MovieDetailContent(
                     Icon(
                         imageVector = Icons.Default.Subtitles,
                         contentDescription = "تحميل ترجمة",
-                        tint = MaterialTheme.colorScheme.secondary
+                        tint = Color.Black
                     )
                 }
             }
@@ -700,7 +720,7 @@ fun TvDetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(264.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -888,7 +908,7 @@ fun TvDetailContent(
                     Icon(
                         imageVector = Icons.Default.Subtitles,
                         contentDescription = "تحميل ترجمة",
-                        tint = MaterialTheme.colorScheme.secondary
+                        tint = Color.Black
                     )
                 }
             }
@@ -1030,10 +1050,23 @@ fun EpisodeRowCard(
 ) {
     val backdropUrl = "https://image.tmdb.org/t/p/w300${episode.stillPath}"
 
+    // Custom press effect (replaces default ripple) — subtle scale + alpha on touch-down
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.91f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.92f else 1f, animationSpec = tween(150))
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onPlay() }
+            .scale(pressScale)
+            .alpha(pressAlpha)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onPlay,
+                onLongClick = onDownloadSubtitle
+            )
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1086,35 +1119,20 @@ fun EpisodeRowCard(
             )
         }
 
-        // Quick action buttons for play / download / subtitle
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        // Quick action button for download (subtitle moved to long-press)
+        Button(
+            onClick = onDownload,
+            modifier = Modifier
+                .height(36.dp)
+                .width(72.dp),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(0.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
         ) {
-            Button(
-                onClick = onDownload,
-                modifier = Modifier
-                    .height(36.dp)
-                    .width(72.dp),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل حلقة أوفلاين", modifier = Modifier.size(18.dp))
-            }
-            IconButton(
-                onClick = onDownloadSubtitle,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Subtitles,
-                    contentDescription = "تحميل ترجمة",
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل حلقة أوفلاين", modifier = Modifier.size(18.dp))
         }
     }
 }

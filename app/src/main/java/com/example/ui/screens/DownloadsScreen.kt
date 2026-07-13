@@ -321,26 +321,26 @@ fun PillHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = if (isLatinText(title)) JetBrainsMonoFontFamily else null,
-                        textDirection = if (isLatinText(title)) TextDirection.Ltr else TextDirection.Rtl
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        textDirection = TextDirection.Ltr,
-                        fontFamily = JetBrainsMonoFontFamily
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    maxLines = 1
-                )
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    textDirection = TextDirection.Ltr,
+                                    fontFamily = JetBrainsMonoFontFamily
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                maxLines = 1
+                            )
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isLatinText(title)) JetBrainsMonoFontFamily else null,
+                                    textDirection = if (isLatinText(title)) TextDirection.Ltr else TextDirection.Rtl
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
             }
         }
     }
@@ -697,6 +697,11 @@ fun SeriesDetailPage(
             val movieBoxViewModel: com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel(factory = com.example.ui.viewmodel.ViewModelFactory(appContext))
 
+            val episodeStillPaths = remember(downloads) {
+                downloads.filter { !it.stillPath.isNullOrEmpty() }
+                    .associate { (it.season to it.episode) to it.stillPath!! }
+            }
+
             com.example.ui.components.moviebox.MovieBoxDownloadSheet(
                 movieTitle = seriesTitle,
                 movieYear = null,
@@ -704,6 +709,7 @@ fun SeriesDetailPage(
                 viewModel = movieBoxViewModel,
                 onDismissRequest = { showDownloadNewSheet = false },
                 onTryOtherMethod = { showDownloadNewSheet = false },
+                episodeStillPaths = episodeStillPaths,
                 alreadyDownloaded = { season, episode, quality ->
                     downloads.any {
                         it.mediaId == seriesId && it.mediaType == "tv" &&
@@ -711,11 +717,12 @@ fun SeriesDetailPage(
                             it.quality == quality && it.status == "completed"
                     }
                 },
-                onDownloadClick = { url, quality, s, ep ->
+                onDownloadClick = { url, quality, s, ep, still ->
                     viewModel.requestDownload(
                         mediaId = seriesId,
                         title = seriesTitle,
                         posterPath = posterPath,
+                        stillPath = still,
                         mediaType = "tv",
                         season = s,
                         episode = ep,
