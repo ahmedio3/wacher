@@ -1041,6 +1041,7 @@ fun TvDetailContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EpisodeRowCard(
     episode: TmdbEpisode,
