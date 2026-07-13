@@ -50,6 +50,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -544,7 +545,7 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             arguments = listOf(
                 navArgument("seriesId") { type = NavType.StringType }
             ),
-            popExitTransition = { EnterTransition.None }
+            popExitTransition = { ExitTransition.None }
         ) { backStackEntry ->
             val seriesId = backStackEntry.arguments?.getString("seriesId") ?: ""
             SeriesDetailPage(

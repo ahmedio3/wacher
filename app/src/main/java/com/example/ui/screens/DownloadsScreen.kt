@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -1363,7 +1364,7 @@ fun CompactEpisodeRow(
                     }
                     // Gradient progress bar at bottom of thumbnail (fades in once progress is known)
                     if (isCompleted && progress > 0f) {
-                        AnimatedVisibility(
+                        BoxScope.AnimatedVisibility(
                             visible = true,
                             enter = fadeIn(animationSpec = tween(180)),
                             modifier = Modifier.align(Alignment.BottomCenter)
