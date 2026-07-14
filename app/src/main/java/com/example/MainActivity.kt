@@ -217,14 +217,12 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
         }
     }
 
-    // Only navigate to the deep link once the NavHost graph is fully built AND we are
-    // past the Splash screen. Navigating during the first composition (before the graph
-    // registers the "deeplink_show" destination) crashed with
-    // "Navigation destination ... cannot be found in the navigation graph", and navigating
-    // while Splash is still the current destination got clobbered by Splash's
-    // popUpTo("splash", inclusive = true).
+    // Only navigate to the deep link once the NavHost graph is fully built (currentRoute
+    // becomes non-null after the start destination "home" is committed). Navigating during
+    // the first composition, before the graph is ready, crashed with
+    // "Navigation destination ... cannot be found in the navigation graph".
     LaunchedEffect(deepLinkState.value, currentRoute) {
-        if (deepLinkState.value != null && currentRoute != null && currentRoute != "splash") {
+        if (deepLinkState.value != null && currentRoute != null) {
             navController.navigate(deepLinkState.value!!) {
                 launchSingleTop = true
             }
@@ -294,10 +292,9 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
                 }
             },
             floatingActionButton = {
-                // Hide FAB on player, adult content, splash routes
+                // Hide FAB on player, adult content routes
                 val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
                                     || currentRoute?.startsWith("player") == true
-                                    || currentRoute == "splash"
                                     || currentRoute == "adult_content"
                                     || currentRoute?.startsWith("adult_content") == true
                 if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
@@ -358,7 +355,7 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
             val layoutDirection = LocalLayoutDirection.current
             NavHost(
                 navController = navController,
-                startDestination = "splash",
+                startDestination = "home",
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     val forward = isForwardNavigation(
@@ -379,18 +376,6 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
                 popEnterTransition = { EnterTransition.None },
                 popExitTransition = { slideOut(false, layoutDirection) }
             ) {
-            composable("splash",
-                    enterTransition = { fadeIn() },
-                    exitTransition = { fadeOut() }) {
-                SplashScreen(
-                    onSplashFinished = {
-                        navController.navigate("home") {
-                            popUpTo("splash") { inclusive = true }
-                        }
-                    }
-                )
-            }
-
             composable("home") {
                 HomeScreen(
                     viewModel = movieViewModel,
