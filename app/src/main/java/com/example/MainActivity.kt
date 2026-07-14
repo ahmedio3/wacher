@@ -213,9 +213,15 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
         }
     }
 
-    LaunchedEffect(deepLinkState.value) {
-        deepLinkState.value?.let { link ->
-            navController.navigate(link) {
+    // Only navigate to the deep link once the NavHost graph is fully built AND we are
+    // past the Splash screen. Navigating during the first composition (before the graph
+    // registers the "deeplink_show" destination) crashed with
+    // "Navigation destination ... cannot be found in the navigation graph", and navigating
+    // while Splash is still the current destination got clobbered by Splash's
+    // popUpTo("splash", inclusive = true).
+    LaunchedEffect(deepLinkState.value, currentRoute) {
+        if (deepLinkState.value != null && currentRoute != null && currentRoute != "splash") {
+            navController.navigate(deepLinkState.value!!) {
                 launchSingleTop = true
             }
             deepLinkState.value = null
