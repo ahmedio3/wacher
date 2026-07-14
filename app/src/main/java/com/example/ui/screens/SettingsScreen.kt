@@ -396,7 +396,6 @@ fun ProfileSection(
         coroutineScope.launch {
             val base = userProfile ?: UserProfile(id = uid, name = u.displayName ?: "", username = "")
             UserManager.saveProfile(uid, base.copy(bio = bioInput))
-            userProfile = base.copy(bio = bioInput)
         }
     }
 

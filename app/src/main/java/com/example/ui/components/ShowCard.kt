@@ -291,6 +291,7 @@ fun ShowShareSheet(
     onNativeShare: () -> Unit
 ) {
     if (visible) {
+        val clipboardManager = LocalClipboardManager.current
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -320,7 +321,7 @@ fun ShowShareSheet(
                 )
                 Button(
                     onClick = {
-                        LocalClipboardManager.current.setText(AnnotatedString(link))
+                        clipboardManager.setText(AnnotatedString(link))
                         onDismiss()
                     },
                     modifier = Modifier

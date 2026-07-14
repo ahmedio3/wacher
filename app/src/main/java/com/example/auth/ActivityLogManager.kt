@@ -1,6 +1,6 @@
 package com.example.auth
 
-import com.example.data.local.MovieEntities.ActivityLogEntity
+import com.example.data.local.ActivityLogEntity
 import com.google.firebase.database.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow

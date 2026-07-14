@@ -31,7 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.zIndex
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -68,6 +68,7 @@ fun GlobalChatScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
@@ -505,7 +506,7 @@ fun GlobalChatScreen(
                         canEdit = msg.userId == user?.uid,
                         canDelete = msg.userId == user?.uid,
                         onCopy = {
-                            val clipboard = LocalClipboardManager.current
+                            val clipboard = clipboardManager
                             clipboard.setText(AnnotatedString(msg.text))
                             menuMsg = null
                         },
