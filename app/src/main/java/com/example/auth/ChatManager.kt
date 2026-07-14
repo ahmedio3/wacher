@@ -75,10 +75,9 @@ object ChatManager {
     }
 
     fun sendMessage(message: ChatMessage) {
-        val key = firebaseDb.push().key ?: return
-        firebaseDb.child(key).setValue(message.copy(id = key)).addOnCompleteListener { task ->
+        firebaseDb.child(message.id).setValue(message).addOnCompleteListener { task ->
             if (!task.isSuccessful) {
-                android.util.Log.e("ChatManager", "Send message failed: \${task.exception?.message}")
+                android.util.Log.e("ChatManager", "Send message failed: ${task.exception?.message}")
             }
         }
     }

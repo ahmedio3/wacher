@@ -53,10 +53,10 @@ import com.example.auth.ChatManager
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
 import com.example.models.ChatMessage
-import com.example.ui.components.CustomHeader
 import com.example.ui.components.MessageContextMenu
 import com.example.ui.components.ProfileBottomSheet
 import com.example.ui.theme.IBMPlexSansArabicFontFamily
+import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -137,9 +137,7 @@ fun GlobalChatScreen(
     }
 
     Scaffold(
-        topBar = {
-            CustomHeader(title = "General Chat", onBackClick = onBackClick)
-        },
+        topBar = { },
         bottomBar = {
             if (isProfileLoading) {
                 Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -314,7 +312,7 @@ fun GlobalChatScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
+            contentPadding = PaddingValues(top = 90.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
         ) {
             itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
                 val isMe = msg.userId == user?.uid
@@ -349,7 +347,7 @@ fun GlobalChatScreen(
                         val revealScale = (offsetX.value / -75f).coerceIn(0.6f, 1.2f)
                         Box(
                             modifier = Modifier
-                                .align(Alignment.CenterStart)
+                                .align(Alignment.CenterEnd)
                                 .padding(start = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -416,10 +414,10 @@ fun GlobalChatScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(topStart, topEnd, bottomEnd, bottomStart))
                                     .background(if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                    .combinedClickable(
-                                        onClick = { /* tap: no-op */ },
-                                        onLongClick = { menuMsg = msg }
-                                    )
+                        .combinedClickable(
+                            onClick = { menuMsg = msg },
+                            onLongClick = { menuMsg = msg }
+                        )
                                     .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Column {
@@ -499,52 +497,85 @@ fun GlobalChatScreen(
                         }
                     }
 
-                    // Long-press context menu for this message
-                    MessageContextMenu(
-                        expanded = menuMsg?.id == msg.id,
-                        onDismiss = { menuMsg = null },
-                        canEdit = msg.userId == user?.uid,
-                        canDelete = msg.userId == user?.uid,
-                        onCopy = {
-                            val clipboard = clipboardManager
-                            clipboard.setText(AnnotatedString(msg.text))
-                            menuMsg = null
-                        },
-                        onReply = {
-                            replyToMessage = msg
-                            menuMsg = null
-                        },
-                        onEdit = {
-                            messageText = msg.text
-                            editingMsgId = msg.id
-                            menuMsg = null
-                        },
-                        onDelete = {
-                            ChatManager.deleteMessage(msg.id)
-                            menuMsg = null
-                        }
-                    )
+                    // Long-press context menu for this message, anchored to the bubble's outer edge
+                    // so it opens on the right for own messages (isMe) and left for others (RTL).
+                    Box(modifier = Modifier.align(if (isMe) Alignment.CenterStart else Alignment.CenterEnd)) {
+                        MessageContextMenu(
+                            expanded = menuMsg?.id == msg.id,
+                            onDismiss = { menuMsg = null },
+                            canEdit = msg.userId == user?.uid,
+                            canDelete = msg.userId == user?.uid,
+                            onCopy = {
+                                clipboardManager.setText(AnnotatedString(msg.text))
+                                menuMsg = null
+                            },
+                            onReply = {
+                                replyToMessage = msg
+                                menuMsg = null
+                            },
+                            onEdit = {
+                                messageText = msg.text
+                                editingMsgId = msg.id
+                                menuMsg = null
+                            },
+                            onDelete = {
+                                ChatManager.deleteMessage(msg.id)
+                                menuMsg = null
+                            }
+                        )
+                    }
                 }
             }
 
         }
 
-            // Top fade overlay: fades the list into the header
+            // Top fade overlay: opaque at the status bar, fading to transparent over the messages.
+            // Pointer-transparent (no clickable) so scrolling passes through.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(80.dp)
                     .align(Alignment.TopCenter)
                     .zIndex(1f)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                MaterialTheme.colorScheme.surface
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0f)
                             )
                         )
                     )
             )
+
+            // Lightweight transparent top header (above the fade): back button + title.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .zIndex(2f)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "رجوع",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "General Chat",
+                    fontFamily = JetBrainsMonoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
         }
 
         // Profile bottom sheet
