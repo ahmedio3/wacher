@@ -117,7 +117,7 @@ fun ShowCardContextMenu(
 }
 
 fun shareShow(context: Context, title: String, id: String, mediaType: String) {
-    val url = "https://www.themoviedb.org/${if (mediaType == "tv") "tv" else "movie"}/$id"
+    val url = "https://watchera.com/show/$mediaType/$id"
     val intent = android.content.Intent().apply {
         action = android.content.Intent.ACTION_SEND
         putExtra(android.content.Intent.EXTRA_TEXT, "$title\n$url")
@@ -297,7 +297,7 @@ fun ShowShareSheet(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
-            val link = "https://www.themoviedb.org/${if (mediaType == "tv") "tv" else "movie"}/$id"
+            val link = "https://watchera.com/show/$mediaType/$id"
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

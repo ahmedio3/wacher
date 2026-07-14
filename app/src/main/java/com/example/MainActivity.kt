@@ -110,10 +110,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun extractDeepLink(intent: Intent): String? {
-        val uri = intent.data
-        if (uri?.scheme == "cinemios" && uri.host == "show") {
+        val uri = intent.data ?: return null
+        if (uri.scheme == "cinemios" && uri.host == "show") {
             val mediaType = uri.pathSegments.getOrNull(0)
             val id = uri.pathSegments.getOrNull(1)
+            if (mediaType != null && id != null) {
+                return "deeplink_show/$mediaType/$id"
+            }
+        }
+        if (uri.scheme == "https" && uri.host == "watchera.com") {
+            val mediaType = uri.pathSegments.getOrNull(1)
+            val id = uri.pathSegments.getOrNull(2)
             if (mediaType != null && id != null) {
                 return "deeplink_show/$mediaType/$id"
             }
