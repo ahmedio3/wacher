@@ -5,10 +5,13 @@ import android.util.Base64
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,13 +31,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.zIndex
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,11 +53,15 @@ import com.example.auth.ChatManager
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
 import com.example.models.ChatMessage
+import com.example.ui.components.CustomHeader
+import com.example.ui.components.MessageContextMenu
+import com.example.ui.components.ProfileBottomSheet
+import com.example.ui.theme.IBMPlexSansArabicFontFamily
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun GlobalChatScreen(
     onBackClick: () -> Unit,
@@ -65,15 +76,31 @@ fun GlobalChatScreen(
     
     // For swipe-to-reply active state
     var replyToMessage by remember { mutableStateOf<ChatMessage?>(null) }
+
+    // For long-press context menu
+    var menuMsg by remember { mutableStateOf<ChatMessage?>(null) }
+    // For editing an existing message
+    var editingMsgId by remember { mutableStateOf<String?>(null) }
+
+    // For profile bottom sheet
+    var profileUser by remember { mutableStateOf<UserProfile?>(null) }
+    var profileAvatar by remember { mutableStateOf("") }
+    var showProfile by remember { mutableStateOf(false) }
     
     // Cache the Flow query so the connection isn't restarted recursively on Typing recompositions
     val messagesFlow = remember(context) { ChatManager.getMessages(context) }
     val allMessages by messagesFlow.collectAsState(initial = emptyList())
-    // Reverse messages for reverseLayout LazyColumn (index 0 is newest/bottom)
-    val messages = remember(allMessages) { allMessages.reversed() }
     
     val typingUsers by ChatManager.getTypingUsers().collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
+
+    // Local optimistic copies so a freshly-sent message appears instantly (no flicker).
+    val localMessages = remember { mutableStateListOf<ChatMessage>() }
+    val messages = remember(allMessages, localMessages) {
+        val rtdbIds = allMessages.mapTo(mutableSetOf()) { it.id }
+        val localOnly = localMessages.filter { it.id !in rtdbIds }
+        localOnly + allMessages.reversed()
+    }
 
     LaunchedEffect(user) {
         if (user != null) {
@@ -99,37 +126,18 @@ fun GlobalChatScreen(
         }
     }
 
-    // Scroll automatically only when a new message is added
-    var previousMessagesSize by remember { mutableStateOf(0) }
+    // Scroll to bottom only on first load to avoid flashes on every list rebuild
+    var hasScrolledOnce by remember { mutableStateOf(false) }
     LaunchedEffect(messages) {
-        if (messages.isNotEmpty()) {
-            if (messages.size > previousMessagesSize) {
-                if (previousMessagesSize > 0) {
-                    listState.animateScrollToItem(0)
-                }
-            }
-            previousMessagesSize = messages.size
+        if (messages.isNotEmpty() && !hasScrolledOnce) {
+            listState.scrollToItem(0)
+            hasScrolledOnce = true
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Column {
-                        Text("الدردشة العامة", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
+            CustomHeader(title = "General Chat", onBackClick = onBackClick)
         },
         bottomBar = {
             if (isProfileLoading) {
@@ -204,13 +212,18 @@ fun GlobalChatScreen(
                         }
                     }
 
-                    // Polished fully-circular iOS input bar
+                    // Polished input bar with dynamic shape (pill for 1 line, rounded rect for multi-line)
+                    val lineCount = messageText.lines().count().coerceAtMost(4).coerceAtLeast(1)
+                    val inputCorner by animateDpAsState(
+                        if (lineCount <= 1) 50.dp else 20.dp,
+                        label = "inputCorner"
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 2.dp)
-                            .shadow(2.dp, CircleShape)
-                            .clip(CircleShape)
+                            .shadow(2.dp, RoundedCornerShape(inputCorner))
+                            .clip(RoundedCornerShape(inputCorner))
                             .background(MaterialTheme.colorScheme.surface)
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -218,19 +231,30 @@ fun GlobalChatScreen(
                         IconButton(
                             onClick = {
                                 if (messageText.isNotBlank()) {
-                                    val msg = ChatMessage(
-                                        userId = user!!.uid,
-                                        username = userProfile!!.name,
-                                        text = messageText.trim(),
-                                        timestamp = System.currentTimeMillis(),
-                                        avatarBase64 = userProfile!!.avatarBase64,
-                                        repliedToId = replyToMessage?.id ?: "",
-                                        repliedToName = replyToMessage?.username ?: "",
-                                        repliedToText = replyToMessage?.text ?: ""
-                                    )
-                                    ChatManager.sendMessage(msg)
-                                    messageText = ""
-                                    replyToMessage = null
+                                    if (editingMsgId != null) {
+                                        ChatManager.updateMessage(editingMsgId!!, messageText.trim())
+                                        editingMsgId = null
+                                        messageText = ""
+                                        replyToMessage = null
+                                    } else {
+                                        val clientId =
+                                            (user?.uid ?: "me") + "-" + System.currentTimeMillis()
+                                        val msg = ChatMessage(
+                                            id = clientId,
+                                            userId = user!!.uid,
+                                            username = userProfile!!.name,
+                                            text = messageText.trim(),
+                                            timestamp = System.currentTimeMillis(),
+                                            avatarBase64 = userProfile!!.avatarBase64,
+                                            repliedToId = replyToMessage?.id ?: "",
+                                            repliedToName = replyToMessage?.username ?: "",
+                                            repliedToText = replyToMessage?.text ?: ""
+                                        )
+                                        localMessages.add(0, msg)
+                                        ChatManager.sendMessage(msg)
+                                        messageText = ""
+                                        replyToMessage = null
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -252,7 +276,11 @@ fun GlobalChatScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
-                            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 15.sp,
+                                fontFamily = IBMPlexSansArabicFontFamily
+                            ),
                             maxLines = 4,
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             decorationBox = { innerTextField ->
@@ -260,7 +288,8 @@ fun GlobalChatScreen(
                                     Text(
                                         text = "مراسلة...", 
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), 
-                                        fontSize = 15.sp
+                                        fontSize = 15.sp,
+                                        fontFamily = IBMPlexSansArabicFontFamily
                                     )
                                 }
                                 innerTextField()
@@ -276,6 +305,7 @@ fun GlobalChatScreen(
         },
         modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
     ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             reverseLayout = true,
@@ -318,8 +348,8 @@ fun GlobalChatScreen(
                         val revealScale = (offsetX.value / -75f).coerceIn(0.6f, 1.2f)
                         Box(
                             modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 16.dp),
+                                .align(Alignment.CenterStart)
+                                .padding(start = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -385,6 +415,10 @@ fun GlobalChatScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(topStart, topEnd, bottomEnd, bottomStart))
                                     .background(if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                    .combinedClickable(
+                                        onClick = { /* tap: no-op */ },
+                                        onLongClick = { menuMsg = msg }
+                                    )
                                     .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Column {
@@ -436,7 +470,13 @@ fun GlobalChatScreen(
 
                         if (!isMe && isLastFromUser) {
                             Spacer(modifier = Modifier.width(8.dp))
-                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
+                                coroutineScope.launch {
+                                    profileUser = UserManager.getProfile(msg.userId)
+                                    profileAvatar = msg.avatarBase64
+                                    showProfile = true
+                                }
+                            }) {
                                 if (msg.avatarBase64.isNotEmpty()) {
                                     val bitmap = try {
                                         val bytes = Base64.decode(msg.avatarBase64, Base64.DEFAULT)
@@ -457,8 +497,61 @@ fun GlobalChatScreen(
                             Spacer(modifier = Modifier.width(40.dp))
                         }
                     }
+
+                    // Long-press context menu for this message
+                    MessageContextMenu(
+                        expanded = menuMsg?.id == msg.id,
+                        onDismiss = { menuMsg = null },
+                        canEdit = msg.userId == user?.uid,
+                        canDelete = msg.userId == user?.uid,
+                        onCopy = {
+                            val clipboard = LocalClipboardManager.current
+                            clipboard.setText(AnnotatedString(msg.text))
+                            menuMsg = null
+                        },
+                        onReply = {
+                            replyToMessage = msg
+                            menuMsg = null
+                        },
+                        onEdit = {
+                            messageText = msg.text
+                            editingMsgId = msg.id
+                            menuMsg = null
+                        },
+                        onDelete = {
+                            ChatManager.deleteMessage(msg.id)
+                            menuMsg = null
+                        }
+                    )
                 }
             }
+
         }
+
+            // Top fade overlay: fades the list into the header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .align(Alignment.TopCenter)
+                    .zIndex(1f)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+            )
+        }
+
+        // Profile bottom sheet
+        ProfileBottomSheet(
+            visible = showProfile,
+            onDismiss = { showProfile = false },
+            userProfile = profileUser,
+            avatarBase64 = profileAvatar
+        )
     }
 }

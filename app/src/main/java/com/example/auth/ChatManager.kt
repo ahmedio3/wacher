@@ -83,6 +83,22 @@ object ChatManager {
         }
     }
 
+    fun updateMessage(messageId: String, newText: String) {
+        firebaseDb.child(messageId).child("text").setValue(newText).addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                android.util.Log.e("ChatManager", "Update message failed: ${task.exception?.message}")
+            }
+        }
+    }
+
+    fun deleteMessage(messageId: String) {
+        firebaseDb.child(messageId).removeValue().addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                android.util.Log.e("ChatManager", "Delete message failed: ${task.exception?.message}")
+            }
+        }
+    }
+
     fun getTypingUsers(): Flow<List<String>> = callbackFlow {
         val typingRef = FirebaseDatabase.getInstance().getReference("typing")
         val listener = object : ValueEventListener {
