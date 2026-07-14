@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -234,6 +235,91 @@ fun ProfileBottomSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Floating header matching DetailScreen / DownloadsScreen design:
+// elevated circular back button + white pill title, adjacent in natural order.
+@Composable
+fun SharedFloatingHeader(
+    title: String,
+    onBackClick: () -> Unit,
+    subtitle: String = "",
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start
+    ) {
+        IconButton(
+            onClick = onBackClick,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .shadow(4.dp, CircleShape)
+                .background(Color.White)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "رجوع",
+                tint = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                if (subtitle.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                textDirection = TextDirection.Ltr,
+                                fontFamily = JetBrainsMonoFontFamily
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            maxLines = 1
+                        )
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = if (isLatinText(title)) JetBrainsMonoFontFamily else null,
+                                textDirection = if (isLatinText(title)) TextDirection.Ltr else TextDirection.Rtl
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = if (isLatinText(title)) JetBrainsMonoFontFamily else null,
+                            textDirection = if (isLatinText(title)) TextDirection.Ltr else TextDirection.Rtl
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }

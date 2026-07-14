@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
@@ -55,8 +54,8 @@ import com.example.auth.UserProfile
 import com.example.models.ChatMessage
 import com.example.ui.components.MessageContextMenu
 import com.example.ui.components.ProfileBottomSheet
+import com.example.ui.components.SharedFloatingHeader
 import com.example.ui.theme.IBMPlexSansArabicFontFamily
-import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -534,7 +533,7 @@ fun GlobalChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp)
+                    .height(120.dp)
                     .align(Alignment.TopCenter)
                     .zIndex(1f)
                     .background(
@@ -547,35 +546,12 @@ fun GlobalChatScreen(
                     )
             )
 
-            // Lightweight transparent top header (above the fade): back button + title.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .zIndex(2f)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "رجوع",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "General Chat",
-                    fontFamily = JetBrainsMonoFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+            // Floating header (above the fade): elevated circular back button + white pill title.
+            SharedFloatingHeader(
+                title = "General Chat",
+                onBackClick = onBackClick,
+                modifier = Modifier.fillMaxWidth().zIndex(2f)
+            )
         }
 
         // Profile bottom sheet
