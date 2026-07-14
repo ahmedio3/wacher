@@ -66,7 +66,7 @@ fun ExploreScreen(
                 .padding(start = 12.dp, end = 12.dp, bottom = 90.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 1. Section: المحادثات + قائمتي + الترجمات المحملة
+            // 1. Section: المحادثات
             Text(
                 text = "المحادثات",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -102,36 +102,6 @@ fun ExploreScreen(
                     }
                 },
                 onClick = onNavigateToGlobalChat
-            )
-
-            // Subtitle Downloads
-            ExploreChatItemRow(
-                title = "الترجمات المحملة",
-                subtitle = "تصدير وحذف الترجمات التي قمت بتحميلها",
-                icon = {
-                    Box(
-                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF9C27B0)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.ClosedCaption, contentDescription = null, tint = Color.White)
-                    }
-                },
-                onClick = onNavigateToSubtitleDownloads
-            )
-
-            // Watchlist Card (جديد — تحت الترجمات المحملة)
-            ExploreChatItemRow(
-                title = "قائمتي",
-                subtitle = "أفلام ومسلسلات محفوظة لمشاهدتها لاحقاً",
-                icon = {
-                    Box(
-                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFFB85C38)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color.White)
-                    }
-                },
-                onClick = onNavigateToWatchlist
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -172,6 +142,38 @@ fun ExploreScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Subtitle Downloads
+            ExploreChatItemRow(
+                title = "الترجمات المحملة",
+                subtitle = "تصدير وحذف الترجمات التي قمت بتحميلها",
+                icon = {
+                    Box(
+                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF9C27B0)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = onNavigateToSubtitleDownloads
+            )
+
+            // Watchlist Card
+            ExploreChatItemRow(
+                title = "قائمتي",
+                subtitle = "أفلام ومسلسلات محفوظة لمشاهدتها لاحقاً",
+                icon = {
+                    Box(
+                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFFB85C38)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = onNavigateToWatchlist
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
@@ -190,7 +192,7 @@ fun ExploreScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "للوصول للوضع الغير آمن، يرجى المتابعة ثم إدخال رمز PIN.",
+                    text = "ابعت صينة بتاعك",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )

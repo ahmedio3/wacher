@@ -54,8 +54,11 @@ import com.example.ui.components.WatchlistPosterCard
 import com.example.ui.components.rememberPressState
 import com.example.ui.components.shareShow
 import com.example.ui.components.shimmerBrush
+import com.example.ui.components.ShowShareSheet
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
+
+data class PendingShare(val title: String, val id: String, val mediaType: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +78,9 @@ fun HomeScreen(
     val isMovieBoxSearch by viewModel.isMovieBoxSearchMode.collectAsState()
     val watchlistItems by viewModel.watchlist.collectAsState()
     val context = LocalContext.current
+
+    var showShareSheet by remember { mutableStateOf(false) }
+    var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
 
     Column(
         modifier = modifier
@@ -186,7 +192,7 @@ fun HomeScreen(
                             },
                             isInMyList = watchlistItems.any { w -> w.id == item.id },
                             onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, "", "movie", 0.0) },
-                            onShare = { shareShow(context, item.title, item.id, "movie") }
+                            onShare = { pendingShare = PendingShare(item.title, item.id, "movie"); showShareSheet = true }
                         )
                     }
                 }
@@ -239,6 +245,7 @@ fun HomeScreen(
                 ) {
                     items(watchlistItems, key = { it.id }) { item ->
                         WatchlistPosterCard(
+                            modifier = Modifier.width(110.dp),
                             item = item,
                             onClick = {
                                 val type = if (item.mediaType == "tv") "tv" else "movie"
@@ -247,7 +254,7 @@ fun HomeScreen(
                             },
                             isInMyList = true,
                             onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, item.posterPath, item.mediaType, item.rating) },
-                            onShare = { shareShow(context, item.title, item.id, item.mediaType) }
+                            onShare = { pendingShare = PendingShare(item.title, item.id, item.mediaType); showShareSheet = true }
                         )
                     }
                 }
@@ -265,7 +272,8 @@ fun HomeScreen(
                     viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                 },
                 onShare = { item ->
-                    shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
                 }
             )
 
@@ -282,11 +290,13 @@ fun HomeScreen(
                     viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                 },
                 onShare = { item ->
-                    shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
                 }
             )
-        } else {
-            // B. Show Search Results Grid — collect only inside this branch
+                } else {
+                    // B. Show Search Results Grid — collect only inside this branch
+
             val searchResultsState by viewModel.searchResults.collectAsState()
             val movieBoxSearchResults by viewModel.movieBoxSearchResults.collectAsState()
             Text(
@@ -328,7 +338,7 @@ fun HomeScreen(
                                         },
                                         isInMyList = false,
                                         onToggleMyList = {},
-                                        onShare = { shareShow(context, item.title, item.subjectId, if (item.type == "series") "tv" else "movie") }
+                                        onShare = { pendingShare = PendingShare(item.title, item.subjectId, if (item.type == "series") "tv" else "movie"); showShareSheet = true }
                                     )
                                 }
                             }
@@ -392,7 +402,7 @@ fun HomeScreen(
                                         onToggleMyList = {
                                             viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
                                         },
-                                        onShare = { shareShow(context, item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie") }
+                                        onShare = { pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie"); showShareSheet = true }
                                     )
                                 }
                             }
@@ -445,6 +455,20 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    pendingShare?.let {
+        ShowShareSheet(
+            visible = showShareSheet,
+            title = it.title,
+            id = it.id,
+            mediaType = it.mediaType,
+            onDismiss = { showShareSheet = false },
+            onNativeShare = {
+                shareShow(context, it.title, it.id, it.mediaType)
+                showShareSheet = false
+            }
+        )
     }
 }
 

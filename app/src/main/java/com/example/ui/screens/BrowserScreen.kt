@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
+import androidx.compose.material3.AssistChip
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,8 +69,9 @@ fun BrowserScreen(
 ) {
     // ---- WebView state ----
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var currentUrl by remember { mutableStateOf("https://www.google.com") }
+    var currentUrl by remember { mutableStateOf("about:blank") }
     var urlInput by remember { mutableStateOf(currentUrl) }
+    var showHome by remember { mutableStateOf(true) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var pageTitle by remember { mutableStateOf("") }
@@ -332,8 +334,13 @@ fun BrowserScreen(
             }
         }
     ) { paddingValues ->
-        // ---- WebView ----
-        AndroidView(
+        // ---- WebView + home overlay ----
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
                     layoutParams = ViewGroup.LayoutParams(
@@ -366,6 +373,7 @@ fun BrowserScreen(
                             url?.let {
                                 currentUrl = it
                                 urlInput = it
+                                if (it != "about:blank") showHome = false
                             }
                             isLoading = true
                         }
@@ -452,10 +460,80 @@ fun BrowserScreen(
                     webView.loadUrl(currentUrl)
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier = Modifier.fillMaxSize()
         )
+
+            if (showHome) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Watchera",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+
+                        var homeQuery by remember { mutableStateOf("") }
+
+                        OutlinedTextField(
+                            value = homeQuery,
+                            onValueChange = { homeQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            singleLine = true,
+                            placeholder = { Text("ابحث أو أدخل رابطاً") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        if (homeQuery.isNotBlank()) {
+                                            navigateTo(homeQuery)
+                                            showHome = false
+                                        }
+                                    }
+                                ) {
+                                    Icon(Icons.Default.ArrowForward, contentDescription = "ذهاب", modifier = Modifier.size(20.dp))
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = {
+                                if (homeQuery.isNotBlank()) {
+                                    navigateTo(homeQuery)
+                                    showHome = false
+                                }
+                            }),
+                            shape = RoundedCornerShape(26.dp)
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AssistChip(
+                                onClick = { navigateTo("https://www.google.com"); showHome = false },
+                                label = { Text("Google") }
+                            )
+                            AssistChip(
+                                onClick = { navigateTo("https://www.youtube.com"); showHome = false },
+                                label = { Text("YouTube") }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

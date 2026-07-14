@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
         var isChatForeground = false
     }
 
+    private val deepLinkState = androidx.compose.runtime.mutableStateOf<String?>(null)
+
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
@@ -88,15 +90,35 @@ class MainActivity : ComponentActivity() {
         }
 
         val openChat = intent.getBooleanExtra("open_chat", false)
+        deepLinkState.value = extractDeepLink(intent)
         
         enableEdgeToEdge()
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
         setContent {
             MyApplicationTheme {
-                MainAppContainer(startWithChat = openChat)
+                MainAppContainer(startWithChat = openChat, deepLinkState = deepLinkState)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val dl = extractDeepLink(intent)
+        if (dl != null) deepLinkState.value = dl
+    }
+
+    private fun extractDeepLink(intent: Intent): String? {
+        val uri = intent.data
+        if (uri?.scheme == "cinemios" && uri.host == "show") {
+            val mediaType = uri.pathSegments.getOrNull(0)
+            val id = uri.pathSegments.getOrNull(1)
+            if (mediaType != null && id != null) {
+                return "deeplink_show/$mediaType/$id"
+            }
+        }
+        return null
     }
 
     private fun startChatService() {
@@ -110,7 +132,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppContainer(startWithChat: Boolean = false) {
+fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.compose.runtime.MutableState<String?> = androidx.compose.runtime.mutableStateOf(null)) {
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext as android.app.Application
     
@@ -181,6 +203,15 @@ fun MainAppContainer(startWithChat: Boolean = false) {
             navController.navigate("chat/global") {
                 launchSingleTop = true
             }
+        }
+    }
+
+    LaunchedEffect(deepLinkState.value) {
+        deepLinkState.value?.let { link ->
+            navController.navigate(link) {
+                launchSingleTop = true
+            }
+            deepLinkState.value = null
         }
     }
 
@@ -544,6 +575,34 @@ fun MainAppContainer(startWithChat: Boolean = false) {
                     }
                 }
             )
+
+            // Deep-link router: cinemios://show/{mediaType}/{id}
+            composable(
+                route = "deeplink_show/{mediaType}/{id}",
+                arguments = listOf(
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("id") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val mediaType = backStackEntry.arguments?.getString("mediaType") ?: "movie"
+                val mediaId = backStackEntry.arguments?.getString("id")?.toIntOrNull() ?: 0
+                DetailScreen(
+                    mediaId = mediaId,
+                    mediaType = mediaType,
+                    viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToPlayer = { id, title, localPath ->
+                        val encodedId = Uri.encode(id)
+                        val encodedTitle = Uri.encode(title)
+                        val encodedPath = Uri.encode(localPath)
+                        if (localPath.isNotEmpty()) {
+                            navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
+                        } else {
+                            navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
+                        }
+                    }
+                )
+            }
         }
 
         // Per-series downloaded-episodes full page (replaces the old ModalBottomSheet)
