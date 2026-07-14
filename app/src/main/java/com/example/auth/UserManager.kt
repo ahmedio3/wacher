@@ -8,7 +8,8 @@ data class UserProfile(
     val id: String = "",
     val name: String = "",
     val username: String = "",
-    val avatarBase64: String = ""
+    val avatarBase64: String = "",
+    val bio: String = ""
 )
 
 object UserManager {

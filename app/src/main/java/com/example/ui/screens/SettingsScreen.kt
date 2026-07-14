@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -24,6 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.MovieViewModel
@@ -36,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import com.example.auth.AuthManager
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
+import com.example.auth.ActivityLogManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,12 +177,26 @@ fun SettingsScreen(
                         .addOnCompleteListener { task ->
                             isLoading = false
                             if (task.isSuccessful) {
-                                user = FirebaseAuth.getInstance().currentUser
+                                val u = FirebaseAuth.getInstance().currentUser
+                                val uid = u?.uid
+                                if (uid != null) {
+                                    coroutineScope.launch {
+                                        ActivityLogManager.addLog(uid, "LOGIN", u.email ?: emailInput)
+                                    }
+                                }
+                                user = u
                             } else {
                                 FirebaseAuth.getInstance().createUserWithEmailAndPassword(emailInput, passInput)
                                     .addOnCompleteListener { task2 ->
                                         if (task2.isSuccessful) {
-                                            user = FirebaseAuth.getInstance().currentUser
+                                            val u = FirebaseAuth.getInstance().currentUser
+                                            val uid = u?.uid
+                                            if (uid != null) {
+                                                coroutineScope.launch {
+                                                    ActivityLogManager.addLog(uid, "ACCOUNT_CREATED", u.email ?: emailInput)
+                                                }
+                                            }
+                                            user = u
                                         }
                                     }
                             }
@@ -187,7 +207,12 @@ fun SettingsScreen(
                     coroutineScope.launch {
                         val resultMsg = AuthManager.signInWithGoogle(context)
                         if (resultMsg == "success") {
-                            user = FirebaseAuth.getInstance().currentUser
+                            val u = FirebaseAuth.getInstance().currentUser
+                            val uid = u?.uid
+                            if (uid != null) {
+                                ActivityLogManager.addLog(uid, "LOGIN", u.displayName ?: u.email ?: "Google")
+                            }
+                            user = u
                         } else {
                             android.widget.Toast.makeText(context, "خطأ: $resultMsg", android.widget.Toast.LENGTH_LONG).show()
                         }
@@ -362,6 +387,19 @@ fun ProfileSection(
     onGoogleSignInClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    var bioInput by remember(userProfile) { mutableStateOf(userProfile?.bio ?: "") }
+
+    fun saveBio() {
+        val u = user ?: return
+        val uid = u.uid
+        coroutineScope.launch {
+            val base = userProfile ?: UserProfile(id = uid, name = u.displayName ?: "", username = "")
+            UserManager.saveProfile(uid, base.copy(bio = bioInput))
+            userProfile = base.copy(bio = bioInput)
+        }
+    }
+
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -376,7 +414,7 @@ fun ProfileSection(
                 // Signed In State
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(72.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
@@ -395,16 +433,17 @@ fun ProfileSection(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                         }
                     } else {
-                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
                     }
                 }
                 Text(
                     text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else (user.displayName ?: user.email ?: "بك"),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 if (userProfile?.username?.isNotEmpty() == true) {
@@ -412,6 +451,18 @@ fun ProfileSection(
                         text = "@${userProfile.username}",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (userProfile?.bio?.isNotEmpty() == true) {
+                    Text(
+                        text = userProfile.bio,
+                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
@@ -434,6 +485,20 @@ fun ProfileSection(
                         Text("تسجيل الخروج")
                     }
                 }
+
+                OutlinedTextField(
+                    value = bioInput,
+                    onValueChange = { bioInput = it },
+                    placeholder = { Text("الوصف") },
+                    label = { Text("Bio (الوصف)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    minLines = 2,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveBio() })
+                )
             } else {
                 // Sign Out State (Login Form)
                 Text(

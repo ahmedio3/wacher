@@ -4,7 +4,6 @@ import com.example.data.local.DownloadEntity
 import com.example.data.local.EpisodeWatchStatusEntity
 import com.example.data.local.MovieDao
 import com.example.data.local.SavedImageEntity
-import com.example.data.local.ActivityLogEntity
 import com.example.data.local.SeasonMetaEntity
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
@@ -108,13 +107,6 @@ class MovieRepository(private val movieDao: MovieDao) {
     suspend fun getSavedImageById(id: String): SavedImageEntity? {
         return movieDao.getSavedImageById(id)
     }
-
-    // ---- ACTIVITY LOG ----
-    suspend fun insertActivityLog(entry: ActivityLogEntity) = movieDao.insertActivityLog(entry)
-
-    fun getActivityLogs(): Flow<List<ActivityLogEntity>> = movieDao.getActivityLogs()
-
-    suspend fun clearActivityLogs() = movieDao.clearActivityLogs()
 
     // ---- REMOTE TMDB APIS ----
     suspend fun getPopularMovies(language: String = "ar", page: Int = 1): TmdbSearchResponse {
