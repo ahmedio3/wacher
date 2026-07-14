@@ -40,6 +40,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -96,10 +98,12 @@ fun GlobalChatScreen(
 
     // Local optimistic copies so a freshly-sent message appears instantly (no flicker).
     val localMessages = remember { mutableStateListOf<ChatMessage>() }
-    val messages = remember(allMessages, localMessages) {
-        val rtdbIds = allMessages.mapTo(mutableSetOf()) { it.id }
-        val localOnly = localMessages.filter { it.id !in rtdbIds }
-        localOnly + allMessages.reversed()
+    val messages by remember {
+        derivedStateOf {
+            val rtdbIds = allMessages.mapTo(mutableSetOf()) { it.id }
+            val localOnly = localMessages.filter { it.id !in rtdbIds }
+            localOnly + allMessages.reversed()
+        }
     }
 
     LaunchedEffect(user) {
@@ -346,7 +350,7 @@ fun GlobalChatScreen(
                         val revealScale = (offsetX.value / -75f).coerceIn(0.6f, 1.2f)
                         Box(
                             modifier = Modifier
-                                .align(Alignment.CenterEnd)
+                                .align(Alignment.CenterStart)
                                 .padding(start = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -364,135 +368,138 @@ fun GlobalChatScreen(
                         }
                     }
 
-                    // Row layout with sliding behavior
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                            .pointerInput(msg.id) {
-                                detectHorizontalDragGestures(
-                                    onDragEnd = {
-                                        if (offsetX.value < -75f) {
-                                            replyToMessage = msg
-                                        }
-                                        coroutineScope.launch {
-                                            offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        coroutineScope.launch {
-                                            offsetX.animateTo(0f)
-                                        }
-                                    }
-                                ) { change, dragAmount ->
-                                    change.consume()
-                                    coroutineScope.launch {
-                                        // Swipe towards left is negative change (right-to-left layout swipe)
-                                        val targetOffset = (offsetX.value + dragAmount).coerceIn(-120f, 0f)
-                                        offsetX.snapTo(targetOffset)
-                                    }
-                                }
-                            },
-                        horizontalArrangement = if (isMe) Arrangement.Start else Arrangement.End,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Column(
-                            horizontalAlignment = if (isMe) Alignment.Start else Alignment.End,
-                            modifier = Modifier.fillMaxWidth(0.85f)
-                        ) {
-                            if (!isMe && isFirstFromUser) {
-                                Text(
-                                    text = msg.username,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                                )
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(topStart, topEnd, bottomEnd, bottomStart))
-                                    .background(if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        .combinedClickable(
-                            onClick = { menuMsg = msg },
-                            onLongClick = { menuMsg = msg }
-                        )
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                            ) {
-                                Column {
-                                    // Reply preview nested container inside the bubble
-                                    if (msg.repliedToId.isNotEmpty()) {
-                                        Row(
-                                            modifier = Modifier
-                                                .padding(bottom = 6.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background((if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.15f))
-                                                .padding(8.dp)
-                                                .fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(3.dp)
-                                                    .height(30.dp)
-                                                    .background(if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Column {
-                                                Text(
-                                                    text = msg.repliedToName, 
-                                                    fontSize = 11.sp, 
-                                                    fontWeight = FontWeight.Bold, 
-                                                    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-                                                )
-                                                Text(
-                                                    text = msg.repliedToText, 
-                                                    fontSize = 11.sp, 
-                                                    color = (if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.8f), 
-                                                    maxLines = 1, 
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                    // Row layout with sliding behavior.
+                    // LTR-localized offset: prevents RTL mirroring by Modifier.offset, so
+                    // a left drag always translates the bubble left on screen.
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                                .pointerInput(msg.id) {
+                                    detectHorizontalDragGestures(
+                                        onDragEnd = {
+                                            if (offsetX.value < -75f) {
+                                                replyToMessage = msg
+                                            }
+                                            coroutineScope.launch {
+                                                offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            coroutineScope.launch {
+                                                offsetX.animateTo(0f)
                                             }
                                         }
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        coroutineScope.launch {
+                                            val targetOffset = (offsetX.value + dragAmount).coerceIn(-120f, 0f)
+                                            offsetX.snapTo(targetOffset)
+                                        }
                                     }
-
+                                },
+                            horizontalArrangement = if (isMe) Arrangement.Start else Arrangement.End,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column(
+                                horizontalAlignment = if (isMe) Alignment.Start else Alignment.End,
+                                modifier = Modifier.fillMaxWidth(0.85f)
+                            ) {
+                                if (!isMe && isFirstFromUser) {
                                     Text(
-                                        text = msg.text,
-                                        color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 15.sp,
-                                        lineHeight = 20.sp
+                                        text = msg.username,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                                     )
                                 }
-                            }
-                        }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(topStart, topEnd, bottomEnd, bottomStart))
+                                        .background(if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            .combinedClickable(
+                                onClick = { menuMsg = msg },
+                                onLongClick = { menuMsg = msg }
+                            )
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Column {
+                                        // Reply preview nested container inside the bubble
+                                        if (msg.repliedToId.isNotEmpty()) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .padding(bottom = 6.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background((if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.15f))
+                                                    .padding(8.dp)
+                                                    .fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(3.dp)
+                                                        .height(30.dp)
+                                                        .background(if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text(
+                                                        text = msg.repliedToName, 
+                                                        fontSize = 11.sp, 
+                                                        fontWeight = FontWeight.Bold, 
+                                                        color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Text(
+                                                        text = msg.repliedToText, 
+                                                        fontSize = 11.sp, 
+                                                        color = (if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.8f), 
+                                                        maxLines = 1, 
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
 
-                        if (!isMe && isLastFromUser) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
-                                coroutineScope.launch {
-                                    profileUser = UserManager.getProfile(msg.userId)
-                                    profileAvatar = msg.avatarBase64
-                                    showProfile = true
-                                }
-                            }) {
-                                if (msg.avatarBase64.isNotEmpty()) {
-                                    val bitmap = try {
-                                        val bytes = Base64.decode(msg.avatarBase64, Base64.DEFAULT)
-                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                                    } catch (e: Exception) { null }
-                                    
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap, 
-                                            contentDescription = null, 
-                                            contentScale = ContentScale.Crop, 
-                                            modifier = Modifier.fillMaxSize()
+                                        Text(
+                                            text = msg.text,
+                                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 15.sp,
+                                            lineHeight = 20.sp
                                         )
                                     }
                                 }
                             }
-                        } else if (!isMe) {
-                            Spacer(modifier = Modifier.width(40.dp))
+
+                            if (!isMe && isLastFromUser) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
+                                    coroutineScope.launch {
+                                        profileUser = UserManager.getProfile(msg.userId)
+                                        profileAvatar = msg.avatarBase64
+                                        showProfile = true
+                                    }
+                                }) {
+                                    if (msg.avatarBase64.isNotEmpty()) {
+                                        val bitmap = try {
+                                            val bytes = Base64.decode(msg.avatarBase64, Base64.DEFAULT)
+                                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                        } catch (e: Exception) { null }
+                                        
+                                        if (bitmap != null) {
+                                            Image(
+                                                bitmap = bitmap, 
+                                                contentDescription = null, 
+                                                contentScale = ContentScale.Crop, 
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if (!isMe) {
+                                Spacer(modifier = Modifier.width(40.dp))
+                            }
                         }
                     }
 

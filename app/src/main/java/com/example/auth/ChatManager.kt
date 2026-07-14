@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
@@ -19,7 +20,8 @@ object ChatManager {
     private var isSyncRegistered = false
 
     fun getMessages(context: Context): Flow<List<ChatMessage>> {
-        val db = MovieDatabase.getDatabase(context).movieDao
+        val database = MovieDatabase.getDatabase(context)
+        val dao = database.movieDao
         
         if (!isSyncRegistered) {
             isSyncRegistered = true
@@ -45,8 +47,10 @@ object ChatManager {
                     }
                     
                     CoroutineScope(Dispatchers.IO).launch {
-                        db.clearChatMessages()
-                        db.insertChatMessages(entities)
+                        database.withTransaction {
+                            dao.clearChatMessages()
+                            dao.insertChatMessages(entities)
+                        }
                     }
                 }
 
@@ -57,7 +61,7 @@ object ChatManager {
             firebaseDb.limitToLast(100).addValueEventListener(listener)
         }
         
-        return db.getLocalChatMessages().map { entities -> 
+        return dao.getLocalChatMessages().map { entities -> 
             entities.map { 
                 ChatMessage(
                     id = it.id,
