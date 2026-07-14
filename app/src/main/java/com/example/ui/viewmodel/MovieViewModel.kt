@@ -16,6 +16,8 @@ import com.example.data.local.WatchlistEntity
 import com.example.data.remote.*
 import com.example.data.repository.MovieRepository
 import com.example.data.remote.moviebox.repository.MovieBoxRepository
+import com.example.auth.ActivityLogManager
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -213,8 +215,14 @@ class MovieViewModel(
         savedImages = repository.savedImages
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        activityLogs = repository.getActivityLogs()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        activityLogs = if (uid != null) {
+            ActivityLogManager.getLogs(uid)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        } else {
+            emptyFlow<List<ActivityLogEntity>>()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }
 
         // Fetch Home content on startup
         fetchHomeContent()
@@ -856,7 +864,8 @@ class MovieViewModel(
     // Activity logging helper
     fun logActivity(type: String, title: String) {
         viewModelScope.launch {
-            repository.insertActivityLog(ActivityLogEntity(type = type, title = title))
+            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
+            ActivityLogManager.addLog(uid, type, title)
         }
     }
 

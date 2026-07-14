@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [WatchlistEntity::class, DownloadEntity::class, ChatEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, ActivityLogEntity::class], version = 11, exportSchema = false)
+@Database(entities = [WatchlistEntity::class, DownloadEntity::class, ChatEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class], version = 12, exportSchema = false)
 abstract class MovieDatabase : RoomDatabase() {
     abstract val movieDao: MovieDao
 
@@ -37,13 +37,20 @@ abstract class MovieDatabase : RoomDatabase() {
             }
         }
 
+        // v11 -> v12: drop obsolete activity_log table (now stored in Firebase RTDB)
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS activity_log")
+            }
+        }
+
         fun getDatabase(context: Context): MovieDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     MovieDatabase::class.java,
                     "cinemios_database"
-                ).addMigrations(MIGRATION_9_10, MIGRATION_10_11).build()
+                ).addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build()
                 INSTANCE = instance
                 instance
             }

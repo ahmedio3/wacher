@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ActivityLogEntity
@@ -69,8 +70,8 @@ fun HistoryScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(logs, key = { it.id }) { log ->
                         HistoryLogItem(log = log, dateFormat = dateFormat)
@@ -90,57 +91,56 @@ private fun HistoryLogItem(
         "OPENED" -> "عرض مفتوح"
         "DOWNLOADED" -> "تم تنزيل"
         "WATCHED" -> "تمت مشاهدة"
+        "ACCOUNT_CREATED" -> "تم إنشاء حساب"
+        "APP_OPENED" -> "فتح التطبيق"
+        "LOGIN" -> "تسجيل دخول"
         else -> log.type
     }
     val typeColor = when (log.type) {
         "OPENED" -> MaterialTheme.colorScheme.primary
         "DOWNLOADED" -> MaterialTheme.colorScheme.tertiary
         "WATCHED" -> MaterialTheme.colorScheme.secondary
+        "ACCOUNT_CREATED" -> MaterialTheme.colorScheme.error
+        "APP_OPENED" -> MaterialTheme.colorScheme.outline
+        "LOGIN" -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.primary
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .clip(MaterialTheme.shapes.small)
+                .background(typeColor.copy(alpha = 0.12f))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = log.title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = dateFormat.format(Date(log.timestamp)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Box(
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .background(typeColor.copy(alpha = 0.12f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = typeLabel,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = typeColor
-                )
-            }
+            Text(
+                text = typeLabel,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = typeColor,
+                fontSize = 10.sp
+            )
         }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = log.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = dateFormat.format(Date(log.timestamp)),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            fontSize = 10.sp
+        )
     }
+    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
 }
