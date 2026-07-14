@@ -111,18 +111,22 @@ class MainActivity : ComponentActivity() {
 
     private fun extractDeepLink(intent: Intent): String? {
         val uri = intent.data ?: return null
+        // Route to the existing, proven-working "detail" destination (which uses an Int
+        // mediaId). The old "deeplink_show" destination was never resolvable by NavController
+        // ("cannot be found in the navigation graph"), so we reuse "detail/{mediaId}/{mediaType}".
+        // Non-numeric ids (e.g. MovieBox subject ids) are ignored to avoid a crash.
         if (uri.scheme == "cinemios" && uri.host == "show") {
             val mediaType = uri.pathSegments.getOrNull(0)
             val id = uri.pathSegments.getOrNull(1)
-            if (mediaType != null && id != null) {
-                return "deeplink_show/$mediaType/$id"
+            if (mediaType != null && id != null && id.toIntOrNull() != null) {
+                return "detail/$id/$mediaType"
             }
         }
         if (uri.scheme == "https" && uri.host == "watchera.com") {
             val mediaType = uri.pathSegments.getOrNull(1)
             val id = uri.pathSegments.getOrNull(2)
-            if (mediaType != null && id != null) {
-                return "deeplink_show/$mediaType/$id"
+            if (mediaType != null && id != null && id.toIntOrNull() != null) {
+                return "detail/$id/$mediaType"
             }
         }
         return null
@@ -589,33 +593,6 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
                 }
             )
 
-            // Deep-link router: cinemios://show/{mediaType}/{id}
-            composable(
-                route = "deeplink_show/{mediaType}/{id}",
-                arguments = listOf(
-                    navArgument("mediaType") { type = NavType.StringType },
-                    navArgument("id") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val mediaType = backStackEntry.arguments?.getString("mediaType") ?: "movie"
-                val mediaId = backStackEntry.arguments?.getString("id")?.toIntOrNull() ?: 0
-                DetailScreen(
-                    mediaId = mediaId,
-                    mediaType = mediaType,
-                    viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() },
-                    onNavigateToPlayer = { id, title, localPath ->
-                        val encodedId = Uri.encode(id)
-                        val encodedTitle = Uri.encode(title)
-                        val encodedPath = Uri.encode(localPath)
-                        if (localPath.isNotEmpty()) {
-                            navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
-                        } else {
-                            navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
-                        }
-                    }
-                )
-            }
         }
 
         // Per-series downloaded-episodes full page (replaces the old ModalBottomSheet)
