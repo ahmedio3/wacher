@@ -3,19 +3,6 @@ package com.example.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "chat_messages")
-data class ChatEntity(
-    @PrimaryKey val id: String,
-    val userId: String,
-    val username: String,
-    val text: String,
-    val timestamp: Long,
-    val avatarBase64: String,
-    val repliedToId: String = "",
-    val repliedToName: String = "",
-    val repliedToText: String = ""
-)
-
 @Entity(tableName = "watchlist")
 data class WatchlistEntity(
     @PrimaryKey val id: String, // tmdb_id or imdb_id

@@ -1,81 +1,28 @@
 package com.example.auth
 
-import android.content.Context
-import com.example.data.local.ChatEntity
-import com.example.data.local.MovieDatabase
 import com.example.models.ChatMessage
 import com.google.firebase.database.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
-import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.map
 
 object ChatManager {
     private val firebaseDb = FirebaseDatabase.getInstance().reference.child("global_chat")
 
-    private var isSyncRegistered = false
-
-    fun getMessages(context: Context): Flow<List<ChatMessage>> {
-        val database = MovieDatabase.getDatabase(context)
-        val dao = database.movieDao
-        
-        if (!isSyncRegistered) {
-            isSyncRegistered = true
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val messages = mutableListOf<ChatMessage>()
-                    for (child in snapshot.children) {
-                        child.getValue(ChatMessage::class.java)?.let { messages.add(it) }
-                    }
-                    messages.sortBy { it.timestamp }
-                    val entities = messages.map { 
-                        ChatEntity(
-                            id = it.id,
-                            userId = it.userId,
-                            username = it.username,
-                            text = it.text,
-                            timestamp = it.timestamp,
-                            avatarBase64 = it.avatarBase64,
-                            repliedToId = it.repliedToId,
-                            repliedToName = it.repliedToName,
-                            repliedToText = it.repliedToText
-                        ) 
-                    }
-                    
-                    CoroutineScope(Dispatchers.IO).launch {
-                        database.withTransaction {
-                            dao.clearChatMessages()
-                            dao.insertChatMessages(entities)
-                        }
-                    }
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    android.util.Log.e("ChatManager", "Database error: ${error.message}")
-                }
+    fun getMessages(): Flow<List<ChatMessage>> = callbackFlow {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val messages = snapshot.children.mapNotNull { it.getValue(ChatMessage::class.java) }
+                    .sortedBy { it.timestamp }
+                trySend(messages)
             }
-            firebaseDb.limitToLast(100).addValueEventListener(listener)
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
         }
-        
-        return dao.getLocalChatMessages().map { entities -> 
-            entities.map { 
-                ChatMessage(
-                    id = it.id,
-                    userId = it.userId,
-                    username = it.username,
-                    text = it.text,
-                    timestamp = it.timestamp,
-                    avatarBase64 = it.avatarBase64,
-                    repliedToId = it.repliedToId,
-                    repliedToName = it.repliedToName,
-                    repliedToText = it.repliedToText
-                ) 
-            } 
-        }
+        firebaseDb.limitToLast(100).addValueEventListener(listener)
+        awaitClose { firebaseDb.limitToLast(100).removeEventListener(listener) }
     }
 
     fun sendMessage(message: ChatMessage) {

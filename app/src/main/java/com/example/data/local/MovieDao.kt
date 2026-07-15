@@ -39,16 +39,6 @@ interface MovieDao {
     @Query("SELECT * FROM downloads WHERE id = :id LIMIT 1")
     suspend fun getDownloadById(id: String): DownloadEntity?
 
-    // ---- Chat ----
-    @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
-    fun getLocalChatMessages(): Flow<List<ChatEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChatMessages(messages: List<ChatEntity>)
-
-    @Query("DELETE FROM chat_messages")
-    suspend fun clearChatMessages()
-
     // ---- Subtitle downloads ----
     @Query("SELECT * FROM subtitle_downloads ORDER BY downloadedAt DESC")
     fun getSubtitleDownloads(): Flow<List<SubtitleDownloadEntity>>

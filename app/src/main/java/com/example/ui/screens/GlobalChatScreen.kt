@@ -89,8 +89,9 @@ fun GlobalChatScreen(
     var profileAvatar by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     
-    // Cache the Flow query so the connection isn't restarted recursively on Typing recompositions
-    val messagesFlow = remember(context) { ChatManager.getMessages(context) }
+    // Read chat live from Firebase RTDB (no local cache). Cache the Flow so the
+    // connection isn't restarted recursively on Typing recompositions.
+    val messagesFlow = remember { ChatManager.getMessages() }
     val allMessages by messagesFlow.collectAsState(initial = emptyList())
     
     val typingUsers by ChatManager.getTypingUsers().collectAsState(initial = emptyList())
@@ -130,13 +131,21 @@ fun GlobalChatScreen(
         }
     }
 
-    // Scroll to bottom only on first load to avoid flashes on every list rebuild
+    // Scroll to bottom on first load; afterwards smart auto-scroll (see LaunchedEffect below).
     var hasScrolledOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(messages) {
+    var justSent by remember { mutableStateOf(false) }
+    LaunchedEffect(messages.size) {
         if (messages.isNotEmpty() && !hasScrolledOnce) {
             listState.scrollToItem(0)
             hasScrolledOnce = true
+            return@LaunchedEffect
         }
+        // reverseLayout = true => index 0 is the bottom. "Near bottom" = small firstVisibleItemIndex.
+        val nearBottom = listState.firstVisibleItemIndex <= 5
+        if (justSent || nearBottom) {
+            listState.scrollToItem(0)
+        }
+        justSent = false
     }
 
     Scaffold(
@@ -254,6 +263,7 @@ fun GlobalChatScreen(
                                         )
                                         localMessages.add(0, msg)
                                         ChatManager.sendMessage(msg)
+                                        justSent = true
                                         messageText = ""
                                         replyToMessage = null
                                     }
@@ -331,11 +341,11 @@ fun GlobalChatScreen(
                 val cornerSmall = 4.dp
                 val cornerTail = 0.dp
                 
-                val topStart = if (isMe) (if (isFirstFromUser) cornerLarge else cornerSmall) else cornerLarge
-                val bottomStart = if (isMe) (if (isLastFromUser) cornerTail else cornerSmall) else cornerLarge
-                
-                val topEnd = if (!isMe) (if (isFirstFromUser) cornerLarge else cornerSmall) else cornerLarge
-                val bottomEnd = if (!isMe) (if (isLastFromUser) cornerTail else cornerSmall) else cornerLarge
+                val topStart = if (!isMe) (if (isFirstFromUser) cornerLarge else cornerSmall) else cornerLarge
+                val bottomStart = if (!isMe) (if (isLastFromUser) cornerTail else cornerSmall) else cornerLarge
+
+                val topEnd = if (isMe) (if (isFirstFromUser) cornerLarge else cornerSmall) else cornerLarge
+                val bottomEnd = if (isMe) (if (isLastFromUser) cornerTail else cornerSmall) else cornerLarge
 
                 val offsetX = remember { Animatable(0f) }
 
@@ -399,11 +409,11 @@ fun GlobalChatScreen(
                                         }
                                     }
                                 },
-                            horizontalArrangement = if (isMe) Arrangement.Start else Arrangement.End,
+                            horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
                             verticalAlignment = Alignment.Bottom
                         ) {
                             Column(
-                                horizontalAlignment = if (isMe) Alignment.Start else Alignment.End,
+                                horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
                                 modifier = Modifier.fillMaxWidth(0.85f)
                             ) {
                                 if (!isMe && isFirstFromUser) {
@@ -505,7 +515,7 @@ fun GlobalChatScreen(
 
                     // Long-press context menu for this message, anchored to the bubble's outer edge
                     // so it opens on the right for own messages (isMe) and left for others (RTL).
-                    Box(modifier = Modifier.align(if (isMe) Alignment.CenterStart else Alignment.CenterEnd)) {
+                    Box(modifier = Modifier.align(if (isMe) Alignment.CenterEnd else Alignment.CenterStart)) {
                         MessageContextMenu(
                             expanded = menuMsg?.id == msg.id,
                             onDismiss = { menuMsg = null },
