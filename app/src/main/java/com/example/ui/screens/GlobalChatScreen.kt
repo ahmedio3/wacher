@@ -242,6 +242,9 @@ fun GlobalChatScreen(
                                         messageText = ""
                                         replyToMessage = null
                                     } else {
+                                        // TODO(cleanup): clientId is redundant now — ChatManager.sendMessage
+                                        // overwrites id with a Firebase push key. Keep for now; safe to remove
+                                        // once we confirm push-key-only flow works in production.
                                         val clientId =
                                             (user?.uid ?: "me") + "-" + System.currentTimeMillis()
                                         val msg = ChatMessage(
@@ -320,7 +323,7 @@ fun GlobalChatScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(top = 90.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
         ) {
-            itemsIndexed(messages, key = { index, msg -> msg.id.ifBlank { "msg_$index" } }) { index, msg ->
+            itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
                 val isMe = msg.userId == user?.uid
                 
                 // Reversed indexes mapping for correct continuous bubble spacing calculation

@@ -7,6 +7,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.example.auth.ActivityLogManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -15,6 +16,7 @@ class WatcheraApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        FirebaseDatabase.getInstance().setPersistenceEnabled(true)
         if (FirebaseAuth.getInstance().currentUser != null) {
             CoroutineScope(Dispatchers.IO).launch {
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
