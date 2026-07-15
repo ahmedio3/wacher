@@ -59,7 +59,7 @@ class ChatNotificationService : Service() {
     }
 
     private fun listenForChats() {
-        val ref = FirebaseDatabase.getInstance().getReference("chat")
+        val ref = FirebaseDatabase.getInstance().getReference("global_chat")
         
         ref.limitToLast(1).addChildEventListener(object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {

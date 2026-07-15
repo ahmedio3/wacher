@@ -89,23 +89,11 @@ fun GlobalChatScreen(
     var profileAvatar by remember { mutableStateOf("") }
     var showProfile by remember { mutableStateOf(false) }
     
-    // Read chat live from Firebase RTDB (no local cache). Cache the Flow so the
-    // connection isn't restarted recursively on Typing recompositions.
-    val messagesFlow = remember { ChatManager.getMessages() }
-    val allMessages by messagesFlow.collectAsState(initial = emptyList())
-    
+    // Read chat live from Firebase RTDB. The Flow emits descending (newest first).
+    val messages by remember { ChatManager.getMessages() }.collectAsState(initial = emptyList())
+
     val typingUsers by ChatManager.getTypingUsers().collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
-
-    // Local optimistic copies so a freshly-sent message appears instantly (no flicker).
-    val localMessages = remember { mutableStateListOf<ChatMessage>() }
-    val messages by remember {
-        derivedStateOf {
-            val rtdbIds = allMessages.mapTo(mutableSetOf()) { it.id }
-            val localOnly = localMessages.filter { it.id !in rtdbIds }
-            localOnly + allMessages.reversed()
-        }
-    }
 
     LaunchedEffect(user) {
         if (user != null) {
@@ -261,7 +249,6 @@ fun GlobalChatScreen(
                                             repliedToName = replyToMessage?.username ?: "",
                                             repliedToText = replyToMessage?.text ?: ""
                                         )
-                                        localMessages.add(0, msg)
                                         ChatManager.sendMessage(msg)
                                         justSent = true
                                         messageText = ""

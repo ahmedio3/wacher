@@ -8,21 +8,24 @@ import kotlinx.coroutines.flow.callbackFlow
 
 object ChatManager {
     private val firebaseDb = FirebaseDatabase.getInstance().reference.child("global_chat")
+    private val globalChatQuery = firebaseDb.limitToLast(100)
 
     fun getMessages(): Flow<List<ChatMessage>> = callbackFlow {
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val messages = snapshot.children.mapNotNull { it.getValue(ChatMessage::class.java) }
-                    .sortedBy { it.timestamp }
-                trySend(messages)
+                    .sortedByDescending { it.timestamp }
+                if (trySend(messages).isFailure) {
+                    // Channel closed — listener is stale; nothing to do.
+                }
             }
 
             override fun onCancelled(error: DatabaseError) {
                 close(error.toException())
             }
         }
-        firebaseDb.limitToLast(100).addValueEventListener(listener)
-        awaitClose { firebaseDb.limitToLast(100).removeEventListener(listener) }
+        globalChatQuery.addValueEventListener(listener)
+        awaitClose { globalChatQuery.removeEventListener(listener) }
     }
 
     fun sendMessage(message: ChatMessage) {
