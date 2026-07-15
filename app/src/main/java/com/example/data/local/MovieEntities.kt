@@ -139,8 +139,8 @@ data class SubtitleDownloadEntity(
 data class ActivityLogEntity(
     val id: String = "",
     val uid: String = "",
-    val type: String,        // "OPENED" | "DOWNLOADED" | "WATCHED" | "APP_OPENED" | "LOGIN" | "ACCOUNT_CREATED"
-    val title: String,
+    val type: String = "",        // "OPENED" | "DOWNLOADED" | "WATCHED" | "APP_OPENED" | "LOGIN" | "ACCOUNT_CREATED"
+    val title: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
 
