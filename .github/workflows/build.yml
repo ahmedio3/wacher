@@ -21,6 +21,16 @@ jobs:
         with:
           gradle-version: "9.3.1"
 
+      - name: Inject API keys into local.properties
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: |
+          echo "tmdb.api.key=${TMDB_API_KEY}" >> local.properties
+          echo "subdl.api.key=${SUBDL_API_KEY}" >> local.properties
+          echo "opensubtitles.api.key=${OPENSUBTITLES_API_KEY}" >> local.properties
+
       - name: Build Debug APK
         run: gradle assembleDebug
 

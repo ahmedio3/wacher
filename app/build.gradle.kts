@@ -19,6 +19,14 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    val tmdbApiKey = project.findProperty("tmdb.api.key") as? String ?: ""
+    val subdlApiKey = project.findProperty("subdl.api.key") as? String ?: ""
+    val opensubtitlesApiKey = project.findProperty("opensubtitles.api.key") as? String ?: ""
+
+    buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey}\"")
+    buildConfigField("String", "SUBDL_API_KEY", "\"${subdlApiKey}\"")
+    buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${opensubtitlesApiKey}\"")
   }
 
   signingConfigs {

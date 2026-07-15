@@ -7,12 +7,12 @@ import com.example.data.local.SavedImageEntity
 import com.example.data.local.SeasonMetaEntity
 import com.example.data.local.SubtitleDownloadEntity
 import com.example.data.local.WatchlistEntity
+import com.example.BuildConfig
 import com.example.data.remote.*
 import kotlinx.coroutines.flow.Flow
 
 class MovieRepository(private val movieDao: MovieDao) {
 
-    private val tmdbApiKey = "970be69502451a04b3c38cbd368fda36"
     private val tmdbService = RetrofitClient.tmdbService
 
     // ---- WATCHLIST ----
@@ -110,23 +110,23 @@ class MovieRepository(private val movieDao: MovieDao) {
 
     // ---- REMOTE TMDB APIS ----
     suspend fun getPopularMovies(language: String = "ar", page: Int = 1): TmdbSearchResponse {
-        return tmdbService.getPopularMovies(apiKey = tmdbApiKey, language = language, page = page)
+        return tmdbService.getPopularMovies(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
     }
 
     suspend fun getPopularTvShows(language: String = "ar", page: Int = 1): TmdbSearchResponse {
-        return tmdbService.getPopularTv(apiKey = tmdbApiKey, language = language, page = page)
+        return tmdbService.getPopularTv(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
     }
 
     suspend fun searchMulti(query: String, language: String = "ar", page: Int = 1): TmdbSearchResponse {
-        return tmdbService.searchMulti(apiKey = tmdbApiKey, query = query, language = language, page = page)
+        return tmdbService.searchMulti(apiKey = BuildConfig.TMDB_API_KEY, query = query, language = language, page = page)
     }
 
     suspend fun getMovieDetails(movieId: Int, language: String = "ar"): TmdbMovieDetails {
-        return tmdbService.getMovieDetails(movieId = movieId, apiKey = tmdbApiKey, language = language)
+        return tmdbService.getMovieDetails(movieId = movieId, apiKey = BuildConfig.TMDB_API_KEY, language = language)
     }
 
     suspend fun getTvDetails(tvId: Int, language: String = "ar"): TmdbTvDetails {
-        val details = tmdbService.getTvDetails(tvId = tvId, apiKey = tmdbApiKey, language = language)
+        val details = tmdbService.getTvDetails(tvId = tvId, apiKey = BuildConfig.TMDB_API_KEY, language = language)
         // Cache season totals locally so the sheet works offline
         val now = System.currentTimeMillis()
         val metas = details.seasons
@@ -145,7 +145,7 @@ class MovieRepository(private val movieDao: MovieDao) {
     }
 
     suspend fun getSeasonDetails(tvId: Int, seasonNumber: Int, language: String = "ar"): TmdbSeasonDetails {
-        val details = tmdbService.getSeasonDetails(tvId = tvId, seasonNumber = seasonNumber, apiKey = tmdbApiKey, language = language)
+        val details = tmdbService.getSeasonDetails(tvId = tvId, seasonNumber = seasonNumber, apiKey = BuildConfig.TMDB_API_KEY, language = language)
         movieDao.upsertSeasonMeta(
             listOf(
                 SeasonMetaEntity(

@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Context
+import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -13,9 +14,6 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
 object SubtitleHelper {
-    private const val API_KEY = "subdl_BLYRvzz54CHwxZVHbNW_eA7iDySnKeFhvc8XYnAXPZ0"
-    private const val SUBDL_API_KEY = "subdl_BLYRvzz54CHwxZVHbNW_eA7iDySnKeFhvc8XYnAXPZ0"
-    private const val OPENSUBTITLES_API_KEY = "JbFq0O0rQD6DsOCciqPmZIoMVFEPcSpT"
     private const val USER_AGENT = "Cinemios v1.0"
     
     data class SubtitleItem(
@@ -422,7 +420,7 @@ object SubtitleHelper {
     suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
         try {
-            val url = StringBuilder("https://api.subdl.com/api/v1/subtitles?api_key=$SUBDL_API_KEY&tmdb_id=$tmdbId&type=${if (isTv) "tv" else "movie"}&languages=ar&unpack=1")
+            val url = StringBuilder("https://api.subdl.com/api/v1/subtitles?api_key=${BuildConfig.SUBDL_API_KEY}&tmdb_id=$tmdbId&type=${if (isTv) "tv" else "movie"}&languages=ar&unpack=1")
             if (isTv && season > 0) {
                 url.append("&season_number=$season")
                 if (episode > 0) url.append("&episode_number=$episode")
@@ -493,7 +491,7 @@ object SubtitleHelper {
                 url.append("&tmdb_id=$tmdbId&type=movie")
             }
             val conn = URL(url.toString()).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Api-Key", OPENSUBTITLES_API_KEY)
+            conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
             conn.setRequestProperty("User-Agent", USER_AGENT)
             conn.setRequestProperty("Accept", "application/json")
             conn.connectTimeout = 15000
@@ -545,7 +543,7 @@ object SubtitleHelper {
             val conn = URL("https://api.opensubtitles.com/api/v1/download").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
-            conn.setRequestProperty("Api-Key", OPENSUBTITLES_API_KEY)
+            conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
             conn.setRequestProperty("User-Agent", USER_AGENT)
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("Accept", "application/json")
