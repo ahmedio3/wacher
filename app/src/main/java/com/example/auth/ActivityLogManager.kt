@@ -19,8 +19,11 @@ object ActivityLogManager {
         val ref = db.child("activity_logs").child(uid)
         val listener = ref.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val list = snapshot.children.mapNotNull {
-                    it.getValue(ActivityLogEntity::class.java)
+                val list = snapshot.children.mapNotNull { child ->
+                    // Populate id from the Firebase push key so each log has a unique,
+                    // stable identifier (the stored 'id' field is always empty). This
+                    // prevents duplicate LazyColumn keys crashing the Activity Log screen.
+                    child.getValue(ActivityLogEntity::class.java)?.copy(id = child.key ?: "")
                 }.sortedByDescending { it.timestamp }
                 trySend(list)
             }
