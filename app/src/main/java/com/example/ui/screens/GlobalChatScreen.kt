@@ -135,6 +135,7 @@ fun GlobalChatScreen(
                 }
                 val nearBottom = listState.firstVisibleItemIndex <= 5
                 if (justSent || nearBottom) {
+                    kotlinx.coroutines.delay(60)
                     try { listState.scrollToItem(0) } catch (_: Exception) {}
                 }
                 justSent = false
