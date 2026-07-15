@@ -59,6 +59,7 @@ import com.example.ui.components.ProfileBottomSheet
 import com.example.ui.components.SharedFloatingHeader
 import com.example.ui.theme.IBMPlexSansArabicFontFamily
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -92,7 +93,7 @@ fun GlobalChatScreen(
     // Read chat live from Firebase RTDB. The Flow emits descending (newest first).
     val messages by remember { ChatManager.getMessages() }.collectAsState(initial = emptyList())
 
-    val typingUsers by ChatManager.getTypingUsers().collectAsState(initial = emptyList())
+    val typingUsers by remember { ChatManager.getTypingUsers() }.collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
 
     LaunchedEffect(user) {
@@ -119,21 +120,25 @@ fun GlobalChatScreen(
         }
     }
 
-    // Scroll to bottom on first load; afterwards smart auto-scroll (see LaunchedEffect below).
+    // Scroll to bottom on first load; afterwards smart auto-scroll via snapshotFlow
+    // so the scroll targets a stable layout pass (avoids race with key-based position maintenance).
     var hasScrolledOnce by remember { mutableStateOf(false) }
     var justSent by remember { mutableStateOf(false) }
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && !hasScrolledOnce) {
-            listState.scrollToItem(0)
-            hasScrolledOnce = true
-            return@LaunchedEffect
-        }
-        // reverseLayout = true => index 0 is the bottom. "Near bottom" = small firstVisibleItemIndex.
-        val nearBottom = listState.firstVisibleItemIndex <= 5
-        if (justSent || nearBottom) {
-            listState.scrollToItem(0)
-        }
-        justSent = false
+    LaunchedEffect(Unit) {
+        snapshotFlow { messages }
+            .drop(1)
+            .collect {
+                if (!hasScrolledOnce) {
+                    try { listState.scrollToItem(0) } catch (_: Exception) {}
+                    hasScrolledOnce = true
+                    return@collect
+                }
+                val nearBottom = listState.firstVisibleItemIndex <= 5
+                if (justSent || nearBottom) {
+                    try { listState.scrollToItem(0) } catch (_: Exception) {}
+                }
+                justSent = false
+            }
     }
 
     Scaffold(
@@ -314,7 +319,7 @@ fun GlobalChatScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(top = 90.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
         ) {
-            itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
+            itemsIndexed(messages, key = { index, msg -> msg.id.ifBlank { "msg_$index" } }) { index, msg ->
                 val isMe = msg.userId == user?.uid
                 
                 // Reversed indexes mapping for correct continuous bubble spacing calculation
