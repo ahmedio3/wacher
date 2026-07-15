@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -28,8 +28,14 @@ jobs:
           OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: gradle assembleDebug
 
-      - uses: actions/upload-artifact@v3
+      - name: Upload APK as Release Asset
         if: success()
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_id }}"
+          gh release create "$TAG" app/build/outputs/apk/debug/*.apk \
+            --title "Build ${{ github.run_id }}" \
+            --notes "Debug APK from commit ${{ github.sha }}" \
+            --target "${{ github.sha }}" || \
+          gh release upload "$TAG" app/build/outputs/apk/debug/*.apk --clobber
