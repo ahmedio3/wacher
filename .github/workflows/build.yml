@@ -28,14 +28,10 @@ jobs:
           OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: gradle assembleDebug
 
-      - name: Upload APK as Release Asset
+      - name: Upload APK as Artifact
         if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="build-${{ github.run_id }}"
-          gh release create "$TAG" app/build/outputs/apk/debug/*.apk \
-            --title "Build ${{ github.run_id }}" \
-            --notes "Debug APK from commit ${{ github.sha }}" \
-            --target "${{ github.sha }}" || \
-          gh release upload "$TAG" app/build/outputs/apk/debug/*.apk --clobber
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 1
