@@ -25,8 +25,10 @@ object ImgBBUploader {
      * Uploads a [bitmap] to ImgBB and returns the hosted image URL, or null on failure.
      * Runs on [Dispatchers.IO].
      */
+    private const val FALLBACK_API_KEY = "ee692b26a4470ad9fcd7e17736afdfbb"
+
     suspend fun uploadImage(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.IMGBB_API_KEY
+        val apiKey = BuildConfig.IMGBB_API_KEY.ifEmpty { FALLBACK_API_KEY }
         if (apiKey.isBlank()) {
             android.util.Log.w("ImgBBUploader", "IMGBB_API_KEY is not configured — skipping upload")
             return@withContext null
