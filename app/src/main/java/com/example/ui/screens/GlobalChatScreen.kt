@@ -484,7 +484,7 @@ fun GlobalChatScreen(
 
                             if (!isMe && isLastFromUser) {
                                 Spacer(modifier = Modifier.width(8.dp))
-                                val senderProfile by produceState<UserProfile?>(msg.userId, initial = null) {
+                                val senderProfile by produceState<UserProfile?>(null, msg.userId) {
                                     value = UserManager.getProfile(msg.userId)
                                 }
                                 Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
