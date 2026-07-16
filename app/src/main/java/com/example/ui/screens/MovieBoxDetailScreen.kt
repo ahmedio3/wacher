@@ -36,6 +36,7 @@ import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.utils.isLatinText
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.ViewModelFactory
+import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MovieBoxDetailScreen(
