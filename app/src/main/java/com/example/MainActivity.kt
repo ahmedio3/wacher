@@ -545,8 +545,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     posterParams = posterUrl,
                     viewModel = movieViewModel,
                     onBackClick = { navController.popBackStack() },
-                    onPlayClick = { id, title ->
-                        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
+                    onPlayClick = { id, playTitle ->
+                        val encodedTitle = java.net.URLEncoder.encode(playTitle, "UTF-8")
                         navController.navigate("player/$id/$encodedTitle?localFilePath=")
                     }
                 )
