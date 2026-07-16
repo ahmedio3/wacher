@@ -56,7 +56,11 @@ object ImgBBUploader {
 
             val json = JSONObject(body)
             if (json.optBoolean("success", false)) {
-                json.getJSONObject("data").optString("url", null)
+                val url = json.getJSONObject("data").optString("url", null)
+                if (url != null) {
+                    android.util.Log.i("ImgBBUploader", "Upload success, url length: ${url.length}")
+                }
+                url
             } else {
                 android.util.Log.e("ImgBBUploader", "ImgBB returned success=false: $body")
                 null

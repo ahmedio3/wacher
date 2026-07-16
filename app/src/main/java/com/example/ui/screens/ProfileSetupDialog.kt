@@ -48,7 +48,7 @@ fun ProfileSetupDialog(
     
     var name by remember { mutableStateOf(initialProfile?.name ?: "") }
     var username by remember { mutableStateOf(initialProfile?.username ?: "") }
-    var base64Image by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
+    var base64Image by remember { mutableStateOf(initialProfile?.avatarBase64 ?: "") }
     var avatarUrl by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
     var pickedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -169,24 +169,36 @@ fun ProfileSetupDialog(
                 
                 Button(
                     onClick = {
-                        if (name.isEmpty() || username.isEmpty() || base64Image.isEmpty()) {
+                        if (name.isEmpty() || username.isEmpty() || (avatarUrl.isEmpty() && base64Image.isEmpty())) {
                             errorMessage = "يرجى تعبئة جميع البيانات واختيار صورة"
                             return@Button
                         }
                         isLoading = true
                         errorMessage = null
                         coroutineScope.launch {
-                            // Upload to ImgBB if user picked a new image
+                            var uploadFailed = false
                             if (pickedBitmap != null) {
                                 val url = ImgBBUploader.uploadImage(pickedBitmap!!)
-                                if (url != null) avatarUrl = url
+                                if (url != null) {
+                                    avatarUrl = url
+                                } else {
+                                    uploadFailed = true
+                                }
                             }
                             val newProfile = UserProfile(userId, name, username, base64Image, avatarUrl)
                             val success = UserManager.saveProfile(userId, newProfile)
                             if (success) {
-                                onSuccess()
+                                if (uploadFailed) {
+                                    errorMessage = "تم حفظ البيانات بنجاح. فشل تحميل الصورة وتم الاحتفاظ بالصورة القديمة."
+                                } else {
+                                    onSuccess()
+                                }
                             } else {
-                                errorMessage = "اسم المستخدم هذا مأخوذ أو حدث خطأ. جرب اسماً آخر."
+                                errorMessage = if (uploadFailed) {
+                                    "فشل تحميل الصورة واسم المستخدم مأخوذ. جرب اسماً آخر."
+                                } else {
+                                    "اسم المستخدم هذا مأخوذ أو حدث خطأ. جرب اسماً آخر."
+                                }
                             }
                             isLoading = false
                         }

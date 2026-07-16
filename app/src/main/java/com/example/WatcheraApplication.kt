@@ -17,6 +17,7 @@ class WatcheraApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         FirebaseDatabase.getInstance().setPersistenceEnabled(true)
+        android.util.Log.i("WatcheraApplication", "IMGBB_API_KEY length: ${BuildConfig.IMGBB_API_KEY.length}")
         if (FirebaseAuth.getInstance().currentUser != null) {
             CoroutineScope(Dispatchers.IO).launch {
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
