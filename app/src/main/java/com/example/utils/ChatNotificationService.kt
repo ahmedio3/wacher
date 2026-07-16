@@ -108,13 +108,7 @@ class ChatNotificationService : Service() {
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        var largeIcon = try {
-            val iconBytes = Base64.decode(msg.avatarBase64, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
-        } catch (e: Exception) {
-            BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-        }
-        if (largeIcon == null) largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+        val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
 
         val builder = NotificationCompat.Builder(this, "chat_channel")
             .setSmallIcon(R.drawable.ic_launcher_foreground)

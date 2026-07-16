@@ -1,13 +1,11 @@
 package com.example.ui.screens
 
-import android.graphics.BitmapFactory
-import android.util.Base64
+import coil.compose.AsyncImage
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +32,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -95,6 +92,14 @@ fun GlobalChatScreen(
 
     val typingUsers by remember { ChatManager.getTypingUsers() }.collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
+
+    // Pre-fetch all unique sender profiles into UserManager's cache so per-item
+    // lookups are instant (all from memory).
+    LaunchedEffect(messages.map { it.userId }.distinct()) {
+        messages.map { it.userId }.distinct().forEach { userId ->
+            UserManager.getProfile(userId)
+        }
+    }
 
     LaunchedEffect(user) {
         if (user != null) {
@@ -253,7 +258,6 @@ fun GlobalChatScreen(
                                             username = userProfile!!.name,
                                             text = messageText.trim(),
                                             timestamp = System.currentTimeMillis(),
-                                            avatarBase64 = userProfile!!.avatarBase64,
                                             repliedToId = replyToMessage?.id ?: "",
                                             repliedToName = replyToMessage?.username ?: "",
                                             repliedToText = replyToMessage?.text ?: ""
@@ -480,27 +484,24 @@ fun GlobalChatScreen(
 
                             if (!isMe && isLastFromUser) {
                                 Spacer(modifier = Modifier.width(8.dp))
+                                val senderProfile by produceState<UserProfile?>(msg.userId, initial = null) {
+                                    value = UserManager.getProfile(msg.userId)
+                                }
                                 Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable {
                                     coroutineScope.launch {
-                                        profileUser = UserManager.getProfile(msg.userId)
-                                        profileAvatar = msg.avatarBase64
+                                        val p = UserManager.getProfile(msg.userId)
+                                        profileUser = p
+                                        profileAvatar = p?.avatarUrl ?: ""
                                         showProfile = true
                                     }
                                 }) {
-                                    if (msg.avatarBase64.isNotEmpty()) {
-                                        val bitmap = try {
-                                            val bytes = Base64.decode(msg.avatarBase64, Base64.DEFAULT)
-                                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                                        } catch (e: Exception) { null }
-                                        
-                                        if (bitmap != null) {
-                                            Image(
-                                                bitmap = bitmap, 
-                                                contentDescription = null, 
-                                                contentScale = ContentScale.Crop, 
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
+                                    if (senderProfile?.avatarUrl?.isNotEmpty() == true) {
+                                        AsyncImage(
+                                            model = senderProfile!!.avatarUrl,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
                                     }
                                 }
                             } else if (!isMe) {
@@ -572,7 +573,7 @@ fun GlobalChatScreen(
             visible = showProfile,
             onDismiss = { showProfile = false },
             userProfile = profileUser,
-            avatarBase64 = profileAvatar
+            avatarUrl = profileAvatar
         )
     }
 }

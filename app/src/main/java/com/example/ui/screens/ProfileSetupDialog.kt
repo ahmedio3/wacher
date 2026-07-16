@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
 import com.example.data.remote.ImgBBUploader
@@ -47,7 +48,7 @@ fun ProfileSetupDialog(
     
     var name by remember { mutableStateOf(initialProfile?.name ?: "") }
     var username by remember { mutableStateOf(initialProfile?.username ?: "") }
-    var base64Image by remember { mutableStateOf(initialProfile?.avatarBase64 ?: "") }
+    var base64Image by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
     var avatarUrl by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
     var pickedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -112,7 +113,14 @@ fun ProfileSetupDialog(
                         .clickable { launcher.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (base64Image.isNotEmpty()) {
+                    if (avatarUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = "Profile avatar",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (base64Image.isNotEmpty()) {
                         val imageBytes = Base64.decode(base64Image, Base64.DEFAULT)
                         val decodedImage = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                         if (decodedImage != null) {

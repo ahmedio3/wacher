@@ -6,7 +6,6 @@ data class ChatMessage(
     val username: String = "",
     val text: String = "",
     val timestamp: Long = 0,
-    val avatarBase64: String = "",
     val repliedToId: String = "",
     val repliedToName: String = "",
     val repliedToText: String = ""

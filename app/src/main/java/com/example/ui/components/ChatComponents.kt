@@ -1,8 +1,6 @@
 package com.example.ui.components
 
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.foundation.Image
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -173,7 +171,7 @@ fun ProfileBottomSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
     userProfile: UserProfile?,
-    avatarBase64: String
+    avatarUrl: String
 ) {
     if (visible) {
         ModalBottomSheet(
@@ -194,19 +192,13 @@ fun ProfileBottomSheet(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    if (avatarBase64.isNotEmpty()) {
-                        val bitmap = try {
-                            val bytes = Base64.decode(avatarBase64, Base64.DEFAULT)
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                        } catch (e: Exception) { null }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                    if (avatarUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
 
