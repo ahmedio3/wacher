@@ -177,7 +177,7 @@ fun AddNewCustomItemView(
                 Text("رابط الصورة:")
                 OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth())
                 
-                Text("الإجراء (مثال: رابط ويب، أو 'downloads', 'chat'):")
+                Text("الإجراء (مثال: رابط ويب، أو 'downloads'):")
                 OutlinedTextField(value = linkTarget, onValueChange = { linkTarget = it }, modifier = Modifier.fillMaxWidth())
             }
 

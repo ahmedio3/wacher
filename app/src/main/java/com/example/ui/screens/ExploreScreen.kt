@@ -9,10 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,8 +31,6 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ExploreScreen(
     onNavigateToAdultContent: (String) -> Unit = {},
-    onNavigateToGlobalChat: () -> Unit = {},
-    onNavigateToAiChat: () -> Unit = {},
     onNavigateToSubtitleDownloads: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -66,51 +62,6 @@ fun ExploreScreen(
                 .padding(start = 12.dp, end = 12.dp, bottom = 90.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 1. Section: المحادثات
-            Text(
-                text = "المحادثات",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-            )
-
-            // AI Chat
-            ExploreChatItemRow(
-                title = "الذكاء الاصطناعي",
-                subtitle = "اسأل عن الأفلام، اقتراحات، بحث في التحميلات والمفضلة",
-                icon = {
-                    Box(
-                        modifier = Modifier.size(54.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White)
-                    }
-                },
-                onClick = onNavigateToAiChat
-            )
-
-            // Global Chat
-            ExploreChatItemRow(
-                title = "الدردشة العامة",
-                subtitle = "موقع التجمع لكل المشاهدين. شارك رأيك في الأفلام!",
-                icon = {
-                    Box(
-                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF32A852)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.People, contentDescription = null, tint = Color.White)
-                    }
-                },
-                onClick = onNavigateToGlobalChat
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            )
-
             Text(
                 text = "الأدوات",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -144,7 +95,7 @@ fun ExploreScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Subtitle Downloads
-            ExploreChatItemRow(
+            ExploreActionRow(
                 title = "الترجمات المحملة",
                 subtitle = "تصدير وحذف الترجمات التي قمت بتحميلها",
                 icon = {
@@ -159,7 +110,7 @@ fun ExploreScreen(
             )
 
             // Watchlist Card
-            ExploreChatItemRow(
+            ExploreActionRow(
                 title = "قائمتي",
                 subtitle = "أفلام ومسلسلات محفوظة لمشاهدتها لاحقاً",
                 icon = {
@@ -268,7 +219,7 @@ fun ExploreScreen(
 }
 
 @Composable
-fun ExploreChatItemRow(
+fun ExploreActionRow(
     title: String,
     subtitle: String,
     icon: @Composable () -> Unit,

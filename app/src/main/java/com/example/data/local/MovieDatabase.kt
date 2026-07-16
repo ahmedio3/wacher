@@ -44,7 +44,7 @@ abstract class MovieDatabase : RoomDatabase() {
             }
         }
 
-        // v12 -> v13: drop obsolete chat_messages table (chat now reads live from RTDB)
+        // v12 -> v13: drop obsolete chat_messages table
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS chat_messages")

@@ -12,7 +12,7 @@ import kotlinx.coroutines.tasks.await
 data class CustomSectionItem(
     val id: String = "",
     val displayType: String = "poster", // "poster", "landscape", "gradient"
-    val targetAction: String = "details", // "details", "link", "downloads", "settings", "chat"
+    val targetAction: String = "details", // "details", "link", "downloads", "settings"
     val targetData: String = "", 
     val message: String = "",
     val title: String = "",

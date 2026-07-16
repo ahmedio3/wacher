@@ -1,13 +1,9 @@
 package com.example
 
 import android.os.Bundle
-import android.os.Build
-import android.Manifest
 import android.content.Intent
 import android.net.Uri
-import androidx.core.content.ContextCompat
-import androidx.activity.result.contract.ActivityResultContracts
-import com.example.utils.ChatNotificationService
+
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.activity.ComponentActivity
@@ -67,29 +63,11 @@ import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 
 class MainActivity : ComponentActivity() {
 
-    companion object {
-        var isChatForeground = false
-    }
-
     private val deepLinkState = androidx.compose.runtime.mutableStateOf<String?>(null)
-
-    private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-                startChatService()
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            startChatService()
-        }
-
-        val openChat = intent.getBooleanExtra("open_chat", false)
         deepLinkState.value = extractDeepLink(intent)
         
         enableEdgeToEdge()
@@ -97,7 +75,7 @@ class MainActivity : ComponentActivity() {
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
         setContent {
             MyApplicationTheme {
-                MainAppContainer(startWithChat = openChat, deepLinkState = deepLinkState)
+                MainAppContainer(deepLinkState = deepLinkState)
             }
         }
     }
@@ -132,18 +110,12 @@ class MainActivity : ComponentActivity() {
         return null
     }
 
-    private fun startChatService() {
-        try {
-            startService(Intent(this, ChatNotificationService::class.java))
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.compose.runtime.MutableState<String?> = androidx.compose.runtime.mutableStateOf(null)) {
+fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String?> = androidx.compose.runtime.mutableStateOf(null)) {
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext as android.app.Application
     
@@ -177,8 +149,8 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
         NavigationTabItem(
             route = "explore",
             label = "استكشاف",
-            filledIcon = Icons.Default.ChatBubble,
-            outlinedIcon = Icons.Outlined.ChatBubbleOutline
+            filledIcon = Icons.Default.Explore,
+            outlinedIcon = Icons.Outlined.Explore
         ),
         NavigationTabItem(
             route = "downloads",
@@ -202,18 +174,9 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
         && !isBottomBarManuallyHidden
  
     LaunchedEffect(currentRoute) {
-        MainActivity.isChatForeground = currentRoute == "chat/global"
         // Auto-restore bottom bar when leaving browser route
         if (currentRoute != "browser") {
             isBottomBarManuallyHidden = false
-        }
-    }
-
-    LaunchedEffect(startWithChat) {
-        if (startWithChat) {
-            navController.navigate("chat/global") {
-                launchSingleTop = true
-            }
         }
     }
 
@@ -411,51 +374,12 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
                         val encQueries = java.net.URLEncoder.encode(queries, "UTF-8")
                         navController.navigate("adult_content?queries=$encQueries")
                     },
-                    onNavigateToGlobalChat = {
-                        navController.navigate("chat/global")
-                    },
-                    onNavigateToAiChat = {
-                        val hasProvider = com.example.data.ai.AiProviderManager.hasProvider(context)
-                        navController.navigate("ai_chat/${hasProvider}")
-                    },
                     onNavigateToSubtitleDownloads = {
                         navController.navigate("subtitle-downloads")
                     },
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
                     }
-                )
-            }
-
-            // AI Chat
-            composable(
-                route = "ai_chat/{hasProvider}",
-                arguments = listOf(
-                    navArgument("hasProvider") { type = NavType.BoolType; defaultValue = false }
-                )
-            ) { backStackEntry ->
-                val hasProvider = backStackEntry.arguments?.getBoolean("hasProvider") ?: false
-                val aiViewModel: com.example.data.ai.AiChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                    factory = com.example.data.ai.AiViewModelFactory(context)
-                )
-                com.example.ui.screens.AiChatScreen(
-                    viewModel = aiViewModel,
-                    hasProvider = hasProvider,
-                    onBack = { navController.popBackStack() },
-                    onConfigureProvider = {
-                        navController.navigate("ai_provider_config")
-                    }
-                )
-            }
-
-            // AI Provider Config
-            composable("ai_provider_config") {
-                val aiViewModel: com.example.data.ai.AiChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                    factory = com.example.data.ai.AiViewModelFactory(context)
-                )
-                com.example.ui.screens.AiProviderConfigScreen(
-                    viewModel = aiViewModel,
-                    onBack = { navController.popBackStack() }
                 )
             }
 
@@ -479,12 +403,6 @@ fun MainAppContainer(startWithChat: Boolean = false, deepLinkState: androidx.com
                         )
                     },
                     onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable("chat/global") {
-                GlobalChatScreen(
-                    onBackClick = { navController.popBackStack() }
                 )
             }
 
