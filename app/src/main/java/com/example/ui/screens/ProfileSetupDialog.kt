@@ -30,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
+import com.example.data.remote.ImgBBUploader
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -47,6 +48,8 @@ fun ProfileSetupDialog(
     var name by remember { mutableStateOf(initialProfile?.name ?: "") }
     var username by remember { mutableStateOf(initialProfile?.username ?: "") }
     var base64Image by remember { mutableStateOf(initialProfile?.avatarBase64 ?: "") }
+    var avatarUrl by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
+    var pickedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -66,6 +69,8 @@ fun ProfileSetupDialog(
                 val height = Math.round(ratio * bitmap.height)
                 val newBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
                 
+                pickedBitmap = newBitmap
+
                 val outputStream = ByteArrayOutputStream()
                 newBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
                 val byteArray = outputStream.toByteArray()
@@ -163,7 +168,12 @@ fun ProfileSetupDialog(
                         isLoading = true
                         errorMessage = null
                         coroutineScope.launch {
-                            val newProfile = UserProfile(userId, name, username, base64Image)
+                            // Upload to ImgBB if user picked a new image
+                            if (pickedBitmap != null) {
+                                val url = ImgBBUploader.uploadImage(pickedBitmap!!)
+                                if (url != null) avatarUrl = url
+                            }
+                            val newProfile = UserProfile(userId, name, username, base64Image, avatarUrl)
                             val success = UserManager.saveProfile(userId, newProfile)
                             if (success) {
                                 onSuccess()

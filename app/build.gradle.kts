@@ -23,10 +23,12 @@ android {
     val tmdbApiKey = System.getenv("TMDB_API_KEY") ?: project.findProperty("tmdb.api.key") as? String ?: ""
     val subdlApiKey = System.getenv("SUBDL_API_KEY") ?: project.findProperty("subdl.api.key") as? String ?: ""
     val opensubtitlesApiKey = System.getenv("OPENSUBTITLES_API_KEY") ?: project.findProperty("opensubtitles.api.key") as? String ?: ""
+    val imgbbApiKey = System.getenv("IMGBB_API_KEY") ?: project.findProperty("imgbb.api.key") as? String ?: ""
 
     buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey}\"")
     buildConfigField("String", "SUBDL_API_KEY", "\"${subdlApiKey}\"")
     buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${opensubtitlesApiKey}\"")
+    buildConfigField("String", "IMGBB_API_KEY", "\"${imgbbApiKey}\"")
   }
 
   signingConfigs {
