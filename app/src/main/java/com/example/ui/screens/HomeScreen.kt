@@ -87,8 +87,9 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
             .then(if (searchQuery.isEmpty()) Modifier.verticalScroll(scrollState) else Modifier)
-            .padding(bottom = 90.dp) // Cushion for bottom bar
     ) {
         // 1. iOS Top Header with Settings Instead of Cinema Logo
         HomeHeader(onNavigateToSettings = onNavigateToSettings)

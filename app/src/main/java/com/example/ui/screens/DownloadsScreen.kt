@@ -104,7 +104,7 @@ fun DownloadsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .padding(bottom = 80.dp)
+                    .navigationBarsPadding()
             ) {
                 // iOS Styled Custom Premium Header with RTL alignment
                 Row(

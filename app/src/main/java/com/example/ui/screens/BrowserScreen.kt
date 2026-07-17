@@ -204,9 +204,7 @@ fun BrowserScreen(
 
     // ---- Main browser UI ----
     Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             Column {
                 // ---- Single compact header row ----
