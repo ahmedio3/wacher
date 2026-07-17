@@ -412,6 +412,11 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     onBackClick = { navController.popBackStack() },
                     onNavigateToDetails = { id, type ->
                         navController.navigate("detail/$id/$type")
+                    },
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
                     }
                 )
             }

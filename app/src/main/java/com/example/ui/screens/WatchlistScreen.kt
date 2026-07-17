@@ -2,12 +2,10 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,22 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.data.local.WatchlistEntity
-import com.example.data.remote.TmdbSeasonDetails
-import com.example.data.remote.TmdbTvDetails
-import com.example.ui.components.SeasonEpisodeSheet
 import com.example.ui.components.WatchlistPosterCard
 import com.example.ui.viewmodel.MovieViewModel
-import com.example.ui.viewmodel.RequestState
 import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,72 +30,12 @@ fun WatchlistScreen(
     viewModel: MovieViewModel,
     onBackClick: () -> Unit,
     onNavigateToDetails: (Int, String) -> Unit,
+    onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val items by viewModel.watchlist.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val context = LocalContext.current
-
-    // Episode tracking sheet state
-    var showEpisodeSheet by remember { mutableStateOf(false) }
-    var selectedItem by remember { mutableStateOf<WatchlistEntity?>(null) }
-    var selectedSeason by remember { mutableIntStateOf(1) }
-    var selectedSeasonDetails by remember { mutableStateOf<TmdbSeasonDetails?>(null) }
-    var availableSeasons by remember { mutableStateOf<List<Int>>(listOf(1)) }
-
-    // Observe tvDetails to extract season numbers
-    val tvDetailsMap by viewModel.tvDetails.collectAsState()
-
-    // Load season details + fetch TV details (for season list) when sheet opens
-    LaunchedEffect(showEpisodeSheet, selectedItem, selectedSeason) {
-        if (showEpisodeSheet && selectedItem != null && selectedItem!!.mediaType == "tv") {
-            val tmdbId = selectedItem!!.id.toIntOrNull()
-            if (tmdbId != null) {
-                // Fetch TV details if not already cached (to get season numbers)
-                viewModel.fetchTvDetails(tmdbId)
-                // Fetch current season episodes
-                viewModel.fetchSeasonDetails(tmdbId, selectedSeason)
-            }
-        }
-    }
-
-    // Extract available seasons from cached tvDetails
-    LaunchedEffect(selectedItem, tvDetailsMap) {
-        if (selectedItem != null && selectedItem!!.mediaType == "tv") {
-            val tmdbId = selectedItem!!.id.toIntOrNull()
-            if (tmdbId != null) {
-                val tvState = tvDetailsMap[tmdbId]
-                if (tvState is RequestState.Success) {
-                    val seasons = tvState.data.seasons
-                        ?.map { it.seasonNumber }
-                        ?.filter { it > 0 } // exclude season 0 (specials)
-                        ?.sorted()
-                    if (!seasons.isNullOrEmpty()) {
-                        availableSeasons = seasons
-                    }
-                }
-            }
-        }
-    }
-
-    // Observe season details
-    val seasonKey = if (selectedItem != null && selectedItem!!.mediaType == "tv")
-        "${selectedItem!!.id.toIntOrNull()}-$selectedSeason" else null
-    val seasonState = if (seasonKey != null) viewModel.seasonDetails.collectAsState().value[seasonKey] else null
-    LaunchedEffect(seasonState) {
-        if (seasonState is RequestState.Success) {
-            selectedSeasonDetails = seasonState.data
-        }
-    }
-
-    // Episode statuses for current season — cached StateFlow
-    val episodeStatuses = if (showEpisodeSheet && selectedItem != null)
-        viewModel.getEpisodeWatchStatusForSeason(selectedItem!!.id, selectedSeason).collectAsState().value
-    else emptyList()
-
-    // Watched count
-    val watchedCount = if (selectedItem != null)
-        viewModel.getWatchedCountForTvShow(selectedItem!!.id).collectAsState().value else 0
 
     Scaffold(
         topBar = {
@@ -153,7 +83,6 @@ fun WatchlistScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             if (items.isEmpty()) {
-                // Empty state
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -203,11 +132,13 @@ fun WatchlistScreen(
                         WatchlistPosterCard(
                             item = item,
                             onClick = {
-                                if (item.mediaType == "tv") {
-                                    selectedItem = item
-                                    selectedSeason = 1
-                                    selectedSeasonDetails = null
-                                    showEpisodeSheet = true
+                                if (item.id.startsWith("mb_")) {
+                                    onNavigateToMovieBoxDetails(
+                                        item.id.removePrefix("mb_"),
+                                        item.mediaType,
+                                        item.title,
+                                        item.posterPath
+                                    )
                                 } else {
                                     onNavigateToDetails(item.id.toIntOrNull() ?: 0, item.mediaType)
                                 }
@@ -219,39 +150,4 @@ fun WatchlistScreen(
             }
         }
     }
-
-    // Episode tracking bottom sheet
-    if (showEpisodeSheet && selectedItem != null) {
-        val tvId = selectedItem!!.id.toIntOrNull() ?: 0
-        val totalEps = selectedSeasonDetails?.episodes?.size ?: 0
-        SeasonEpisodeSheet(
-            title = selectedItem!!.title,
-            seasonDetails = selectedSeasonDetails,
-            episodeStatuses = episodeStatuses,
-            watchedCount = watchedCount,
-            totalEpisodes = totalEps,
-            seasonNumber = selectedSeason,
-            availableSeasons = availableSeasons,
-            onSeasonSelected = { s ->
-                selectedSeason = s
-                selectedSeasonDetails = null
-            },
-            onToggleEpisode = { episodeNum ->
-                viewModel.toggleEpisodeWatchStatus(selectedItem!!.id, selectedSeason, episodeNum)
-            },
-            onMarkAllWatched = {
-                viewModel.markAllEpisodesAsWatched(selectedItem!!.id, selectedSeason)
-            },
-            onMarkAllUnwatched = {
-                viewModel.markAllEpisodesAsUnwatched(selectedItem!!.id, selectedSeason)
-            },
-            onDismiss = {
-                showEpisodeSheet = false
-                selectedItem = null
-                availableSeasons = listOf(1)
-            }
-        )
-    }
 }
-
-

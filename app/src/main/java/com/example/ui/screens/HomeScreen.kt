@@ -248,9 +248,13 @@ fun HomeScreen(
                             modifier = Modifier.width(110.dp),
                             item = item,
                             onClick = {
-                                val type = if (item.mediaType == "tv") "tv" else "movie"
-                                try { onNavigateToDetails(item.id.split("-")[0].toInt(), type) }
-                                catch (_: Exception) { onNavigateToDetails(item.id.hashCode(), type) }
+                                if (item.id.startsWith("mb_")) {
+                                    onNavigateToMovieBoxDetails(item.id.removePrefix("mb_"), item.mediaType, item.title, item.posterPath)
+                                } else {
+                                    val type = if (item.mediaType == "tv") "tv" else "movie"
+                                    try { onNavigateToDetails(item.id.split("-")[0].toInt(), type) }
+                                    catch (_: Exception) { onNavigateToDetails(item.id.hashCode(), type) }
+                                }
                             },
                             isInMyList = true,
                             onToggleMyList = { viewModel.toggleWatchlist(item.id, item.title, item.posterPath, item.mediaType, item.rating) },

@@ -137,7 +137,7 @@ fun WatchlistPosterCard(
     onShare: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val posterUrl = "https://image.tmdb.org/t/p/w342${item.posterPath}"
+    val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w342${item.posterPath}"
 
     val (interactionSource, pressed) = rememberPressState()
     val pressAlpha by animateFloatAsState(if (pressed) 0.75f else 1f, animationSpec = tween(150))

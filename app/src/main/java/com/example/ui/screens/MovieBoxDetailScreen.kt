@@ -36,6 +36,12 @@ import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.utils.isLatinText
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.ViewModelFactory
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -59,10 +65,12 @@ fun MovieBoxDetailScreen(
     var retryTrigger by remember { mutableIntStateOf(0) }
     var itemDetail by remember { mutableStateOf<ItemDetailResult?>(null) }
     var videoLinks by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
+    val mbWatchlistId = "mb_$subjectId"
+
     var showSubtitleSheet by remember { mutableStateOf(false) }
     var subtitleFiles by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
 
-    val isFavorited by viewModel.isItemInWatchlist(subjectId).collectAsState(initial = false)
+    val isFavorited by viewModel.isItemInWatchlist(mbWatchlistId).collectAsState(initial = false)
     val scrollState = rememberScrollState()
 
     var showMovieBoxSheet by remember { mutableStateOf(false) }
@@ -337,16 +345,16 @@ fun MovieBoxDetailScreen(
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                                             .combinedClickable(
-                                                onClick = {
-                                                    viewModel.toggleWatchlist(
-                                                        id = subjectId, title = displayTitle,
-                                                        posterPath = displayPoster,
-                                                        mediaType = "tv",
-                                                        rating = itemDetail?.rating ?: 0.0
-                                                    )
-                                                },
-                                                onLongClick = {}
-                                            ),
+                                onClick = {
+                                    viewModel.toggleWatchlist(
+                                        id = mbWatchlistId, title = displayTitle,
+                                        posterPath = displayPoster,
+                                        mediaType = "tv",
+                                        rating = itemDetail?.rating ?: 0.0
+                                    )
+                                },
+                                onLongClick = {}
+                            ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -354,21 +362,6 @@ fun MovieBoxDetailScreen(
                                             contentDescription = "قائمة المشاهدة",
                                             tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
                                         )
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            val allSubs = videoLinks.flatMap { it.allSubtitles }.distinctBy { it.languageCode }
-                                            if (allSubs.isNotEmpty()) {
-                                                subtitleFiles = allSubs
-                                                showSubtitleSheet = true
-                                            } else {
-                                                Toast.makeText(appContext, "لا توجد ترجمات متوفرة", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Subtitles, contentDescription = "تحميل ترجمة", tint = Color.Black)
                                     }
                                 }
                             } else {
@@ -402,7 +395,7 @@ fun MovieBoxDetailScreen(
                                             .combinedClickable(
                                                 onClick = {
                                                     viewModel.toggleWatchlist(
-                                                        id = subjectId, title = displayTitle,
+                                                        id = mbWatchlistId, title = displayTitle,
                                                         posterPath = displayPoster,
                                                         mediaType = "movie",
                                                         rating = itemDetail?.rating ?: 0.0
@@ -428,21 +421,6 @@ fun MovieBoxDetailScreen(
                                         modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
                                         Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل المشاهدة أوفلاين", tint = MaterialTheme.colorScheme.primary)
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            val allSubs = videoLinks.flatMap { it.allSubtitles }.distinctBy { it.languageCode }
-                                            if (allSubs.isNotEmpty()) {
-                                                subtitleFiles = allSubs
-                                                showSubtitleSheet = true
-                                            } else {
-                                                Toast.makeText(appContext, "لا توجد ترجمات متوفرة", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Subtitles, contentDescription = "تحميل ترجمة", tint = Color.Black)
                                     }
                                 }
                             }
@@ -520,11 +498,19 @@ fun MovieBoxDetailScreen(
                                         val file = files.firstOrNull() ?: return@forEach
                                         MovieBoxEpisodeRowCard(
                                             episodeNumber = episodeNum,
-                                            videoFile = file,
                                             onClick = {
                                                 pendingDownloadSeason = selectedSeason
                                                 pendingDownloadEpisode = episodeNum
                                                 showMovieBoxSheet = true
+                                            },
+                                            onLongClick = {
+                                                val allSubs = videoLinks.flatMap { it.allSubtitles }.distinctBy { it.languageCode }
+                                                if (allSubs.isNotEmpty()) {
+                                                    subtitleFiles = allSubs
+                                                    showSubtitleSheet = true
+                                                } else {
+                                                    Toast.makeText(appContext, "لا توجد ترجمات متوفرة", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         )
                                     }
@@ -601,19 +587,27 @@ fun MovieBoxDetailScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MovieBoxEpisodeRowCard(
     episodeNumber: Int,
-    videoFile: VideoFile,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressAlpha by animateFloatAsState(if (pressed) 0.91f else 1f, animationSpec = tween(150))
+    val pressScale by animateFloatAsState(if (pressed) 0.92f else 1f, animationSpec = tween(150))
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(pressScale)
+            .alpha(pressAlpha)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
-                onLongClick = {}
+                onLongClick = onLongClick
             )
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -637,29 +631,12 @@ private fun MovieBoxEpisodeRowCard(
             )
         }
 
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Text(
-                text = "الحلقة $episodeNumber",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            val sizeText = videoFile.formattedSize()
-            if (sizeText.isNotEmpty()) {
-                Text(
-                    text = sizeText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = JetBrainsMonoFontFamily,
-                        textDirection = TextDirection.Ltr
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        Text(
+            text = "الحلقة $episodeNumber",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
 
         Button(
             onClick = onClick,
