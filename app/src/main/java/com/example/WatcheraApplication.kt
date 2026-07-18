@@ -1,6 +1,8 @@
 package com.example
 
 import android.app.Application
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
@@ -16,6 +18,7 @@ class WatcheraApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        WorkManager.initialize(this, Configuration.Builder().build())
         FirebaseDatabase.getInstance().setPersistenceEnabled(true)
         android.util.Log.i("WatcheraApplication", "IMGBB_API_KEY length: ${BuildConfig.IMGBB_API_KEY.length}")
         if (FirebaseAuth.getInstance().currentUser != null) {

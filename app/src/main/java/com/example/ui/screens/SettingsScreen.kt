@@ -32,13 +32,22 @@ import com.example.ui.viewmodel.MovieViewModel
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.example.auth.AuthManager
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
 import com.example.auth.ActivityLogManager
+import com.example.worker.SubtitleAutoWorker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -361,6 +370,116 @@ fun SettingsScreen(
                                 fontSize = 13.sp,
                                 color = if (!isArabicPosters) Color.White else MaterialTheme.colorScheme.onBackground
                             )
+                        }
+                    }
+                }
+            }
+
+            // Auto Subtitle Card
+            val prefs = context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+            var autoSubEnabled by remember { mutableStateOf(prefs.getBoolean("auto_subtitle_enabled", true)) }
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "تنزيل الترجمة تلقائياً",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "للمحتوى المُحمَّل محلياً فقط (لا يشمل البث المباشر). سيتم البحث عن ترجمة عربية من Subdl و MovieBox و OpenSubtitles فور اكتمال التحميل.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                maxLines = 3
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = autoSubEnabled,
+                            onCheckedChange = {
+                                autoSubEnabled = it
+                                prefs.edit().putBoolean("auto_subtitle_enabled", it).apply()
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    var isBackfilling by remember { mutableStateOf(false) }
+                    OutlinedButton(
+                        onClick = {
+                            isBackfilling = true
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val db = com.example.data.local.MovieDatabase.getDatabase(context)
+                                    val allDownloads = db.movieDao.getDownloads().first()
+                                    val completedDownloads = allDownloads.filter { it.status == "completed" && it.mediaType == "tv" }
+                                    val allSubs = db.movieDao.getSubtitleDownloads().first()
+
+                                    val needsSub = completedDownloads.filter { dl ->
+                                        val autoId = "${dl.mediaId}_s${dl.season}e${dl.episode}_ar"
+                                        allSubs.none { it.id == autoId }
+                                    }
+
+                                    var delay = 0L
+                                    for (dl in needsSub) {
+                                        val isTv = dl.mediaType == "tv"
+                                        val tmdbIdStr = if (isTv) dl.mediaId.substringBefore("-s") else dl.mediaId
+                                        val seasonNum = if (isTv) dl.mediaId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                        val episodeNum = if (isTv) dl.mediaId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+
+                                        val workData = workDataOf(
+                                            "tmdbId" to tmdbIdStr,
+                                            "downloadId" to dl.id,
+                                            "title" to dl.title,
+                                            "mediaType" to dl.mediaType,
+                                            "season" to seasonNum,
+                                            "episode" to episodeNum,
+                                            "posterPath" to dl.posterPath
+                                        )
+                                        val workRequest = OneTimeWorkRequestBuilder<SubtitleAutoWorker>()
+                                            .setInputData(workData)
+                                            .setConstraints(
+                                                Constraints.Builder()
+                                                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                                                    .build()
+                                            )
+                                            .setBackoffCriteria(
+                                                androidx.work.BackoffPolicy.EXPONENTIAL,
+                                                30,
+                                                java.util.concurrent.TimeUnit.SECONDS
+                                            )
+                                            .setInitialDelay(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
+                                            .build()
+                                        WorkManager.getInstance(context).enqueue(workRequest)
+                                        delay += 2000
+                                    }
+                                } catch (_: Exception) { }
+                                withContext(Dispatchers.Main) { isBackfilling = false }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isBackfilling
+                    ) {
+                        if (isBackfilling) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("جارٍ التعقب...", fontSize = 13.sp)
+                        } else {
+                            Text("تعقب الحلقات القديمة بدون ترجمة", fontSize = 13.sp)
                         }
                     }
                 }

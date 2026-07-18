@@ -111,6 +111,7 @@ dependencies {
   implementation(libs.googleid)
   // implementation(libs.firebase.ai)
   implementation(libs.haze)
+  implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)

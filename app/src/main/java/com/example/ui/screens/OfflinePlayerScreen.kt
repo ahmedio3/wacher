@@ -334,22 +334,34 @@ fun OfflinePlayerScreen(
 
                 // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
-                    launch(Dispatchers.IO) {
-                        try {
-                            val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
-                            val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                            val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                            val subs = SubtitleHelper.fetchSubtitles(
-                                tmdbIdStr, isTv, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
-                            )
-                            val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
-                            if (arSub != null) {
-                                val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
-                                if (extracted != null) {
-                                    parsedSubtitles = SubtitleParser.parseBlock(extracted)
+                    // First try standalone_subtitles/ (from auto-fetcher)
+                    val standaloneDir = File(context.filesDir, "standalone_subtitles")
+                    val autoFiles = standaloneDir.listFiles()?.filter {
+                        it.name.startsWith(activeId) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
+                    }
+                    val autoSub = autoFiles?.firstOrNull()
+                    if (autoSub != null && autoSub.exists()) {
+                        parsedSubtitles = SubtitleParser.parseBlock(autoSub)
+                        val playerExt = if (autoSub.name.endsWith(".vtt")) ".vtt" else ".srt"
+                        autoSub.copyTo(File(context.filesDir, "downloads/$activeId$playerExt"), overwrite = true)
+                    } else {
+                        launch(Dispatchers.IO) {
+                            try {
+                                val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                                val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                val subs = SubtitleHelper.fetchSubtitles(
+                                    tmdbIdStr, isTv, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
+                                )
+                                val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
+                                if (arSub != null) {
+                                    val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
+                                    if (extracted != null) {
+                                        parsedSubtitles = SubtitleParser.parseBlock(extracted)
+                                    }
                                 }
-                            }
-                        } catch (_: Exception) { }
+                            } catch (_: Exception) { }
+                        }
                     }
                 }
 
