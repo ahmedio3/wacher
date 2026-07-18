@@ -29,6 +29,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -176,7 +177,7 @@ fun OfflinePlayerScreen(
     var dragPosition by remember { mutableFloatStateOf(0f) }
 
     // Subtitle Custom Variables
-    var subtitleYOffset by remember { mutableFloatStateOf(prefs.getFloat("sub_y", -35f)) }
+    var subtitleYOffset by remember { mutableFloatStateOf(prefs.getFloat("sub_y", 0f)) }
     var subtitleSize by remember { mutableFloatStateOf(prefs.getFloat("sub_size", 20f)) }
     var subtitleTimeOffsetMs by remember { mutableLongStateOf(0L) }
     var parsedSubtitles by remember { mutableStateOf<List<SubtitleLine>>(emptyList()) }
@@ -861,19 +862,46 @@ fun OfflinePlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onBack) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = Color.White)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = activeTitle,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (isTv) {
+                                val sNum = activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1
+                                val eNum = activeId.substringAfter("-e").toIntOrNull() ?: 1
+                                Text(
+                                    text = activeTitle.substringBefore(" - "),
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "S$sNum - E$eNum",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            } else {
+                                Text(
+                                    text = activeTitle,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.width(16.dp))
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             // Home button (exit to home screen, keep app alive)
@@ -1817,17 +1845,29 @@ fun OfflinePlayerScreen(
                         shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
-                        val episodesListState = rememberLazyListState()
-                        // Ascending order episodes
-                        val sortedEps = remember(seriesEpisodes) {
-                            seriesEpisodes.sortedBy { it.episode }
+                        val currentSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 1
+                        var selectedSeason by remember { mutableStateOf(currentSeason) }
+                        // Open the drawer on the season of the episode currently being watched
+                        LaunchedEffect(showEpisodesDrawer) {
+                            if (showEpisodesDrawer) selectedSeason = currentSeason
                         }
-                        // Find current episode index for auto-scroll
-                        val currentEpIndex = remember(seriesEpisodes, activeId) {
-                            sortedEps.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
+                        // Keep the selection synced when the played episode changes
+                        LaunchedEffect(activeId) {
+                            selectedSeason = currentSeason
                         }
 
-                        LaunchedEffect(showEpisodesDrawer, currentEpIndex) {
+                        val availableSeasons = remember(seriesEpisodes) {
+                            seriesEpisodes.map { it.season }.distinct().sorted()
+                        }
+                        val seasonEps = remember(seriesEpisodes, selectedSeason) {
+                            seriesEpisodes.filter { it.season == selectedSeason }.sortedBy { it.episode }
+                        }
+                        val episodesListState = rememberLazyListState()
+                        val currentEpIndex = remember(seasonEps, activeId) {
+                            seasonEps.indexOfFirst { it.id == activeId }.coerceAtLeast(0)
+                        }
+
+                        LaunchedEffect(showEpisodesDrawer, selectedSeason, currentEpIndex) {
                             if (showEpisodesDrawer && currentEpIndex > 0) {
                                 delay(200)
                                 episodesListState.animateScrollToItem(currentEpIndex)
@@ -1850,11 +1890,33 @@ fun OfflinePlayerScreen(
                             if (seriesEpisodes.isEmpty()) {
                                 Text("لا توجد حلقات محملة أخرى.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             } else {
+                                // Season selector — navigate between seasons that have downloads
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(availableSeasons) { sNo ->
+                                        val selected = sNo == selectedSeason
+                                        FilterChip(
+                                            selected = selected,
+                                            onClick = { selectedSeason = sNo },
+                                            label = { Text("الموسم $sNo", fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                                selectedLabelColor = Color.White,
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                labelColor = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+
                                 LazyColumn(
                                     state = episodesListState,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(sortedEps, key = { it.id }) { ep ->
+                                    items(seasonEps, key = { it.id }) { ep ->
                                         val isPlayingThis = ep.id == activeId
                                         Row(
                                             modifier = Modifier
