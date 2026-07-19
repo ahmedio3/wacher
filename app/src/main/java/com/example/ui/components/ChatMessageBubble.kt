@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -18,18 +17,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.chat.Message
 import com.example.chat.ReplyTo
-import kotlin.math.roundToInt
 
 private const val SWIPE_THRESHOLD = 100f
 
@@ -45,40 +43,34 @@ fun ChatMessageBubble(
     onUserClick: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    val animatedOffset by animateFloatAsState(
-        targetValue = offsetX,
-        label = "swipeOffset"
-    )
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 1.dp)
-            .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+            .graphicsLayer { translationX = swipeOffset }
             .pointerInput(message.id) {
                 awaitEachGesture {
-                    val down = awaitFirstDown()
-                    var accumulatedX = 0f
+                    val down = awaitFirstDown(requireUnconsumed = false)
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
                         val dx = change.position.x - down.position.x
                         if (dx > 0) {
-                            accumulatedX = dx
-                            offsetX = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
-                            change.consume()
+                            swipeOffset = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
+                        } else {
+                            swipeOffset = 0f
                         }
                     } while (event.changes.any { it.pressed })
-
-                    if (accumulatedX > SWIPE_THRESHOLD) {
+                    if (swipeOffset > SWIPE_THRESHOLD) {
                         onReply(message)
                     }
-                    offsetX = 0f
+                    swipeOffset = 0f
                 }
             }
     ) {
-        if (offsetX > 0f) {
+        if (swipeOffset > 0f) {
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -100,7 +92,7 @@ fun ChatMessageBubble(
                     if (isMine) Modifier.padding(start = 64.dp, end = 4.dp)
                     else Modifier.padding(start = 4.dp, end = 64.dp)
                 ),
-            horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
+            horizontalArrangement = if (isMine) Arrangement.Start else Arrangement.End,
             verticalAlignment = Alignment.Bottom
         ) {
             if (!isMine) {
@@ -132,7 +124,7 @@ fun ChatMessageBubble(
             }
 
             Column(
-                horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
+                horizontalAlignment = if (isMine) Alignment.Start else Alignment.End
             ) {
                 if (isFirstInGroup && !isMine) {
                     Text(
@@ -188,16 +180,6 @@ fun ChatMessageBubble(
                             color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface
                         )
                     }
-
-                    Text(
-                        text = formatTimestamp(message.timestamp),
-                        fontSize = 10.sp,
-                        color = if (isMine) Color.White.copy(alpha = 0.6f)
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(top = 2.dp)
-                    )
                 }
             }
 
@@ -238,18 +220,4 @@ private fun ReplyQuote(replyTo: ReplyTo, isMine: Boolean) {
         }
     }
     Spacer(modifier = Modifier.height(4.dp))
-}
-
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-    return when {
-        diff < 60_000 -> "الآن"
-        diff < 3_600_000 -> "${diff / 60_000} د"
-        diff < 86_400_000 -> "${diff / 3_600_000} س"
-        else -> {
-            val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.US)
-            sdf.format(java.util.Date(timestamp))
-        }
-    }
 }

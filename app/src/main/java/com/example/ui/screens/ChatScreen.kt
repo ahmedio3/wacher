@@ -112,7 +112,9 @@ fun ChatScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
             topBar = { /* empty - we use floating header */ }
         ) { padding ->
             Box(
@@ -121,9 +123,7 @@ fun ChatScreen(
                     .padding(padding)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .imePadding()
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     if (messages.isNotEmpty()) {
                         LazyColumn(
@@ -166,7 +166,7 @@ fun ChatScreen(
                             }
 
                             val groupedMessages = groupMessages(messages)
-                            items(groupedMessages, key = { it.message.id }) { group ->
+                            items(groupedMessages, key = { "${it.message.id}_${it.isLast}_${it.showAvatar}" }) { group ->
                                 ChatMessageBubble(
                                     message = group.message,
                                     isMine = group.message.senderId == currentUserId,
