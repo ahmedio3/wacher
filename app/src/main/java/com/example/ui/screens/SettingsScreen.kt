@@ -401,7 +401,7 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
-                                text = "للمحتوى المُحمَّل محلياً فقط (لا يشمل البث المباشر). سيتم البحث عن ترجمة عربية من Subdl و MovieBox و OpenSubtitles فور اكتمال التحميل.",
+                                text = "يبحث عن ترجمة عربية تلقائياً فور اكتمال تحميل أي حلقة.",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                 maxLines = 3
@@ -487,6 +487,9 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(100.dp))
+
         }
     }
 }
@@ -507,16 +510,6 @@ fun ProfileSection(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var bioInput by remember(userProfile) { mutableStateOf(userProfile?.bio ?: "") }
-
-    fun saveBio() {
-        val u = user ?: return
-        val uid = u.uid
-        coroutineScope.launch {
-            val base = userProfile ?: UserProfile(id = uid, name = u.displayName ?: "", username = "")
-            UserManager.saveProfile(uid, base.copy(bio = bioInput))
-        }
-    }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -529,39 +522,51 @@ fun ProfileSection(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (user != null) {
-                // Signed In State
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                // Signed In State — horizontal header (avatar + name/username)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    if (userProfile?.avatarUrl?.isNotEmpty() == true) {
-                        AsyncImage(
-                            model = userProfile!!.avatarUrl,
-                            contentDescription = "Profile avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (userProfile?.avatarUrl?.isNotEmpty() == true) {
+                            AsyncImage(
+                                model = userProfile!!.avatarUrl,
+                                contentDescription = "Profile avatar",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        }
+                    }
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else (user.displayName ?: user.email ?: "بك"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
-                    } else {
-                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                        if (userProfile?.username?.isNotEmpty() == true) {
+                            Text(
+                                text = "@${userProfile.username}",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                        }
                     }
                 }
-                Text(
-                    text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else (user.displayName ?: user.email ?: "بك"),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                if (userProfile?.username?.isNotEmpty() == true) {
-                    Text(
-                        text = "@${userProfile.username}",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+
+                // Bio (read-only display)
                 if (userProfile?.bio?.isNotEmpty() == true) {
                     Text(
                         text = userProfile.bio,
@@ -594,20 +599,6 @@ fun ProfileSection(
                         Text("تسجيل الخروج")
                     }
                 }
-
-                OutlinedTextField(
-                    value = bioInput,
-                    onValueChange = { bioInput = it },
-                    placeholder = { Text("الوصف") },
-                    label = { Text("Bio (الوصف)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    minLines = 2,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Done
-                    ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveBio() })
-                )
             } else {
                 // Sign Out State (Login Form)
                 Text(

@@ -48,6 +48,7 @@ fun ProfileSetupDialog(
     
     var name by remember { mutableStateOf(initialProfile?.name ?: "") }
     var username by remember { mutableStateOf(initialProfile?.username ?: "") }
+    var bio by remember { mutableStateOf(initialProfile?.bio ?: "") }
     var base64Image by remember { mutableStateOf(initialProfile?.avatarBase64 ?: "") }
     var avatarUrl by remember { mutableStateOf(initialProfile?.avatarUrl ?: "") }
     var pickedBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -159,6 +160,17 @@ fun ProfileSetupDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
                 
+                OutlinedTextField(
+                    value = bio,
+                    onValueChange = { bio = it },
+                    label = { Text("الوصف (Bio)") },
+                    placeholder = { Text("اكتب نبذة قصيرة عنك") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    minLines = 2,
+                    maxLines = 4
+                )
+                
                 if (errorMessage != null) {
                     Text(
                         text = errorMessage!!,
@@ -185,7 +197,7 @@ fun ProfileSetupDialog(
                                     uploadFailed = true
                                 }
                             }
-                            val newProfile = UserProfile(userId, name, username, base64Image, avatarUrl)
+                            val newProfile = UserProfile(userId, name, username, base64Image, avatarUrl, bio)
                             val success = UserManager.saveProfile(userId, newProfile)
                             if (success) {
                                 if (uploadFailed) {
@@ -210,7 +222,7 @@ fun ProfileSetupDialog(
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
                     } else {
-                        Text("حفظ الصورة والاسم")
+                        Text("حفظ التغييرات")
                     }
                 }
             }
