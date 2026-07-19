@@ -5,10 +5,9 @@ import android.util.Base64
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
@@ -21,14 +20,8 @@ object ImgBBUploader {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * Uploads a [bitmap] to ImgBB and returns the hosted image URL, or null on failure.
-     * Runs on [Dispatchers.IO].
-     */
-    private const val FALLBACK_API_KEY = "ee692b26a4470ad9fcd7e17736afdfbb"
-
     suspend fun uploadImage(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.IMGBB_API_KEY.ifEmpty { FALLBACK_API_KEY }
+        val apiKey = BuildConfig.IMGBB_API_KEY
         if (apiKey.isBlank()) {
             android.util.Log.w("ImgBBUploader", "IMGBB_API_KEY is not configured — skipping upload")
             return@withContext null
@@ -40,12 +33,13 @@ object ImgBBUploader {
             val imageBytes = outputStream.toByteArray()
             val base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
 
-            val requestBody = base64Image.toRequestBody("text/plain".toMediaType())
+            val formBody = FormBody.Builder()
+                .add("image", base64Image)
+                .build()
 
             val request = Request.Builder()
                 .url("https://api.imgbb.com/1/upload?key=$apiKey")
-                .addHeader("Content-Type", "application/x-www-form-urlencoded")
-                .post("image=$base64Image".toRequestBody("application/x-www-form-urlencoded".toMediaType()))
+                .post(formBody)
                 .build()
 
             val response = client.newCall(request).execute()
