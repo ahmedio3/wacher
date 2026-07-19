@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.chat.UserChat
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +36,7 @@ fun ExploreScreen(
     onNavigateToAdultContent: (String) -> Unit = {},
     onNavigateToSubtitleDownloads: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
+    onNavigateToChat: (String, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -41,6 +45,7 @@ fun ExploreScreen(
     var showVerifySheet by remember { mutableStateOf(false) }
     var showPinSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     Scaffold(
         topBar = {
@@ -68,6 +73,23 @@ fun ExploreScreen(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
             )
+
+            // Chat button
+            ExploreActionRow(
+                title = "الدردشة العامة",
+                subtitle = "تواصل مع جميع المستخدمين",
+                icon = {
+                    Box(
+                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF8C6D4F)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Forum, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = { onNavigateToChat("public", true) }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 2. Unsafe mode button (بديل الوضع الآمن القديم)
             Button(
@@ -125,6 +147,28 @@ fun ExploreScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (currentUserId.isNotEmpty()) {
+                Text(
+                    text = "المحادثات",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                )
+
+                ChatRoomList(
+                    userId = currentUserId,
+                    onChatClick = { chat ->
+                        if (chat.roomType == "public") {
+                            onNavigateToChat(chat.roomId, true)
+                        } else {
+                            onNavigateToChat(chat.roomId, false)
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 

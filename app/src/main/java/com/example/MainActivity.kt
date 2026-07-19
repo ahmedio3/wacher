@@ -379,6 +379,9 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     },
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
+                    },
+                    onNavigateToChat = { roomId, isPublic ->
+                        navController.navigate("chat/${Uri.encode(roomId)}/$isPublic")
                     }
                 )
             }
@@ -470,6 +473,25 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 HistoryScreen(
                     viewModel = movieViewModel,
                     onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = "chat/{roomId}/{isPublic}",
+                arguments = listOf(
+                    navArgument("roomId") { type = NavType.StringType },
+                    navArgument("isPublic") { type = NavType.BoolType }
+                )
+            ) { backStackEntry ->
+                val roomId = backStackEntry.arguments?.getString("roomId") ?: "public"
+                val isPublic = backStackEntry.arguments?.getBoolean("isPublic") ?: true
+                ChatScreen(
+                    roomId = roomId,
+                    isPublic = isPublic,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToDM = { dmRoomId, _ ->
+                        navController.navigate("chat/${Uri.encode(dmRoomId)}/false")
+                    }
                 )
             }
 
