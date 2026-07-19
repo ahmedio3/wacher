@@ -55,18 +55,17 @@ fun ChatMessageBubble(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var isSwiping = false
-                    var finalOffset = 0f
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
                         val dx = change.position.x - down.position.x
                         val dy = abs(change.position.y - down.position.y)
-                        if (dx > 0 && dx > dy * 2f) {
+                        if (dx < 0 && abs(dx) > dy * 2f) {
                             isSwiping = true
                         }
                         if (isSwiping) {
-                            if (dx > 0) {
-                                swipeOffset = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
+                            if (dx < 0) {
+                                swipeOffset = dx.coerceAtLeast(-SWIPE_THRESHOLD * 1.5f)
                             } else {
                                 swipeOffset = 0f
                             }
@@ -74,18 +73,18 @@ fun ChatMessageBubble(
                             swipeOffset = 0f
                         }
                     } while (event.changes.any { it.pressed })
-                    if (isSwiping && swipeOffset > SWIPE_THRESHOLD) {
+                    if (isSwiping && swipeOffset < -SWIPE_THRESHOLD) {
                         onReply(message)
                     }
                     swipeOffset = 0f
                 }
             }
     ) {
-        if (swipeOffset > 0f) {
+        if (swipeOffset < 0f) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 8.dp)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Reply,
