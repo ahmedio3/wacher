@@ -82,8 +82,7 @@ fun ChatInputBar(
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     maxLines = 4,
                     singleLine = false,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                    contentPadding = PaddingValues(start = 16.dp, end = 48.dp)
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
                 )
 
                 IconButton(
