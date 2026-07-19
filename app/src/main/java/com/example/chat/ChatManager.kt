@@ -2,10 +2,10 @@ package com.example.chat
 
 import android.graphics.Bitmap
 import com.example.data.remote.ImgBBUploader
-import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -14,8 +14,8 @@ object ChatManager {
 
     private val db = FirebaseDatabase.getInstance().reference
 
-    private val messagesCache = mutableMapOf<String, MutableList<Message>>()
-    private val listeners = mutableMapOf<String, ChildEventListener>()
+    private val messagesCache = mutableMapOf<String, List<Message>>()
+    private val listeners = mutableMapOf<String, ValueEventListener>()
     private val messageListeners = mutableMapOf<String, MutableList<(List<Message>) -> Unit>>()
 
     fun generateDMRoomId(uid1: String, uid2: String): String {
@@ -99,29 +99,30 @@ object ChatManager {
 
         if (listeners.containsKey(roomId)) return
 
-        val childListener = object : ChildEventListener {
-            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                val msg = snapshot.getValue(Message::class.java)?.copy(id = snapshot.key ?: "")
-                if (msg != null) {
-                    val list = messagesCache.getOrPut(roomId) { mutableListOf() }
-                    list.add(msg)
-                    list.sortBy { it.timestamp }
-                    notifyListeners(roomId)
-                }
+        val valueListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val latest = snapshot.children.mapNotNull {
+                    it.getValue(Message::class.java)?.copy(id = it.key ?: "")
+                }.sortedBy { it.timestamp }
+
+                val existing = messagesCache[roomId] ?: emptyList()
+                val existingIds = existing.map { it.id }.toSet()
+                val latestIds = latest.map { it.id }.toSet()
+
+                val paginated = existing.filter { it.id !in latestIds }
+                messagesCache[roomId] = (paginated + latest).sortedBy { it.timestamp }
+                notifyListeners(roomId)
             }
 
-            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
-            override fun onChildRemoved(snapshot: DataSnapshot) {}
-            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
             override fun onCancelled(error: DatabaseError) {}
         }
 
         db.child("messages").child(roomId)
             .orderByChild("timestamp")
             .limitToLast(50)
-            .addChildEventListener(childListener)
+            .addValueEventListener(valueListener)
 
-        listeners[roomId] = childListener
+        listeners[roomId] = valueListener
     }
 
     suspend fun loadMoreMessages(roomId: String, oldestTimestamp: Long): List<Message> {
@@ -132,16 +133,13 @@ object ChatManager {
             .get().await()
 
         val olderMessages = snapshot.children.mapNotNull { it.getValue(Message::class.java)?.copy(id = it.key ?: "") }
-        val list = messagesCache.getOrPut(roomId) { mutableListOf() }
-        val existingIds = list.map { it.id }.toSet()
-        for (msg in olderMessages) {
-            if (msg.id !in existingIds) {
-                list.add(msg)
-            }
-        }
-        list.sortBy { it.timestamp }
+        val existing = messagesCache[roomId] ?: emptyList()
+        val existingIds = existing.map { it.id }.toSet()
+        val deduped = olderMessages.filter { it.id !in existingIds }
+        val merged = (deduped + existing).sortedBy { it.timestamp }
+        messagesCache[roomId] = merged
         notifyListeners(roomId)
-        return olderMessages
+        return deduped
     }
 
     fun removeListener(roomId: String) {
@@ -153,7 +151,7 @@ object ChatManager {
     }
 
     fun getCachedMessages(roomId: String): List<Message> {
-        return messagesCache[roomId]?.toList() ?: emptyList()
+        return messagesCache[roomId] ?: emptyList()
     }
 
     private fun notifyListeners(roomId: String) {

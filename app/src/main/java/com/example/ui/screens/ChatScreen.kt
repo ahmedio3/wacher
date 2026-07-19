@@ -121,7 +121,9 @@ fun ChatScreen(
                     .padding(padding)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .imePadding()
                 ) {
                     if (messages.isNotEmpty()) {
                         LazyColumn(
@@ -129,8 +131,7 @@ fun ChatScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                                .padding(top = 72.dp)
-                                .imePadding(),
+                                .padding(top = 72.dp),
                             reverseLayout = false,
                             contentPadding = PaddingValues(vertical = 8.dp)
                         ) {

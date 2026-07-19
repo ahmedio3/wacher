@@ -56,7 +56,8 @@ fun ChatInputBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .navigationBarsPadding(),
+                    .navigationBarsPadding()
+                    .imePadding(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
