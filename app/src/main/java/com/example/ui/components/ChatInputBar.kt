@@ -57,7 +57,7 @@ fun ChatInputBar(
                 animationSpec = tween(200)
             )
         ) {
-            ReplyBar(replyTo!!, onDismissReply)
+            replyTo?.let { ReplyBar(it, onDismissReply) }
         }
 
         Row(
