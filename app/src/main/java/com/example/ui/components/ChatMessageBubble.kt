@@ -63,13 +63,11 @@ fun ChatMessageBubble(
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
-                        if (change.positionChange) {
-                            val dx = change.position.x - down.position.x
-                            if (dx > 0) {
-                                accumulatedX = dx
-                                offsetX = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
-                                change.consume()
-                            }
+                        val dx = change.position.x - down.position.x
+                        if (dx > 0) {
+                            accumulatedX = dx
+                            offsetX = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
+                            change.consume()
                         }
                     } while (event.changes.any { it.pressed })
 
