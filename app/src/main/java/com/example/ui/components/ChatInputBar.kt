@@ -65,19 +65,26 @@ fun ChatInputBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
                     placeholder = { Text("Type a message", fontSize = 14.sp) },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(end = 38.dp)
                         .animateContentSize(),
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
                     ),
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     maxLines = 4,
