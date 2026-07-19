@@ -22,6 +22,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,7 +64,7 @@ fun ChatMessageBubble(
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
-                        if (change.positionChanged()) {
+                        if (change.positionChange() != Offset.Zero) {
                             val dx = change.position.x - down.position.x
                             if (dx > 0) {
                                 accumulatedX = dx
