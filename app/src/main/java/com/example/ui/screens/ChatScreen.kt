@@ -262,7 +262,7 @@ fun ChatScreen(
                         .zIndex(1f)
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .statusBarsPadding()
+                        .padding(top = 6.dp)
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween

@@ -48,7 +48,7 @@ fun ChatMessageBubble(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 1.dp)
+            .padding(horizontal = 2.dp, vertical = 1.dp)
             .graphicsLayer { translationX = swipeOffset }
             .pointerInput(message.id) {
                 awaitEachGesture {
@@ -89,8 +89,8 @@ fun ChatMessageBubble(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (isMine) Modifier.padding(start = 64.dp, end = 4.dp)
-                    else Modifier.padding(start = 4.dp, end = 64.dp)
+                    if (isMine) Modifier.padding(start = 40.dp, end = 4.dp)
+                    else Modifier.padding(start = 4.dp, end = 40.dp)
                 ),
             horizontalArrangement = if (isMine) Arrangement.Start else Arrangement.End,
             verticalAlignment = Alignment.Bottom

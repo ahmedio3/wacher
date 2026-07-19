@@ -5,13 +5,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,59 +42,52 @@ fun ChatInputBar(
         uri?.let { onImagePicked(it) }
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column {
-            if (replyTo != null) {
-                ReplyBar(replyTo, onDismissReply)
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (replyTo != null) {
+            ReplyBar(replyTo, onDismissReply)
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .navigationBarsPadding()
+                .imePadding(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(
+                onClick = { imagePicker.launch("image/*") },
+                modifier = Modifier
+                    .size(36.dp)
+                    .padding(bottom = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "إرفاق",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .navigationBarsPadding()
-                    .imePadding(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                IconButton(
-                    onClick = { imagePicker.launch("image/*") },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = "إرسال صورة",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
+            Box(modifier = Modifier.weight(1f)) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    placeholder = { Text("اكتب رسالتك...", fontSize = 14.sp) },
-                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Message...", fontSize = 14.sp) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 38.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     ),
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     maxLines = 4,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(
-                        onSend = {
-                            if (text.isNotBlank()) {
-                                onSendText(text.trim())
-                                text = ""
-                            }
-                        }
-                    )
+                    singleLine = false,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
                 )
 
                 IconButton(
@@ -104,21 +97,21 @@ fun ChatInputBar(
                             text = ""
                         }
                     },
-                    enabled = text.isNotBlank(),
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .align(Alignment.CenterEnd)
+                        .size(32.dp)
+                        .clip(CircleShape)
                         .background(
                             if (text.isNotBlank()) MaterialTheme.colorScheme.primary
                             else Color.Transparent
                         )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.Default.ArrowUpward,
                         contentDescription = "إرسال",
                         tint = if (text.isNotBlank()) Color.White
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                        modifier = Modifier.size(22.dp)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -145,7 +138,7 @@ private fun ReplyBar(replyTo: ReplyTo, onDismiss: () -> Unit) {
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "الرد على ${replyTo.senderName}",
+                text = "Reply to ${replyTo.senderName}",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary
