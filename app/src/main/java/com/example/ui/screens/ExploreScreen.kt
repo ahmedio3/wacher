@@ -76,7 +76,7 @@ fun ExploreScreen(
 
             // Chat button
             ExploreActionRow(
-                title = "الدردشة العامة",
+                title = "General Chat",
                 subtitle = "تواصل مع جميع المستخدمين",
                 icon = {
                     Box(

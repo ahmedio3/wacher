@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.auth.UserManager
 import com.example.chat.ChatManager
 import com.example.chat.Message
 import com.example.chat.ReplyTo
@@ -89,7 +90,7 @@ fun ChatScreen(
 
     LaunchedEffect(roomId) {
         if (isPublic) {
-            chatRoomName = ChatManager.getChatRoomName(roomId) ?: "الدردشة العامة"
+            chatRoomName = ChatManager.getChatRoomName(roomId) ?: "General Chat"
             chatRoomImageUrl = ChatManager.getChatRoomImage(roomId) ?: ""
         }
 
@@ -104,7 +105,7 @@ fun ChatScreen(
         }
     }
 
-    val displayName = if (isPublic) chatRoomName.ifEmpty { "الدردشة العامة" } else ""
+    val displayName = if (isPublic) chatRoomName.ifEmpty { "General Chat" } else ""
 
     Box(
         modifier = Modifier
@@ -130,10 +131,8 @@ fun ChatScreen(
                             state = listState,
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth()
-                                .padding(top = 72.dp),
-                            reverseLayout = false,
-                            contentPadding = PaddingValues(vertical = 8.dp)
+                                .fillMaxWidth(),
+                            reverseLayout = false
                         ) {
                             if (hasMore && messages.size >= 50) {
                                 item {
@@ -195,12 +194,11 @@ fun ChatScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth()
-                                .padding(top = 72.dp),
+                                .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "لا توجد رسائل بعد.\n ابدأ المحادثة!",
+                                text = "No messages yet.\nStart chatting!",
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                                 fontSize = 14.sp
                             )
@@ -210,36 +208,42 @@ fun ChatScreen(
                     ChatInputBar(
                         replyTo = replyTo,
                         onSendText = { text ->
-                            val msg = Message(
-                                senderId = currentUserId,
-                                senderName = FirebaseAuth.getInstance().currentUser?.displayName ?: "مستخدم",
-                                senderAvatarUrl = "",
-                                text = text,
-                                type = "text",
-                                replyTo = replyTo,
-                                timestamp = System.currentTimeMillis()
-                            )
                             scope.launch {
+                                val profile = UserManager.getProfile(currentUserId)
+                                val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
+                                val avatarUrl = profile?.avatarUrl ?: ""
+                                val msg = Message(
+                                    senderId = currentUserId,
+                                    senderName = name,
+                                    senderAvatarUrl = avatarUrl,
+                                    text = text,
+                                    type = "text",
+                                    replyTo = replyTo,
+                                    timestamp = System.currentTimeMillis()
+                                )
                                 ChatManager.sendMessage(roomId, msg)
+                                replyTo = null
                             }
-                            replyTo = null
                         },
                         onImagePicked = { uri ->
                             scope.launch {
+                                val profile = UserManager.getProfile(currentUserId)
+                                val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
+                                val avatarUrl = profile?.avatarUrl ?: ""
                                 val bitmap = uriToBitmap(uri, context)
                                 if (bitmap != null) {
                                     val success = ChatManager.sendImageMessage(
                                         roomId = roomId,
                                         bitmap = bitmap,
                                         senderId = currentUserId,
-                                        senderName = FirebaseAuth.getInstance().currentUser?.displayName ?: "مستخدم",
-                                        senderAvatarUrl = "",
+                                        senderName = name,
+                                        senderAvatarUrl = avatarUrl,
                                         replyTo = replyTo
                                     )
                                     if (!success) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "فشل تحميل الصورة",
+                                            "Failed to upload image",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -254,10 +258,11 @@ fun ChatScreen(
 
                 Row(
                     modifier = Modifier
+                        .zIndex(1f)
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -362,12 +367,14 @@ fun ChatScreen(
                 onStartChat = { otherUserId ->
                     userProfileSheet = null
                     scope.launch {
-                        val name = FirebaseAuth.getInstance().currentUser?.displayName ?: "مستخدم"
+                        val profile = UserManager.getProfile(currentUserId)
+                        val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
+                        val avatarUrl = profile?.avatarUrl ?: ""
                         val roomId = ChatManager.getOrCreateDMRoom(
                             currentUserId = currentUserId,
                             otherUserId = otherUserId,
                             otherUserName = name,
-                            otherUserAvatarUrl = ""
+                            otherUserAvatarUrl = avatarUrl
                         )
                         onNavigateToDM(roomId, false)
                     }

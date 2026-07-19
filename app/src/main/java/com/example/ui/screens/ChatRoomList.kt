@@ -90,7 +90,7 @@ private fun ChatRoomItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = chat.otherUserName.ifEmpty {
-                    if (chat.roomType == "public") "الدردشة العامة" else "مستخدم"
+                    if (chat.roomType == "public") "General Chat" else "User"
                 },
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,

@@ -48,7 +48,7 @@ fun ChatMessageBubble(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 1.dp)
+            .padding(horizontal = 4.dp, vertical = 1.dp)
             .graphicsLayer { translationX = swipeOffset }
             .pointerInput(message.id) {
                 awaitEachGesture {
@@ -95,35 +95,8 @@ fun ChatMessageBubble(
             horizontalArrangement = if (isMine) Arrangement.Start else Arrangement.End,
             verticalAlignment = Alignment.Bottom
         ) {
-            if (!isMine) {
-                if (showAvatar) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onUserClick(message.senderId, message.senderName, message.senderAvatarUrl) }
-                    ) {
-                        if (message.senderAvatarUrl.isNotEmpty()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(message.senderAvatarUrl)
-                                    .crossfade(200)
-                                    .build(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                } else {
-                    Spacer(modifier = Modifier.width(38.dp))
-                }
-            }
-
             Column(
+                modifier = Modifier.weight(1f, fill = false),
                 horizontalAlignment = if (isMine) Alignment.Start else Alignment.End
             ) {
                 if (isFirstInGroup && !isMine) {
@@ -186,6 +159,34 @@ fun ChatMessageBubble(
             if (isMine) {
                 Spacer(modifier = Modifier.width(4.dp))
                 Box(modifier = Modifier.size(28.dp))
+            }
+
+            if (!isMine) {
+                if (showAvatar) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onUserClick(message.senderId, message.senderName, message.senderAvatarUrl) }
+                    ) {
+                        if (message.senderAvatarUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(message.senderAvatarUrl)
+                                    .crossfade(200)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                } else {
+                    Spacer(modifier = Modifier.width(38.dp))
+                }
             }
         }
     }
