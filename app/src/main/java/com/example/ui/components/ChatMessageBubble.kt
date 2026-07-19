@@ -54,6 +54,8 @@ fun ChatMessageBubble(
             .pointerInput(message.id) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    val startTime = System.nanoTime()
+                    var isSwiping = false
                     var finalDx = 0f
                     var finalDy = 0f
                     do {
@@ -61,10 +63,20 @@ fun ChatMessageBubble(
                         val change = event.changes.firstOrNull() ?: break
                         val dx = change.position.x - down.position.x
                         val dy = abs(change.position.y - down.position.y)
+                        val elapsed = System.nanoTime() - startTime
                         finalDx = dx
                         finalDy = dy
-                        if (dx > 0 && dx > dy * 2f) {
-                            swipeOffset = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
+                        if (dx > 0 && dx > dy * 2f && elapsed > 250_000_000L) {
+                            isSwiping = true
+                        }
+                        if (isSwiping) {
+                            if (dx > 0) {
+                                swipeOffset = dx.coerceAtMost(SWIPE_THRESHOLD * 1.5f)
+                                change.consume()
+                            } else {
+                                isSwiping = false
+                                swipeOffset = 0f
+                            }
                         } else {
                             swipeOffset = 0f
                         }
@@ -95,8 +107,8 @@ fun ChatMessageBubble(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (isMine) Modifier.padding(start = 30.dp, end = 4.dp)
-                    else Modifier.padding(start = 4.dp, end = 30.dp)
+                    if (isMine) Modifier.padding(start = 20.dp, end = 4.dp)
+                    else Modifier.padding(start = 4.dp, end = 20.dp)
                 ),
             horizontalArrangement = if (isMine) Arrangement.Start else Arrangement.End,
             verticalAlignment = Alignment.Bottom

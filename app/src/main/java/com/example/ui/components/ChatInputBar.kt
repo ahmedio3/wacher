@@ -5,8 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -49,10 +48,16 @@ fun ChatInputBar(
     Column(modifier = modifier.fillMaxWidth()) {
         AnimatedVisibility(
             visible = replyTo != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(200)
+            ),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(200)
+            )
         ) {
-            replyTo?.let { ReplyBar(it, onDismissReply) }
+            ReplyBar(replyTo!!, onDismissReply)
         }
 
         Row(
@@ -77,7 +82,7 @@ fun ChatInputBar(
                     placeholder = { Text("Type a message", fontSize = 14.sp) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 38.dp)
+                        .padding(start = 44.dp)
                         .animateContentSize(),
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -100,7 +105,7 @@ fun ChatInputBar(
                         }
                     },
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
+                        .align(Alignment.BottomStart)
                         .size(32.dp)
                         .clip(CircleShape)
                         .background(

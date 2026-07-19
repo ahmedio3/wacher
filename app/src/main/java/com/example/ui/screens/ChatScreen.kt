@@ -110,12 +110,22 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages) {
         if (messages.isEmpty()) return@LaunchedEffect
+        val lastMessage = messages.last()
         if (!hasScrolledToBottom) {
             listState.scrollToItem(messages.size - 1)
             hasScrolledToBottom = true
+        } else if (lastMessage.senderId == currentUserId) {
+            listState.animateScrollToItem(messages.size - 1)
         } else if (isAtBottom) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    LaunchedEffect(replyTo) {
+        if (replyTo != null && hasScrolledToBottom && messages.isNotEmpty()) {
+            kotlinx.coroutines.delay(100)
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -229,6 +239,8 @@ fun ChatScreen(
                     ChatInputBar(
                         replyTo = replyTo,
                         onSendText = { text ->
+                            val currentReply = replyTo
+                            replyTo = null
                             scope.launch {
                                 val profile = UserManager.getProfile(currentUserId)
                                 val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
@@ -239,14 +251,15 @@ fun ChatScreen(
                                     senderAvatarUrl = avatarUrl,
                                     text = text,
                                     type = "text",
-                                    replyTo = replyTo,
+                                    replyTo = currentReply,
                                     timestamp = System.currentTimeMillis()
                                 )
                                 ChatManager.sendMessage(roomId, msg)
-                                replyTo = null
                             }
                         },
                         onImagePicked = { uri ->
+                            val currentReply = replyTo
+                            replyTo = null
                             scope.launch {
                                 val profile = UserManager.getProfile(currentUserId)
                                 val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
@@ -259,7 +272,7 @@ fun ChatScreen(
                                         senderId = currentUserId,
                                         senderName = name,
                                         senderAvatarUrl = avatarUrl,
-                                        replyTo = replyTo
+                                        replyTo = currentReply
                                     )
                                     if (!success) {
                                         android.widget.Toast.makeText(
@@ -269,7 +282,6 @@ fun ChatScreen(
                                         ).show()
                                     }
                                 }
-                                replyTo = null
                             }
                         },
                         onDismissReply = { replyTo = null },
