@@ -3,6 +3,12 @@ package com.example.ui.components
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -18,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -34,7 +39,6 @@ fun ChatInputBar(
     modifier: Modifier = Modifier
 ) {
     var text by remember { mutableStateOf("") }
-    val context = LocalContext.current
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -43,8 +47,12 @@ fun ChatInputBar(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        if (replyTo != null) {
-            ReplyBar(replyTo, onDismissReply)
+        AnimatedVisibility(
+            visible = replyTo != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            replyTo?.let { ReplyBar(it, onDismissReply) }
         }
 
         Row(
@@ -56,27 +64,14 @@ fun ChatInputBar(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(
-                onClick = { imagePicker.launch("image/*") },
-                modifier = Modifier
-                    .size(36.dp)
-                    .padding(bottom = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "إرفاق",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    placeholder = { Text("Message...", fontSize = 14.sp) },
+                    placeholder = { Text("Type a message", fontSize = 14.sp) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 38.dp),
+                        .animateContentSize(),
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
@@ -87,7 +82,8 @@ fun ChatInputBar(
                     textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                     maxLines = 4,
                     singleLine = false,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                    contentPadding = PaddingValues(start = 16.dp, end = 48.dp)
                 )
 
                 IconButton(
@@ -98,7 +94,7 @@ fun ChatInputBar(
                         }
                     },
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
+                        .align(Alignment.CenterStart)
                         .size(32.dp)
                         .clip(CircleShape)
                         .background(
@@ -114,6 +110,19 @@ fun ChatInputBar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
+
+            IconButton(
+                onClick = { imagePicker.launch("image/*") },
+                modifier = Modifier
+                    .size(36.dp)
+                    .padding(bottom = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "إرفاق",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

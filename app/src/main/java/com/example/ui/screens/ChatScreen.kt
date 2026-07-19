@@ -69,6 +69,16 @@ fun ChatScreen(
     var isChangingImage by remember { mutableStateOf(false) }
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
     var userProfileSheet by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+    var hasScrolledToBottom by remember { mutableStateOf(false) }
+
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            if (layoutInfo.totalItemsCount == 0) return@derivedStateOf true
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleItem >= layoutInfo.totalItemsCount - 2
+        }
+    }
 
     val headerImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -97,6 +107,16 @@ fun ChatScreen(
 
         ChatManager.listenForMessages(roomId) { msgList ->
             messages = msgList
+        }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isEmpty()) return@LaunchedEffect
+        if (!hasScrolledToBottom) {
+            listState.scrollToItem(messages.size - 1)
+            hasScrolledToBottom = true
+        } else if (isAtBottom) {
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
@@ -262,7 +282,7 @@ fun ChatScreen(
                         .zIndex(1f)
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .padding(top = 6.dp)
+                        .padding(top = 9.dp)
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
