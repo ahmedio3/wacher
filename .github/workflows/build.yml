@@ -36,3 +36,12 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 1
+
+      - name: Upload APK as Release Asset
+        if: success() && contains(github.event.head_commit.message, '[release]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${{ github.run_id }}"
+          gh release create "$tag" --title "$tag" --generate-notes
+          gh release upload "$tag" app/build/outputs/apk/debug/*.apk --clobber
