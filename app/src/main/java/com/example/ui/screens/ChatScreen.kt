@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -113,25 +112,23 @@ fun ChatScreen(
         }
     }
 
-    val smoothScrollSpec = tween<Int>(350)
-
     LaunchedEffect(messages) {
         if (messages.isEmpty()) return@LaunchedEffect
         val lastMessage = messages.last()
         if (!hasScrolledToBottom) {
-            listState.animateScrollToItem(animationSpec = smoothScrollSpec, index = messages.size - 1)
+            listState.animateScrollToItem(messages.size - 1)
             hasScrolledToBottom = true
         } else if (lastMessage.senderId == currentUserId) {
-            listState.animateScrollToItem(animationSpec = smoothScrollSpec, index = messages.size - 1)
+            listState.animateScrollToItem(messages.size - 1)
         } else if (isAtBottom) {
-            listState.animateScrollToItem(animationSpec = smoothScrollSpec, index = messages.size - 1)
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
     LaunchedEffect(replyTo) {
         if (replyTo != null && hasScrolledToBottom && messages.isNotEmpty()) {
             kotlinx.coroutines.delay(100)
-            listState.animateScrollToItem(animationSpec = smoothScrollSpec, index = messages.size - 1)
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
