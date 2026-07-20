@@ -37,30 +37,23 @@ fun ChatRoomList(
 ) {
     var chats by remember { mutableStateOf<List<UserChat>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var loadedProfileCount by remember { mutableStateOf(0) }
 
     LaunchedEffect(userId) {
         ChatManager.ensurePublicRoom(userId)
         ChatManager.listenForUserChats(userId) { chatList ->
             chats = chatList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
-        }
-    }
-
-    LaunchedEffect(chats, loadedProfileCount) {
-        if (chats.isNotEmpty() && loadedProfileCount >= chats.size) {
             isLoading = false
         }
     }
 
     Column(modifier = modifier) {
-        if (isLoading) {
+        if (isLoading && chats.isEmpty()) {
             repeat(4) { ChatRoomSkeleton() }
         } else {
             chats.forEach { chat ->
                 ChatRoomItem(
                     chat = chat,
-                    onClick = { onChatClick(chat) },
-                    onProfileLoaded = { loadedProfileCount++ }
+                    onClick = { onChatClick(chat) }
                 )
             }
         }
@@ -117,8 +110,7 @@ private fun ChatRoomSkeleton() {
 @Composable
 private fun ChatRoomItem(
     chat: UserChat,
-    onClick: () -> Unit,
-    onProfileLoaded: () -> Unit = {}
+    onClick: () -> Unit
 ) {
     var displayName by remember(chat.roomId) {
         mutableStateOf(
@@ -129,7 +121,6 @@ private fun ChatRoomItem(
     }
     var displayAvatar by remember(chat.roomId) { mutableStateOf(chat.otherUserAvatarUrl) }
     var globalLastMessage by remember(chat.roomId) { mutableStateOf<LastMessage?>(null) }
-    var profileLoaded by remember(chat.roomId) { mutableStateOf(false) }
     val isPublic = chat.roomType == "public"
 
     LaunchedEffect(chat.roomId, chat.roomType, chat.otherUserId) {
@@ -150,10 +141,6 @@ private fun ChatRoomItem(
                     if (profile.avatarUrl.isNotEmpty()) displayAvatar = profile.avatarUrl
                 }
             }
-        }
-        if (!profileLoaded) {
-            profileLoaded = true
-            onProfileLoaded()
         }
     }
 
