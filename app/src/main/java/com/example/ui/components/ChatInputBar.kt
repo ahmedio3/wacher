@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.chat.ReplyTo
 
+private val SendBlue = Color(0xFF2196F3)
+
 @Composable
 fun ChatInputBar(
     replyTo: ReplyTo?,
@@ -60,80 +62,79 @@ fun ChatInputBar(
             replyTo?.let { ReplyBar(it, onDismissReply) }
         }
 
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
                 .navigationBarsPadding()
-                .imePadding(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .imePadding()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surface)
         ) {
-            Box(modifier = Modifier.weight(1f)) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    placeholder = { Text("Type a message", fontSize = 14.sp) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 44.dp)
-                        .animateContentSize(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
-                    ),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                    maxLines = 4,
-                    singleLine = false,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        placeholder = { Text("اكتب رسالة...", fontSize = 14.sp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 40.dp)
+                            .animateContentSize(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        ),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                        maxLines = 4,
+                        singleLine = false,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
+                    )
+
+                    IconButton(
+                        onClick = {
+                            if (text.isNotBlank()) {
+                                onSendText(text.trim())
+                                text = ""
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (text.isNotBlank()) SendBlue
+                                else Color.Transparent
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "إرسال",
+                            tint = if (text.isNotBlank()) Color.White
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
                 IconButton(
-                    onClick = {
-                        if (text.isNotBlank()) {
-                            onSendText(text.trim())
-                            text = ""
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (text.isNotBlank()) MaterialTheme.colorScheme.primary
-                            else Color.Transparent
-                        )
+                    onClick = { imagePicker.launch("image/*") },
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
-                        contentDescription = "إرسال",
-                        tint = if (text.isNotBlank()) Color.White
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                        modifier = Modifier.size(20.dp)
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "إرفاق",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
-            }
-
-            IconButton(
-                onClick = { imagePicker.launch("image/*") },
-                modifier = Modifier
-                    .size(36.dp)
-                    .padding(bottom = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "إرفاق",
-                    tint = MaterialTheme.colorScheme.primary
-                )
             }
         }
     }
