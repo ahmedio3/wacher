@@ -97,6 +97,14 @@ object ChatManager {
         db.child("chat_rooms").child(roomId).child("lastMessage").setValue(lastMsg).await()
 
         db.child("user_rooms").child(message.senderId).child(roomId).child("lastMessage").setValue(lastMsg).await()
+
+        if (roomId.startsWith("dm_")) {
+            val parts = roomId.removePrefix("dm_").split("_")
+            if (parts.size >= 2) {
+                val otherId = if (parts[0] == message.senderId) parts[1] else parts[0]
+                db.child("user_rooms").child(otherId).child(roomId).child("lastMessage").setValue(lastMsg).await()
+            }
+        }
     }
 
     suspend fun sendImageMessage(roomId: String, bitmap: Bitmap, senderId: String, senderName: String, senderAvatarUrl: String, replyTo: ReplyTo? = null): Boolean {

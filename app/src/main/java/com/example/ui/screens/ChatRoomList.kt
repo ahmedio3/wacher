@@ -3,8 +3,6 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -14,7 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -34,12 +31,13 @@ fun ChatRoomList(
     modifier: Modifier = Modifier
 ) {
     var chats by remember { mutableStateOf<List<UserChat>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(userId) {
         ChatManager.ensurePublicRoom(userId)
         ChatManager.listenForUserChats(userId) { chatList ->
-            chats = chatList.filter { it.lastMessage != null }
-                .sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+            chats = chatList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+            isLoading = false
         }
     }
 
@@ -47,13 +45,62 @@ fun ChatRoomList(
         onDispose { /* listener cleanup handled internally */ }
     }
 
-    if (chats.isEmpty()) return
-
     Column(modifier = modifier) {
-        chats.forEach { chat ->
-            ChatRoomItem(chat = chat, onClick = { onChatClick(chat) })
+        if (isLoading) {
+            repeat(4) { ChatRoomSkeleton() }
+        } else {
+            chats.forEach { chat ->
+                ChatRoomItem(chat = chat, onClick = { onChatClick(chat) })
+            }
         }
     }
+}
+
+@Composable
+private fun ChatRoomSkeleton() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(12.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        )
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 76.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+    )
 }
 
 @Composable
