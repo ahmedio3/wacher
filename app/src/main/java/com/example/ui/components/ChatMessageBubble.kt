@@ -83,8 +83,8 @@ fun ChatMessageBubble(
         if (swipeOffset < 0f) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = 8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Reply,

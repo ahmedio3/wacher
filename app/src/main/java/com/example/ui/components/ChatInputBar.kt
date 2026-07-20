@@ -108,7 +108,8 @@ fun ChatInputBar(
                         },
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .size(32.dp)
+                            .padding(end = 6.dp, bottom = 4.dp)
+                            .size(26.dp)
                             .clip(CircleShape)
                             .background(
                                 if (text.isNotBlank()) SendBlue
@@ -120,14 +121,14 @@ fun ChatInputBar(
                             contentDescription = "إرسال",
                             tint = if (text.isNotBlank()) Color.White
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
                 IconButton(
                     onClick = { imagePicker.launch("image/*") },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(36.dp).offset(y = (-3).dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
