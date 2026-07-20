@@ -93,6 +93,7 @@ fun ChatScreen(
                     val url = withContext(Dispatchers.IO) { ImgBBUploader.uploadImage(bitmap) }
                     if (url != null) {
                         ChatManager.updateChatRoomImage(roomId, url)
+                        ChatManager.setCachedChatRoomImage(roomId, url)
                         chatRoomImageUrl = url
                     }
                 }

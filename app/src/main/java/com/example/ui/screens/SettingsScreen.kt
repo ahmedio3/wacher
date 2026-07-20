@@ -63,6 +63,7 @@ fun SettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var isProfileLoading by remember { mutableStateOf(true) }
     var emailInput by remember { mutableStateOf("") }
     var passInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -73,14 +74,17 @@ fun SettingsScreen(
 
     // Fetch user profile on user change
     LaunchedEffect(user) {
+        isProfileLoading = true
         if (user != null) {
             val prof = UserManager.getProfile(user!!.uid)
             userProfile = prof
+            isProfileLoading = false
             if (prof == null || prof.name.isEmpty() || prof.username.isEmpty()) {
                 showProfileDialog = true
             }
         } else {
             userProfile = null
+            isProfileLoading = false
         }
     }
 
@@ -170,6 +174,7 @@ fun SettingsScreen(
             ProfileSection(
                 user = user,
                 userProfile = userProfile,
+                isProfileLoading = isProfileLoading,
                 onEditClick = { showProfileDialog = true },
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
@@ -498,6 +503,7 @@ fun SettingsScreen(
 fun ProfileSection(
     user: FirebaseUser?,
     userProfile: UserProfile?,
+    isProfileLoading: Boolean = false,
     onEditClick: () -> Unit,
     onLogoutClick: () -> Unit,
     emailInput: String,
@@ -522,6 +528,36 @@ fun ProfileSection(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (user != null) {
+                if (isProfileLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(120.dp)
+                                    .height(18.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(80.dp)
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
+                } else {
                 // Signed In State — horizontal header (avatar + name/username)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -550,7 +586,7 @@ fun ProfileSection(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else (user.displayName ?: user.email ?: "بك"),
+                            text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else "بك",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             style = MaterialTheme.typography.titleLarge,

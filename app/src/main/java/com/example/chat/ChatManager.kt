@@ -15,6 +15,7 @@ object ChatManager {
     private val db = FirebaseDatabase.getInstance().reference
 
     private val messagesCache = mutableMapOf<String, List<Message>>()
+    private val roomInfoCache = mutableMapOf<String, Pair<String?, String?>>()
     private val listeners = mutableMapOf<String, ValueEventListener>()
     private val messageListeners = mutableMapOf<String, MutableList<(List<Message>) -> Unit>>()
 
@@ -130,6 +131,10 @@ object ChatManager {
     fun listenForMessages(roomId: String, onMessages: (List<Message>) -> Unit) {
         messageListeners.getOrPut(roomId) { mutableListOf() }.add(onMessages)
 
+        if (messagesCache.containsKey(roomId)) {
+            onMessages(messagesCache[roomId]!!)
+        }
+
         if (listeners.containsKey(roomId)) return
 
         val valueListener = object : ValueEventListener {
@@ -179,7 +184,6 @@ object ChatManager {
         listeners.remove(roomId)?.let {
             db.child("messages").child(roomId).removeEventListener(it)
         }
-        messagesCache.remove(roomId)
         messageListeners.remove(roomId)
     }
 
@@ -214,13 +218,32 @@ object ChatManager {
     }
 
     suspend fun getChatRoomName(roomId: String): String? {
-        val snapshot = db.child("chat_rooms").child(roomId).child("name").get().await()
-        return snapshot.getValue(String::class.java)
+        roomInfoCache[roomId]?.first?.let { return it }
+        val name = db.child("chat_rooms").child(roomId).child("name").get().await().getValue(String::class.java)
+        val current = roomInfoCache[roomId]
+        roomInfoCache[roomId] = name to (current?.second)
+        return name
     }
 
     suspend fun getChatRoomImage(roomId: String): String? {
-        val snapshot = db.child("chat_rooms").child(roomId).child("imageUrl").get().await()
-        return snapshot.getValue(String::class.java)
+        roomInfoCache[roomId]?.second?.let { return it }
+        val url = db.child("chat_rooms").child(roomId).child("imageUrl").get().await().getValue(String::class.java)
+        val current = roomInfoCache[roomId]
+        roomInfoCache[roomId] = (current?.first) to url
+        return url
+    }
+
+    fun getCachedChatRoomName(roomId: String): String? = roomInfoCache[roomId]?.first
+    fun getCachedChatRoomImage(roomId: String): String? = roomInfoCache[roomId]?.second
+
+    fun setCachedChatRoomName(roomId: String, name: String) {
+        val current = roomInfoCache[roomId]
+        roomInfoCache[roomId] = name to (current?.second)
+    }
+
+    fun setCachedChatRoomImage(roomId: String, url: String) {
+        val current = roomInfoCache[roomId]
+        roomInfoCache[roomId] = (current?.first) to url
     }
 
     suspend fun updateOtherUserInfoInDmRoom(roomId: String, currentUserId: String, otherUserName: String, otherUserAvatarUrl: String) {

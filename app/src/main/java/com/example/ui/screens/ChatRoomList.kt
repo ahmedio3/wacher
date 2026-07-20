@@ -22,7 +22,11 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.auth.UserManager
 import com.example.chat.ChatManager
+import com.example.chat.LastMessage
 import com.example.chat.UserChat
+import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 
 @Composable
 fun ChatRoomList(
@@ -32,17 +36,19 @@ fun ChatRoomList(
 ) {
     var chats by remember { mutableStateOf<List<UserChat>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var loadedProfileCount by remember { mutableStateOf(0) }
 
     LaunchedEffect(userId) {
         ChatManager.ensurePublicRoom(userId)
         ChatManager.listenForUserChats(userId) { chatList ->
             chats = chatList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
-            isLoading = false
         }
     }
 
-    DisposableEffect(userId) {
-        onDispose { /* listener cleanup handled internally */ }
+    LaunchedEffect(chats, loadedProfileCount) {
+        if (chats.isNotEmpty() && loadedProfileCount >= chats.size) {
+            isLoading = false
+        }
     }
 
     Column(modifier = modifier) {
@@ -50,7 +56,11 @@ fun ChatRoomList(
             repeat(4) { ChatRoomSkeleton() }
         } else {
             chats.forEach { chat ->
-                ChatRoomItem(chat = chat, onClick = { onChatClick(chat) })
+                ChatRoomItem(
+                    chat = chat,
+                    onClick = { onChatClick(chat) },
+                    onProfileLoaded = { loadedProfileCount++ }
+                )
             }
         }
     }
@@ -106,7 +116,8 @@ private fun ChatRoomSkeleton() {
 @Composable
 private fun ChatRoomItem(
     chat: UserChat,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onProfileLoaded: () -> Unit = {}
 ) {
     var displayName by remember(chat.roomId) {
         mutableStateOf(
@@ -116,11 +127,20 @@ private fun ChatRoomItem(
         )
     }
     var displayAvatar by remember(chat.roomId) { mutableStateOf(chat.otherUserAvatarUrl) }
+    var globalLastMessage by remember(chat.roomId) { mutableStateOf<LastMessage?>(null) }
+    var profileLoaded by remember(chat.roomId) { mutableStateOf(false) }
+    val isPublic = chat.roomType == "public"
 
     LaunchedEffect(chat.roomId, chat.roomType, chat.otherUserId) {
         if (chat.roomType == "public") {
             displayName = ChatManager.getChatRoomName(chat.roomId) ?: "General Chat"
             displayAvatar = ChatManager.getChatRoomImage(chat.roomId) ?: ""
+
+            val snap = FirebaseDatabase.getInstance().reference
+                .child("chat_rooms").child(chat.roomId).child("lastMessage")
+                .get().await()
+            val msg = snap.getValue(LastMessage::class.java)
+            if (msg != null) globalLastMessage = msg
         } else {
             if (chat.otherUserId.isNotEmpty()) {
                 val profile = UserManager.getProfile(chat.otherUserId)
@@ -130,7 +150,29 @@ private fun ChatRoomItem(
                 }
             }
         }
+        if (!profileLoaded) {
+            profileLoaded = true
+            onProfileLoaded()
+        }
     }
+
+    if (isPublic) {
+        val publicRef = FirebaseDatabase.getInstance().reference
+            .child("chat_rooms").child(chat.roomId).child("lastMessage")
+        DisposableEffect(chat.roomId) {
+            val listener = object : ValueEventListener {
+                override fun onDataChange(s: com.google.firebase.database.DataSnapshot) {
+                    val m = s.getValue(LastMessage::class.java)
+                    if (m != null) globalLastMessage = m
+                }
+                override fun onCancelled(e: com.google.firebase.database.DatabaseError) {}
+            }
+            publicRef.addValueEventListener(listener)
+            onDispose { publicRef.removeEventListener(listener) }
+        }
+    }
+
+    val lastMsg = if (isPublic) (globalLastMessage ?: chat.lastMessage) else chat.lastMessage
 
     Row(
         modifier = Modifier
@@ -161,16 +203,30 @@ private fun ChatRoomItem(
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = displayName,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = displayName,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = if (isPublic) JetBrainsMonoFontFamily else null,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                if (isPublic) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "group",
+                        fontSize = 10.sp,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = chat.lastMessage?.let {
+                text = lastMsg?.let {
                     if (it.type == "image") "🖼️ صورة"
                     else it.text
                 } ?: "",
@@ -182,7 +238,7 @@ private fun ChatRoomItem(
         }
 
         Text(
-            text = chat.lastMessage?.let { formatChatTimestamp(it.timestamp) } ?: "",
+            text = lastMsg?.let { formatChatTimestamp(it.timestamp) } ?: "",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         )
