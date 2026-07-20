@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.auth.UserManager
 import com.example.chat.ChatManager
 import com.example.chat.UserChat
 
@@ -35,6 +36,7 @@ fun ChatRoomList(
     var chats by remember { mutableStateOf<List<UserChat>>(emptyList()) }
 
     LaunchedEffect(userId) {
+        ChatManager.ensurePublicRoom(userId)
         ChatManager.listenForUserChats(userId) { chatList ->
             chats = chatList.filter { it.lastMessage != null }
                 .sortedByDescending { it.lastMessage?.timestamp ?: 0L }
@@ -59,6 +61,30 @@ private fun ChatRoomItem(
     chat: UserChat,
     onClick: () -> Unit
 ) {
+    var displayName by remember(chat.roomId) {
+        mutableStateOf(
+            chat.otherUserName.ifEmpty {
+                if (chat.roomType == "public") "General Chat" else "User"
+            }
+        )
+    }
+    var displayAvatar by remember(chat.roomId) { mutableStateOf(chat.otherUserAvatarUrl) }
+
+    LaunchedEffect(chat.roomId, chat.roomType, chat.otherUserId) {
+        if (chat.roomType == "public") {
+            displayName = ChatManager.getChatRoomName(chat.roomId) ?: "General Chat"
+            displayAvatar = ChatManager.getChatRoomImage(chat.roomId) ?: ""
+        } else {
+            if (chat.otherUserId.isNotEmpty()) {
+                val profile = UserManager.getProfile(chat.otherUserId)
+                if (profile != null) {
+                    if (profile.name.isNotEmpty()) displayName = profile.name
+                    if (profile.avatarUrl.isNotEmpty()) displayAvatar = profile.avatarUrl
+                }
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -72,10 +98,10 @@ private fun ChatRoomItem(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            if (chat.otherUserAvatarUrl.isNotEmpty()) {
+            if (displayAvatar.isNotEmpty()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(chat.otherUserAvatarUrl)
+                        .data(displayAvatar)
                         .crossfade(200)
                         .build(),
                     contentDescription = null,
@@ -89,9 +115,7 @@ private fun ChatRoomItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = chat.otherUserName.ifEmpty {
-                    if (chat.roomType == "public") "General Chat" else "User"
-                },
+                text = displayName,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

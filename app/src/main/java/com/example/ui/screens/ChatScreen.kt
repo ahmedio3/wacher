@@ -70,6 +70,8 @@ fun ChatScreen(
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
     var userProfileSheet by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     var hasScrolledToBottom by remember { mutableStateOf(false) }
+    var dmPartnerName by remember { mutableStateOf("") }
+    var dmPartnerAvatar by remember { mutableStateOf("") }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -127,6 +129,17 @@ fun ChatScreen(
         if (replyTo != null && hasScrolledToBottom && messages.isNotEmpty()) {
             kotlinx.coroutines.delay(100)
             listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    LaunchedEffect(roomId) {
+        if (!isPublic) {
+            val otherId = ChatManager.getOtherUserId(roomId, currentUserId)
+            if (otherId.isNotEmpty()) {
+                val profile = UserManager.getProfile(otherId)
+                dmPartnerName = profile?.name ?: "User"
+                dmPartnerAvatar = profile?.avatarUrl ?: ""
+            }
         }
     }
 
@@ -313,48 +326,52 @@ fun ChatScreen(
                         )
                     }
 
-                    if (isPublic) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color.White)
-                                    .clickable { headerImagePicker.launch("image/*") }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color.White)
+                                .then(
+                                    if (isPublic) Modifier.clickable { headerImagePicker.launch("image/*") }
+                                    else Modifier
+                                )
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    if (chatRoomImageUrl.isNotEmpty()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(chatRoomImageUrl)
-                                                .crossfade(200)
-                                                .build(),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                    Text(
-                                        text = displayName,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = if (isLatinText(displayName))
-                                                androidx.compose.ui.text.font.FontFamily.Monospace
-                                            else null,
-                                            fontSize = 15.sp
-                                        )
+                                val headerImage = if (isPublic) chatRoomImageUrl else dmPartnerAvatar
+                                val headerName = if (isPublic) (chatRoomName.ifEmpty { "General Chat" }) else dmPartnerName
+
+                                if (headerImage.isNotEmpty()) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(headerImage)
+                                            .crossfade(200)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
                                     )
-                                    if (isChangingImage) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                    }
+                                }
+                                Text(
+                                    text = headerName,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = if (isLatinText(headerName))
+                                            androidx.compose.ui.text.font.FontFamily.Monospace
+                                        else null,
+                                        fontSize = 15.sp
+                                    )
+                                )
+                                if (isPublic && isChangingImage) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
                                 }
                             }
                         }
@@ -400,14 +417,19 @@ fun ChatScreen(
                 onStartChat = { otherUserId ->
                     userProfileSheet = null
                     scope.launch {
-                        val profile = UserManager.getProfile(currentUserId)
-                        val name = profile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
-                        val avatarUrl = profile?.avatarUrl ?: ""
+                        val myProfile = UserManager.getProfile(currentUserId)
+                        val otherProfile = UserManager.getProfile(otherUserId)
+                        val myName = myProfile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "User"
+                        val myAvatar = myProfile?.avatarUrl ?: ""
+                        val otherName = otherProfile?.name ?: "User"
+                        val otherAvatar = otherProfile?.avatarUrl ?: ""
                         val roomId = ChatManager.getOrCreateDMRoom(
                             currentUserId = currentUserId,
                             otherUserId = otherUserId,
-                            otherUserName = name,
-                            otherUserAvatarUrl = avatarUrl
+                            otherUserName = otherName,
+                            otherUserAvatarUrl = otherAvatar,
+                            currentUserName = myName,
+                            currentUserAvatarUrl = myAvatar
                         )
                         onNavigateToDM(roomId, false)
                     }

@@ -23,7 +23,14 @@ object ChatManager {
         return "dm_${sorted[0]}_${sorted[1]}"
     }
 
-    suspend fun getOrCreateDMRoom(currentUserId: String, otherUserId: String, otherUserName: String, otherUserAvatarUrl: String): String {
+    suspend fun getOrCreateDMRoom(
+        currentUserId: String,
+        otherUserId: String,
+        otherUserName: String,
+        otherUserAvatarUrl: String,
+        currentUserName: String = "",
+        currentUserAvatarUrl: String = ""
+    ): String {
         val roomId = generateDMRoomId(currentUserId, otherUserId)
 
         val snapshot = db.child("chat_rooms").child(roomId).get().await()
@@ -35,25 +42,43 @@ object ChatManager {
                 createdAt = System.currentTimeMillis()
             )
             db.child("chat_rooms").child(roomId).setValue(room).await()
-
-            addUserRoom(currentUserId, roomId, "private", otherUserId, otherUserName, otherUserAvatarUrl)
-            addUserRoom(otherUserId, roomId, "private", currentUserId, "", "")
         }
+
+        addUserRoom(currentUserId, roomId, "private", otherUserId, otherUserName, otherUserAvatarUrl)
+        addUserRoom(otherUserId, roomId, "private", currentUserId, currentUserName, currentUserAvatarUrl)
         return roomId
     }
 
     private suspend fun addUserRoom(userId: String, roomId: String, roomType: String, otherUserId: String, otherUserName: String, otherUserAvatarUrl: String) {
-        val ref = db.child("user_rooms").child(userId).child(roomId)
-        val existing = ref.child("otherUserId").get().await()
-        if (!existing.exists() || existing.getValue(String::class.java) != otherUserId) {
-            val userChat = UserChat(
-                roomId = roomId,
-                roomType = roomType,
-                otherUserId = otherUserId,
-                otherUserName = otherUserName,
-                otherUserAvatarUrl = otherUserAvatarUrl
+        val userChat = UserChat(
+            roomId = roomId,
+            roomType = roomType,
+            otherUserId = otherUserId,
+            otherUserName = otherUserName,
+            otherUserAvatarUrl = otherUserAvatarUrl
+        )
+        db.child("user_rooms").child(userId).child(roomId).setValue(userChat).await()
+    }
+
+    fun getOtherUserId(roomId: String, currentUserId: String): String {
+        if (!roomId.startsWith("dm_")) return ""
+        val parts = roomId.removePrefix("dm_").split("_")
+        if (parts.size < 2) return ""
+        return if (parts[0] == currentUserId) parts[1] else parts[0]
+    }
+
+    suspend fun ensurePublicRoom(userId: String) {
+        val ref = db.child("user_rooms").child(userId).child("public")
+        val existing = ref.child("roomId").get().await()
+        if (!existing.exists()) {
+            val publicChat = UserChat(
+                roomId = "public",
+                roomType = "public",
+                otherUserId = "",
+                otherUserName = "General Chat",
+                otherUserAvatarUrl = ""
             )
-            ref.setValue(userChat).await()
+            ref.setValue(publicChat).await()
         }
     }
 

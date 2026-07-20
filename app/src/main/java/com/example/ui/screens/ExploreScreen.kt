@@ -11,7 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Forum
+
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -74,24 +74,7 @@ fun ExploreScreen(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
             )
 
-            // Chat button
-            ExploreActionRow(
-                title = "General Chat",
-                subtitle = "تواصل مع جميع المستخدمين",
-                icon = {
-                    Box(
-                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF8C6D4F)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Forum, contentDescription = null, tint = Color.White)
-                    }
-                },
-                onClick = { onNavigateToChat("public", true) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 2. Unsafe mode button (بديل الوضع الآمن القديم)
+            // Unsafe mode button
             Button(
                 onClick = {
                     if (unlocked) onNavigateToAdultContent("")
