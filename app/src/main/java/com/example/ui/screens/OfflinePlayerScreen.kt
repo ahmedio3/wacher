@@ -64,14 +64,9 @@ import androidx.media3.ui.PlayerView
 import com.example.MainActivity
 import com.example.data.local.DownloadEntity
 import com.example.ui.components.DownloadedSubtitleBrowser
-import com.example.ui.components.InAppNotificationHost
-import com.example.ui.components.NotificationType
-import com.example.ui.components.SubtitleAutoSearchSheet
 import com.example.ui.components.SubtitleBatchCard
 import com.example.ui.components.SubtitleDownloadViewType
 import com.example.ui.components.SubtitleSourceSheet
-import com.example.ui.components.notify
-import com.example.ui.components.rememberNotificationState
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.SubtitleHelper
 import com.example.ui.viewmodel.SubtitleLine
@@ -192,14 +187,7 @@ fun OfflinePlayerScreen(
     
     // Subtitle sources page
     var subtitlePage by remember { mutableIntStateOf(0) }
-
-    // Subtitle auto-search dialog
-    var showSubtitleSearchDialog by remember { mutableStateOf(false) }
-    var subtitleSearchKey by remember { mutableIntStateOf(0) }
-
-    // In-app notification
-    val notificationState = rememberNotificationState()
-
+    
     // Folder navigation state for in-drawer file browser (page 6)
     var folderNavStack by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
@@ -209,7 +197,6 @@ fun OfflinePlayerScreen(
     var activeLocalFilePath by remember { mutableStateOf(localFilePath) }
 
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
-    val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val parentTmdbId = if (activeId.contains("-s")) activeId.substringBefore("-s") else activeId
     val seriesEpisodes = remember(downloadsList, parentTmdbId) {
         downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
@@ -346,9 +333,37 @@ fun OfflinePlayerScreen(
                 exoPlayer.prepare()
                 exoPlayer.play()
 
-                // Show subtitle search dialog if no subtitle loaded
+                // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
-                    showSubtitleSearchDialog = true
+                    // First try standalone_subtitles/ (from auto-fetcher)
+                    val standaloneDir = File(context.filesDir, "standalone_subtitles")
+                    val autoFiles = standaloneDir.listFiles()?.filter {
+                        it.name.startsWith(activeId) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
+                    }
+                    val autoSub = autoFiles?.firstOrNull()
+                    if (autoSub != null && autoSub.exists()) {
+                        parsedSubtitles = SubtitleParser.parseBlock(autoSub)
+                        val playerExt = if (autoSub.name.endsWith(".vtt")) ".vtt" else ".srt"
+                        autoSub.copyTo(File(context.filesDir, "downloads/$activeId$playerExt"), overwrite = true)
+                    } else {
+                        launch(Dispatchers.IO) {
+                            try {
+                                val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                                val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                                val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                val subs = SubtitleHelper.fetchSubtitles(
+                                    tmdbIdStr, isTv, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
+                                )
+                                val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
+                                if (arSub != null) {
+                                    val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
+                                    if (extracted != null) {
+                                        parsedSubtitles = SubtitleParser.parseBlock(extracted)
+                                    }
+                                }
+                            } catch (_: Exception) { }
+                        }
+                    }
                 }
 
                 // Update position periodically with higher frequency for smooth subtitles
@@ -1217,47 +1232,11 @@ fun OfflinePlayerScreen(
                                     )
                                 }
                             }
-            }
-        }
-
-        // Subtitle auto-search overlay
-        SubtitleAutoSearchSheet(
-            visible = showSubtitleSearchDialog,
-            activeId = activeId,
-            isTv = isTv,
-            tmdbId = if (isTv) activeId.substringBefore("-s") else activeId,
-            season = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0,
-            episode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0,
-            title = activeTitle.substringBefore(" - "),
-            subtitleDownloads = subtitleDownloads,
-            onSubtitleFound = { file ->
-                val parsed = SubtitleParser.parseBlock(file)
-                if (parsed.isNotEmpty()) {
-                    parsedSubtitles = parsed
+                        }
+                    }
                 }
-                showSubtitleSearchDialog = false
-            },
-            onDismiss = {
-                showSubtitleSearchDialog = false
-            }
-        )
 
-        // In-app notification overlay
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 80.dp),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            InAppNotificationHost(
-                notification = notificationState.value,
-                onDismiss = { notificationState.value = null }
-            )
-        }
-
-    }
-
-    // ===== SUBTITLE DRAWER =====
+                // ===== SUBTITLE DRAWER =====
                 AnimatedVisibility(
                     visible = showSubtitleDrawer,
                     enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
