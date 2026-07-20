@@ -635,6 +635,7 @@ fun ProfileSection(
                         Text("تسجيل الخروج")
                     }
                 }
+                }
             } else {
                 // Sign Out State (Login Form)
                 Text(
