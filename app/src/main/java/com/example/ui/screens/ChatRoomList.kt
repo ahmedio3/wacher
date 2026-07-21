@@ -43,6 +43,10 @@ fun ChatRoomList(
         ChatManager.listenForUserChats(userId) { chatList ->
             chats = chatList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
             isLoading = false
+            val partnerIds = chatList.mapNotNull { it.otherUserId.takeIf { id -> id.isNotEmpty() && it.roomType != "public" } }
+            if (partnerIds.isNotEmpty()) {
+                UserManager.prefetchProfiles(partnerIds)
+            }
         }
     }
 
@@ -112,14 +116,8 @@ private fun ChatRoomItem(
     chat: UserChat,
     onClick: () -> Unit
 ) {
-    var displayName by remember(chat.roomId) {
-        mutableStateOf(
-            chat.otherUserName.ifEmpty {
-                if (chat.roomType == "public") "General Chat" else "User"
-            }
-        )
-    }
-    var displayAvatar by remember(chat.roomId) { mutableStateOf(chat.otherUserAvatarUrl) }
+    var displayName by remember(chat.roomId) { mutableStateOf("") }
+    var displayAvatar by remember(chat.roomId) { mutableStateOf("") }
     var globalLastMessage by remember(chat.roomId) { mutableStateOf<LastMessage?>(null) }
     val isPublic = chat.roomType == "public"
 
@@ -136,10 +134,10 @@ private fun ChatRoomItem(
         } else {
             if (chat.otherUserId.isNotEmpty()) {
                 val profile = UserManager.getProfile(chat.otherUserId)
-                if (profile != null) {
-                    if (profile.name.isNotEmpty()) displayName = profile.name
-                    if (profile.avatarUrl.isNotEmpty()) displayAvatar = profile.avatarUrl
-                }
+                displayName = profile?.name?.takeIf { it.isNotEmpty() } ?: "User"
+                displayAvatar = profile?.avatarUrl?.takeIf { it.isNotEmpty() } ?: ""
+            } else {
+                displayName = "User"
             }
         }
     }
