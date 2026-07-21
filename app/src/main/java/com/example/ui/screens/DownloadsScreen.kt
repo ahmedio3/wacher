@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
@@ -965,6 +966,7 @@ fun DownloadItemRow(
     val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
 
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
+    val downloadScope = rememberCoroutineScope()
     val hasSubtitle = remember(item.id, subtitleDownloads) {
         subtitleDownloads.any { sub ->
             if (item.mediaType == "tv")
@@ -1295,7 +1297,7 @@ fun DownloadItemRow(
                 text = { Text("جلب ترجمة MovieBox") },
                 onClick = {
                     showContextMenu = false
-                    viewModel.viewModelScope.launch {
+                    downloadScope.launch {
                         val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
                         val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                             context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
@@ -1369,6 +1371,7 @@ fun CompactEpisodeRow(
         }
     }
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
+    val compactScope = rememberCoroutineScope()
     val hasSubtitle = remember(item.id, subtitleDownloads) {
         subtitleDownloads.any { sub ->
             if (item.mediaType == "tv")
@@ -1704,7 +1707,7 @@ fun CompactEpisodeRow(
                 text = { Text("جلب ترجمة MovieBox") },
                 onClick = {
                     onDismissContextMenu()
-                    viewModel.viewModelScope.launch {
+                    compactScope.launch {
                         val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
                         val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                             context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
