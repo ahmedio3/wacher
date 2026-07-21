@@ -27,14 +27,14 @@ class OpenAiCompatibleProvider(
     override suspend fun streamChat(
         messages: List<AiChatMessage>,
         model: String,
-        tools: List<Map<String, Any>>?,
+        toolsJson: String?,
         reasoningEnabled: Boolean,
         onEvent: (AiStreamEvent) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/chat/completions"
 
-            val body = buildOpenAiBody(messages, model, tools)
+            val body = buildOpenAiBody(messages, model, toolsJson)
 
             val request = Request.Builder()
                 .url(url)
@@ -136,7 +136,7 @@ class OpenAiCompatibleProvider(
     private fun buildOpenAiBody(
         messages: List<AiChatMessage>,
         model: String,
-        tools: List<Map<String, Any>>?
+        toolsJson: String?
     ): String {
         val json = JSONObject()
         json.put("model", model)
@@ -171,7 +171,7 @@ class OpenAiCompatibleProvider(
                 }
                 AiMessageRole.ASSISTANT -> {
                     m.put("role", "assistant")
-                    if (msg.reasoningContent != null && reasoningEnabled) {
+                    if (msg.reasoningContent != null) {
                         m.put("reasoning_content", msg.reasoningContent)
                     }
                     if (!msg.toolCalls.isNullOrEmpty()) {
@@ -203,15 +203,17 @@ class OpenAiCompatibleProvider(
         }
         json.put("messages", msgsArray)
 
-        if (!tools.isNullOrEmpty()) {
+        if (!toolsJson.isNullOrBlank()) {
             val toolsArray = JSONArray()
-            for (tool in tools) {
+            val parsedArray = JSONArray(toolsJson)
+            for (i in 0 until parsedArray.length()) {
+                val tool = parsedArray.getJSONObject(i)
                 val t = JSONObject()
                 t.put("type", "function")
                 t.put("function", JSONObject().apply {
-                    put("name", tool["name"])
-                    put("description", tool["description"])
-                    put("parameters", JSONObject(tool["parameters"] as? Map<*, *> ?: emptyMap<Any, Any>()))
+                    put("name", tool.getString("name"))
+                    put("description", tool.optString("description", ""))
+                    put("parameters", tool.optJSONObject("parameters") ?: JSONObject())
                 })
                 toolsArray.put(t)
             }

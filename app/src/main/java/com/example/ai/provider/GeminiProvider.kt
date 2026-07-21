@@ -24,14 +24,14 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
     override suspend fun streamChat(
         messages: List<AiChatMessage>,
         model: String,
-        tools: List<Map<String, Any>>?,
+        toolsJson: String?,
         reasoningEnabled: Boolean,
         onEvent: (AiStreamEvent) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:streamGenerateContent?alt=sse&key=$apiKey"
 
-            val body = buildGeminiRequestBody(messages, tools, reasoningEnabled)
+            val body = buildGeminiRequestBody(messages, toolsJson, reasoningEnabled)
 
             val request = Request.Builder()
                 .url(url)
@@ -118,7 +118,7 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
 
     private fun buildGeminiRequestBody(
         messages: List<AiChatMessage>,
-        tools: List<Map<String, Any>>?,
+        toolsJson: String?,
         reasoningEnabled: Boolean
     ): String {
         val json = JSONObject()
@@ -160,14 +160,16 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
             })
         }
 
-        if (!tools.isNullOrEmpty()) {
+        if (!toolsJson.isNullOrBlank()) {
             val toolsArray = JSONArray()
             val functionDeclarations = JSONArray()
-            for (tool in tools) {
+            val parsedArray = JSONArray(toolsJson)
+            for (i in 0 until parsedArray.length()) {
+                val tool = parsedArray.getJSONObject(i)
                 val fd = JSONObject()
-                fd.put("name", tool["name"])
-                fd.put("description", tool["description"])
-                fd.put("parameters", JSONObject(tool["parameters"] as? Map<*, *> ?: emptyMap<Any, Any>()))
+                fd.put("name", tool.getString("name"))
+                fd.put("description", tool.optString("description", ""))
+                fd.put("parameters", tool.optJSONObject("parameters") ?: JSONObject())
                 functionDeclarations.put(fd)
             }
             toolsArray.put(JSONObject().put("functionDeclarations", functionDeclarations))

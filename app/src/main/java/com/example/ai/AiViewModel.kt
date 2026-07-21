@@ -11,7 +11,7 @@ import com.example.ai.data.MovieDatabase
 import com.example.ai.provider.AiProviderService
 import com.example.ai.provider.GeminiProvider
 import com.example.ai.provider.OpenAiCompatibleProvider
-import com.example.ai.provider.buildToolDeclarations
+import com.example.ai.provider.buildToolDeclarationsJson
 import com.example.ai.tools.AiToolExecutor
 import com.example.ai.tools.ToolResult
 import kotlinx.coroutines.Dispatchers
@@ -167,7 +167,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             provider.streamChat(
                 messages = allMessages,
                 model = _state.value.currentModelId,
-                tools = buildToolDeclarations(),
+                toolsJson = buildToolDeclarationsJson(),
                 reasoningEnabled = _state.value.reasoningEnabled,
                 onEvent = { event ->
                     viewModelScope.launch {
@@ -330,7 +330,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         provider.streamChat(
             messages = allMessages,
             model = _state.value.currentModelId,
-            tools = buildToolDeclarations(),
+            toolsJson = buildToolDeclarationsJson(),
             reasoningEnabled = _state.value.reasoningEnabled,
             onEvent = { event ->
                 viewModelScope.launch {
