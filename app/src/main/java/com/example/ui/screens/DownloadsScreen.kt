@@ -375,6 +375,10 @@ fun SeriesDetailPage(
 
     val seasonPrefs = context.getSharedPreferences("series_season_prefs", Context.MODE_PRIVATE)
     var selectedSeasonNumber by remember { mutableIntStateOf(seasonPrefs.getInt("season_$seriesId", 1)) }
+
+    val mainPrefs = context.getSharedPreferences("watchera_prefs", Context.MODE_PRIVATE)
+    var hasFetchedSubtitleOnce by remember { mutableStateOf(mainPrefs.getBoolean("has_fetched_subtitle_once", false)) }
+
     var showDownloadNewSheet by remember { mutableStateOf(false) }
     var selectedForContextMenu by remember { mutableStateOf<String?>(null) }
     // The row that was most recently the context-menu target. On close it is held at full opacity
@@ -613,6 +617,16 @@ fun SeriesDetailPage(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    if (!hasFetchedSubtitleOnce) {
+                        item {
+                            Text(
+                                text = "اجباري: اضغط مطولا على الحلقة > تحميل الترجمة.\nيمكنك عدم فعل ذلك، لأنه عند الدخول إلى الحلقة لمشاهدتها يتم جلب الترجمة تلقائيا في حالة وجود نت (غالبا يا غبي بتدخل الحلقة لما يكون مفيش نت، فاعمل الخطوة الأولى الإجبارية)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp, end = 4.dp)
+                            )
+                        }
+                    }
                     items(listForSeason, key = { it.id }) { item ->
                         CompactEpisodeRow(
                             item = item,
@@ -628,6 +642,7 @@ fun SeriesDetailPage(
                             isContextMenuTarget = selectedForContextMenu == item.id,
                             menuOpen = selectedForContextMenu != null,
                             lastTargetId = lastContextMenuTarget,
+                            onSubtitleFetched = { hasFetchedSubtitleOnce = true },
                             durationCache = durationCache,
                             sizeCache = sizeCache,
                             onLongClick = {
@@ -967,6 +982,7 @@ fun DownloadItemRow(
 
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val downloadScope = rememberCoroutineScope()
+    var isDownloadingSubtitle by remember { mutableStateOf(false) }
     val hasSubtitle = remember(item.id, subtitleDownloads) {
         subtitleDownloads.any { sub ->
             if (item.mediaType == "tv")
@@ -1226,7 +1242,17 @@ fun DownloadItemRow(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
-                    if (hasSubtitle) {
+                    if (isDownloadingSubtitle) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "يتم جلب الترجمة..",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else if (hasSubtitle) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = Icons.Default.ClosedCaption,
@@ -1294,14 +1320,18 @@ fun DownloadItemRow(
                 )
             }
             DropdownMenuItem(
-                text = { Text("جلب ترجمة MovieBox") },
+                text = { Text("تحميل الترجمة") },
                 onClick = {
                     showContextMenu = false
+                    isDownloadingSubtitle = true
+                    context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("has_fetched_subtitle_once", true).apply()
                     downloadScope.launch {
                         val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
                         val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                             context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
                         )
+                        isDownloadingSubtitle = false
                         android.widget.Toast.makeText(
                             context,
                             if (file != null) "✓ تم تحميل الترجمة العربية" else "لم يتم العثور على ترجمة عربية",
@@ -1309,7 +1339,13 @@ fun DownloadItemRow(
                         ).show()
                     }
                 },
-                leadingIcon = { Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                leadingIcon = {
+                    if (isDownloadingSubtitle) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                }
             )
             DropdownMenuItem(
                 text = { Text("حذف الملف", color = PaletteMutedRed) },
@@ -1340,6 +1376,7 @@ fun CompactEpisodeRow(
     onCheckedChange: (Boolean) -> Unit = {},
     onDismissContextMenu: () -> Unit = {},
     onEnterMultiSelect: () -> Unit = {},
+    onSubtitleFetched: () -> Unit = {},
     durationCache: MutableMap<String, Long> = mutableMapOf(),
     sizeCache: MutableMap<String, String> = mutableMapOf()
 ) {
@@ -1372,6 +1409,7 @@ fun CompactEpisodeRow(
     }
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val compactScope = rememberCoroutineScope()
+    var isDownloadingSubtitle by remember { mutableStateOf(false) }
     val hasSubtitle = remember(item.id, subtitleDownloads) {
         subtitleDownloads.any { sub ->
             if (item.mediaType == "tv")
@@ -1554,7 +1592,9 @@ fun CompactEpisodeRow(
                                 fontFamily = JetBrainsMonoFontFamily
                             )
                         }
-                        if (hasSubtitle) {
+                        if (isDownloadingSubtitle) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.tertiary)
+                        } else if (hasSubtitle) {
                             Icon(
                                 imageVector = Icons.Default.ClosedCaption,
                                 contentDescription = "ترجمة",
@@ -1704,14 +1744,19 @@ fun CompactEpisodeRow(
                 )
             }
             DropdownMenuItem(
-                text = { Text("جلب ترجمة MovieBox") },
+                text = { Text("تحميل الترجمة") },
                 onClick = {
                     onDismissContextMenu()
+                    isDownloadingSubtitle = true
+                    onSubtitleFetched()
+                    context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("has_fetched_subtitle_once", true).apply()
                     compactScope.launch {
                         val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
                         val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                             context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
                         )
+                        isDownloadingSubtitle = false
                         android.widget.Toast.makeText(
                             context,
                             if (file != null) "✓ تم تحميل الترجمة العربية" else "لم يتم العثور على ترجمة عربية",
@@ -1719,7 +1764,13 @@ fun CompactEpisodeRow(
                         ).show()
                     }
                 },
-                leadingIcon = { Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                leadingIcon = {
+                    if (isDownloadingSubtitle) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                }
             )
             DropdownMenuItem(
                 text = { Text("حذف الملف", color = PaletteMutedRed) },
