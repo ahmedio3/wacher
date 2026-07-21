@@ -44,7 +44,7 @@
 **مصادر البث والتحميل** تأتي من **MovieBox API** عبر Backend وسيط.
 **الترجمة** من 3 مصادر: MovieBox (الأساسي)، Subdl، و OpenSubtitles.
 **المحادثة الجماعية** عبر Firebase Realtime Database.
-**AI Chat** عبر أي مزود متوافق مع OpenAI API.
+
 
 ### 📊 إحصائيات المشروع
 
