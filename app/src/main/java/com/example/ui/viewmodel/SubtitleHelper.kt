@@ -561,4 +561,45 @@ object SubtitleHelper {
             }
         } catch (_: Exception) { null }
     }
+
+    // Shared: fetch MovieBox Arabic subtitle → download → save to Room → return File
+    suspend fun fetchAndSaveMovieBoxSubtitle(
+        context: Context,
+        tmdbId: String,
+        isTv: Boolean,
+        season: Int,
+        episode: Int,
+        title: String,
+        mediaId: String
+    ): File? = withContext(Dispatchers.IO) {
+        try {
+            val subs = fetchSubtitles(tmdbId, isTv, season, episode, title.substringBefore(" - "))
+            val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) }
+                ?: subs.firstOrNull() ?: return@withContext null
+            val file = downloadAndExtractSubtitle(context, arSub.url, mediaId) ?: return@withContext null
+
+            val db = com.example.data.local.MovieDatabase.getDatabase(context)
+            val entityId = if (isTv) "${tmdbId}_s${season}e${episode}_${arSub.langCode}" else "${tmdbId}_${arSub.langCode}"
+            db.movieDao.insertSubtitleDownload(
+                com.example.data.local.SubtitleDownloadEntity(
+                    id = entityId,
+                    tmdbId = tmdbId,
+                    title = title.substringBefore(" - "),
+                    mediaType = if (isTv) "tv" else "movie",
+                    season = season,
+                    episode = episode,
+                    language = arSub.lang,
+                    languageCode = arSub.langCode,
+                    source = arSub.source,
+                    localFilePath = file.absolutePath,
+                    fileName = arSub.name,
+                    batchId = "auto_${mediaId}",
+                    originalUrl = arSub.url,
+                    downloadedAt = System.currentTimeMillis()
+                )
+            )
+
+            file
+        } catch (_: Exception) { null }
+    }
 }

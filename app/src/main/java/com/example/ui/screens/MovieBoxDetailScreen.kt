@@ -72,6 +72,7 @@ fun MovieBoxDetailScreen(
     var subtitleFiles by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
 
     val isFavorited by viewModel.isItemInWatchlist(mbWatchlistId).collectAsState(initial = false)
+    val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val scrollState = rememberScrollState()
 
     var showMovieBoxSheet by remember { mutableStateOf(false) }
@@ -497,8 +498,14 @@ fun MovieBoxDetailScreen(
                                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     episodes.forEach { (episodeNum, files) ->
                                         val file = files.firstOrNull() ?: return@forEach
+                                        val epHasSubtitle = remember(episodeNum, subtitleDownloads) {
+                                            subtitleDownloads.any { sub ->
+                                                sub.tmdbId == subjectId && sub.season == selectedSeason && sub.episode == episodeNum
+                                            }
+                                        }
                                         MovieBoxEpisodeRowCard(
                                             episodeNumber = episodeNum,
+                                            hasSubtitle = epHasSubtitle,
                                             onClick = {
                                                 pendingDownloadSeason = selectedSeason
                                                 pendingDownloadEpisode = episodeNum
@@ -592,6 +599,7 @@ fun MovieBoxDetailScreen(
 @Composable
 private fun MovieBoxEpisodeRowCard(
     episodeNumber: Int,
+    hasSubtitle: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -639,6 +647,16 @@ private fun MovieBoxEpisodeRowCard(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
+
+        if (hasSubtitle) {
+            Icon(
+                imageVector = Icons.Default.ClosedCaption,
+                contentDescription = "ترجمة",
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
 
         Button(
             onClick = onClick,

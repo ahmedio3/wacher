@@ -197,6 +197,7 @@ fun OfflinePlayerScreen(
     var activeLocalFilePath by remember { mutableStateOf(localFilePath) }
 
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
+    val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val parentTmdbId = if (activeId.contains("-s")) activeId.substringBefore("-s") else activeId
     val seriesEpisodes = remember(downloadsList, parentTmdbId) {
         downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
@@ -347,21 +348,23 @@ fun OfflinePlayerScreen(
                         autoSub.copyTo(File(context.filesDir, "downloads/$activeId$playerExt"), overwrite = true)
                     } else {
                         launch(Dispatchers.IO) {
-                            try {
-                                val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
-                                val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                                val subs = SubtitleHelper.fetchSubtitles(
-                                    tmdbIdStr, isTv, seasonSub, episodeSub, activeTitle.substringBefore(" - ")
-                                )
-                                val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
-                                if (arSub != null) {
-                                    val extracted = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, activeId)
-                                    if (extracted != null) {
-                                        parsedSubtitles = SubtitleParser.parseBlock(extracted)
-                                    }
+                            val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                            val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                            val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                            val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                                context, tmdbIdStr, isTv, seasonSub, episodeSub,
+                                activeTitle, activeId
+                            )
+                            if (file != null) {
+                                parsedSubtitles = SubtitleParser.parseBlock(file)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "✓ تم تحميل الترجمة العربية", Toast.LENGTH_SHORT).show()
                                 }
-                            } catch (_: Exception) { }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "لم يتم العثور على ترجمة عربية", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         }
                     }
                 }
@@ -1954,6 +1957,20 @@ fun OfflinePlayerScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
+                                            val epHasSubtitle = remember(ep.id, subtitleDownloads) {
+                                                subtitleDownloads.any { sub ->
+                                                    sub.tmdbId == parentTmdbId && sub.season == ep.season && sub.episode == ep.episode
+                                                }
+                                            }
+                                            if (epHasSubtitle) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.ClosedCaption,
+                                                    contentDescription = "ترجمة",
+                                                    tint = MaterialTheme.colorScheme.tertiary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }

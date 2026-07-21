@@ -64,6 +64,7 @@ import com.example.ui.theme.PaletteMutedRed
 import com.example.utils.isLatinText
 import com.example.ui.components.CircularSelectionIndicator
 import com.example.ui.viewmodel.MovieViewModel
+import com.example.ui.viewmodel.SubtitleHelper
 import com.example.ui.viewmodel.RequestState
 import java.io.File
 
@@ -963,6 +964,16 @@ fun DownloadItemRow(
 
     val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
 
+    val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
+    val hasSubtitle = remember(item.id, subtitleDownloads) {
+        subtitleDownloads.any { sub ->
+            if (item.mediaType == "tv")
+                sub.tmdbId == item.mediaId && sub.season == item.season && sub.episode == item.episode
+            else
+                sub.tmdbId == item.mediaId
+        }
+    }
+
     Box(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1213,6 +1224,15 @@ fun DownloadItemRow(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
+                    if (hasSubtitle) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.ClosedCaption,
+                            contentDescription = "ترجمة",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1272,6 +1292,24 @@ fun DownloadItemRow(
                 )
             }
             DropdownMenuItem(
+                text = { Text("جلب ترجمة MovieBox") },
+                onClick = {
+                    showContextMenu = false
+                    viewModel.viewModelScope.launch {
+                        val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
+                        val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                            context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            if (file != null) "✓ تم تحميل الترجمة العربية" else "لم يتم العثور على ترجمة عربية",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                leadingIcon = { Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            DropdownMenuItem(
                 text = { Text("حذف الملف", color = PaletteMutedRed) },
                 onClick = {
                     showContextMenu = false
@@ -1330,6 +1368,16 @@ fun CompactEpisodeRow(
             if (fileSizeText == "...") { sizeCache[item.id] = sizeStr; fileSizeText = sizeStr }
         }
     }
+    val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
+    val hasSubtitle = remember(item.id, subtitleDownloads) {
+        subtitleDownloads.any { sub ->
+            if (item.mediaType == "tv")
+                sub.tmdbId == item.mediaId && sub.season == item.season && sub.episode == item.episode
+            else
+                sub.tmdbId == item.mediaId
+        }
+    }
+
     // Pulse animation for active downloading thumbnail overlay
     val infiniteTransition = rememberInfiniteTransition(label = "downloadPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -1503,6 +1551,14 @@ fun CompactEpisodeRow(
                                 fontFamily = JetBrainsMonoFontFamily
                             )
                         }
+                        if (hasSubtitle) {
+                            Icon(
+                                imageVector = Icons.Default.ClosedCaption,
+                                contentDescription = "ترجمة",
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
 
                     if (isCompleted) {
@@ -1644,6 +1700,24 @@ fun CompactEpisodeRow(
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
+            DropdownMenuItem(
+                text = { Text("جلب ترجمة MovieBox") },
+                onClick = {
+                    onDismissContextMenu()
+                    viewModel.viewModelScope.launch {
+                        val tmdbId = if (item.mediaType == "tv") item.mediaId.substringBefore("-s") else item.mediaId
+                        val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                            context, tmdbId, item.mediaType == "tv", item.season, item.episode, item.title, item.id
+                        )
+                        android.widget.Toast.makeText(
+                            context,
+                            if (file != null) "✓ تم تحميل الترجمة العربية" else "لم يتم العثور على ترجمة عربية",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                leadingIcon = { Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
             DropdownMenuItem(
                 text = { Text("حذف الملف", color = PaletteMutedRed) },
                 onClick = {

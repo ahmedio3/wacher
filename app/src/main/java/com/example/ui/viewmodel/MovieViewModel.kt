@@ -778,40 +778,6 @@ class MovieViewModel(
                               ))
                               // Log the completed download to the activity history
                               logActivity("DOWNLOADED", current.title)
-
-                              // Enqueue automatic subtitle fetch via WorkManager
-                              val prefs = getApplication<Application>().getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
-                              if (prefs.getBoolean("auto_subtitle_enabled", true)) {
-                                  val isTv = current.mediaType == "tv"
-                                  val tmdbIdStr = if (isTv) current.mediaId.substringBefore("-s") else current.mediaId
-                                  val seasonNum = if (isTv) current.mediaId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                  val episodeNum = if (isTv) current.mediaId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-
-                                  val workData = androidx.work.workDataOf(
-                                      "tmdbId" to tmdbIdStr,
-                                      "downloadId" to current.id,
-                                      "title" to current.title,
-                                      "mediaType" to current.mediaType,
-                                      "season" to seasonNum,
-                                      "episode" to episodeNum,
-                                      "posterPath" to current.posterPath
-                                  )
-                                  val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.SubtitleAutoWorker>()
-                                      .setInputData(workData)
-                                      .setConstraints(
-                                          androidx.work.Constraints.Builder()
-                                              .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                              .build()
-                                      )
-                                      .setBackoffCriteria(
-                                          androidx.work.BackoffPolicy.EXPONENTIAL,
-                                          30,
-                                          java.util.concurrent.TimeUnit.SECONDS
-                                      )
-                                      .addTag("subtitle_auto_${current.id}")
-                                      .build()
-                                  androidx.work.WorkManager.getInstance(getApplication()).enqueue(workRequest)
-                              }
                          } else if (current.status != "paused") {
                              repository.addDownload(current.copy(
                                  status = "error",
