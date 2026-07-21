@@ -146,6 +146,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 state.reasoningEnabled
             )
             _state.update { it.copy(currentConversationId = conversationId) }
+            sessionManager.saveConversation("محادثة جديدة", conversationId)
         }
         return conversationId
     }
@@ -444,11 +445,14 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startNewConversation() {
         val state = _state.value
-        sessionManager.startNewSession(state.currentProviderType, state.currentModelId, state.reasoningEnabled)
+        val conversationId = sessionManager.startNewSession(state.currentProviderType, state.currentModelId, state.reasoningEnabled)
+        viewModelScope.launch {
+            sessionManager.saveConversation("محادثة جديدة", conversationId)
+        }
         _state.update {
             it.copy(
                 messages = emptyList(),
-                currentConversationId = sessionManager.getCurrentConversationId(),
+                currentConversationId = conversationId,
                 currentConversationTitle = "محادثة جديدة",
                 error = null,
                 toolExecutions = emptyList(),
