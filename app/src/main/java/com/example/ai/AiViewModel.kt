@@ -70,33 +70,30 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         currentProvider = when (providerType) {
             AiProviderType.GEMINI -> GeminiProvider(BuildConfig.GEMINI_API_KEY)
             AiProviderType.OPENCODE_ZEN -> OpenAiCompatibleProvider(
-                PROVIDER_CONFIGS[AiProviderType.OPENCODE_ZEN]!!.baseUrl!!,
-                BuildConfig.OPENCODE_ZEN_API_KEY
+                baseUrl = PROVIDER_CONFIGS[AiProviderType.OPENCODE_ZEN]!!.baseUrl!!,
+                apiKey = BuildConfig.OPENCODE_ZEN_API_KEY,
+                providerName = "OpenCode Zen"
             )
             AiProviderType.BYNARA -> OpenAiCompatibleProvider(
-                PROVIDER_CONFIGS[AiProviderType.BYNARA]!!.baseUrl!!,
-                BuildConfig.BYNARA_API_KEY
+                baseUrl = PROVIDER_CONFIGS[AiProviderType.BYNARA]!!.baseUrl!!,
+                apiKey = BuildConfig.BYNARA_API_KEY,
+                providerName = "Bynara"
             )
         }
+        sessionManager.setProviderAndModel(providerType, modelId, _state.value.reasoningEnabled)
     }
 
     fun selectModel(providerType: AiProviderType, modelId: String) {
         val config = PROVIDER_CONFIGS[providerType] ?: return
-        val model = config.models.find { it.id == modelId } ?: return
+        if (config.models.none { it.id == modelId }) return
 
         updateProvider(providerType, modelId)
-
-        sessionManager.startNewSession(providerType, modelId, _state.value.reasoningEnabled)
+        // Keep current conversation messages; only switch provider/model for next request
         _state.update {
             it.copy(
                 currentProviderType = providerType,
                 currentModelId = modelId,
-                currentConversationId = sessionManager.getCurrentConversationId(),
-                currentConversationTitle = "محادثة جديدة",
-                messages = emptyList(),
-                error = null,
-                toolExecutions = emptyList(),
-                pendingApproval = null
+                error = null
             )
         }
     }
@@ -112,43 +109,42 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         if (text.isBlank() && imageBase64 == null) return
 
         viewModelScope.launch {
-            val conversationId = ensureConversation()
-
-            val userMsg = AiChatMessage(
-                role = AiMessageRole.USER,
-                content = text,
-                imageUrls = if (imageBase64 != null) listOf(imageBase64) else null
-            )
-
-            sessionManager.addMessage(userMsg)
-            sessionManager.saveMessage(userMsg, conversationId)
-
-            _state.update {
-                it.copy(
-                    messages = sessionManager.getMessages(),
-                    isStreaming = true,
-                    error = null,
-                    toolExecutions = emptyList()
+            try {
+                val conversationId = sessionManager.ensureConversationInDb(
+                    _state.value.currentConversationTitle.ifBlank { "محادثة جديدة" }
                 )
+                _state.update { it.copy(currentConversationId = conversationId) }
+
+                val userMsg = AiChatMessage(
+                    role = AiMessageRole.USER,
+                    content = text,
+                    imageUrls = if (imageBase64 != null) listOf(imageBase64) else null
+                )
+
+                sessionManager.addMessage(userMsg)
+                try {
+                    sessionManager.saveMessage(userMsg, conversationId)
+                } catch (e: Exception) {
+                    // Don't crash UI if DB write fails
+                    android.util.Log.e("AiViewModel", "saveMessage failed", e)
+                }
+
+                _state.update {
+                    it.copy(
+                        messages = sessionManager.getMessages(),
+                        isStreaming = true,
+                        error = null,
+                        toolExecutions = emptyList()
+                    )
+                }
+
+                processStreaming(conversationId)
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(isStreaming = false, error = "فشل الإرسال: ${e.message}")
+                }
             }
-
-            processStreaming(conversationId)
         }
-    }
-
-    private suspend fun ensureConversation(): String {
-        var conversationId = sessionManager.getCurrentConversationId()
-        if (conversationId == null) {
-            val state = _state.value
-            conversationId = sessionManager.startNewSession(
-                state.currentProviderType,
-                state.currentModelId,
-                state.reasoningEnabled
-            )
-            _state.update { it.copy(currentConversationId = conversationId) }
-            sessionManager.saveConversation("محادثة جديدة", conversationId)
-        }
-        return conversationId
     }
 
     private suspend fun processStreaming(conversationId: String) {
@@ -195,8 +191,8 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 event.toolCalls?.let { executeToolCalls(it, conversationId) }
             }
             AiStreamEventType.DONE -> {
-                if (event.finishReason == "TOOL_CALLS") {
-                    // Tool results already handled
+                if (event.finishReason == "TOOL_CALLS" || event.finishReason == "tool_calls") {
+                    // Tool results will re-invoke provider
                 } else {
                     finalizeMessage(conversationId)
                 }
@@ -205,7 +201,13 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 // handled by tool execution flow
             }
             AiStreamEventType.ERROR -> {
-                _state.update { it.copy(isStreaming = false, error = event.content) }
+                // Show clean short error (no HTML dumps)
+                val clean = event.content
+                    .replace(Regex("<[^>]+>"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                    .take(280)
+                _state.update { it.copy(isStreaming = false, error = clean.ifBlank { "حدث خطأ" }) }
             }
         }
     }
@@ -379,30 +381,45 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun finalizeMessage(conversationId: String) {
-        val msgs = _state.value.messages
-        val lastAssistant = msgs.lastOrNull { it.role == AiMessageRole.ASSISTANT }
-        if (lastAssistant != null) {
-            sessionManager.addMessage(lastAssistant)
-            sessionManager.saveMessage(lastAssistant, conversationId)
-        }
-
-        // Auto-generate title from first user message
-        val firstUserMsg = msgs.firstOrNull { it.role == AiMessageRole.USER }
-        if (firstUserMsg != null && _state.value.currentConversationTitle == "محادثة جديدة") {
-            val title = firstUserMsg.content.take(50).trim().let {
-                if (it.length >= 50) "$it..." else it
+        try {
+            val msgs = _state.value.messages
+            val lastAssistant = msgs.lastOrNull { it.role == AiMessageRole.ASSISTANT }
+            if (lastAssistant != null) {
+                // Avoid double-adding if already in session
+                val sessionMsgs = sessionManager.getMessages()
+                val alreadyInSession = sessionMsgs.any {
+                    it.role == AiMessageRole.ASSISTANT && it.content == lastAssistant.content
+                }
+                if (!alreadyInSession) {
+                    sessionManager.addMessage(lastAssistant)
+                }
+                try {
+                    sessionManager.saveMessage(lastAssistant, conversationId)
+                } catch (e: Exception) {
+                    android.util.Log.e("AiViewModel", "save assistant message failed", e)
+                }
             }
-            sessionManager.updateConversationTitle(conversationId, title.ifEmpty { "محادثة جديدة" })
-            _state.update { it.copy(currentConversationTitle = title.ifEmpty { "محادثة جديدة" }) }
+
+            val firstUserMsg = msgs.firstOrNull { it.role == AiMessageRole.USER }
+            if (firstUserMsg != null && _state.value.currentConversationTitle == "محادثة جديدة") {
+                val title = firstUserMsg.content.take(50).trim().let {
+                    if (it.length >= 50) "$it..." else it
+                }.ifEmpty { "محادثة جديدة" }
+                try {
+                    sessionManager.updateConversationTitle(conversationId, title)
+                } catch (_: Exception) {}
+                _state.update { it.copy(currentConversationTitle = title) }
+            }
+
+            try {
+                sessionManager.saveConversation(
+                    _state.value.currentConversationTitle,
+                    conversationId
+                )
+            } catch (_: Exception) {}
+        } finally {
+            _state.update { it.copy(isStreaming = false) }
         }
-
-        sessionManager.saveConversation(
-            _state.value.currentConversationTitle,
-            conversationId
-        )
-
-        _state.update { it.copy(isStreaming = false) }
-        loadConversations()
     }
 
     fun loadConversation(conversationEntity: AiConversationEntity) {
@@ -445,9 +462,17 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startNewConversation() {
         val state = _state.value
-        val conversationId = sessionManager.startNewSession(state.currentProviderType, state.currentModelId, state.reasoningEnabled)
+        val conversationId = sessionManager.startNewSession(
+            state.currentProviderType,
+            state.currentModelId,
+            state.reasoningEnabled
+        )
         viewModelScope.launch {
-            sessionManager.saveConversation("محادثة جديدة", conversationId)
+            try {
+                sessionManager.ensureConversationInDb("محادثة جديدة")
+            } catch (e: Exception) {
+                android.util.Log.e("AiViewModel", "ensureConversation failed", e)
+            }
         }
         _state.update {
             it.copy(

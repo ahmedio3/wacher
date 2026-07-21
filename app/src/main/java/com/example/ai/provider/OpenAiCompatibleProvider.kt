@@ -3,23 +3,26 @@ package com.example.ai.provider
 import com.example.ai.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 
 class OpenAiCompatibleProvider(
     private val baseUrl: String,
-    private val apiKey: String
+    private val apiKey: String,
+    private val providerName: String = "OpenAI"
 ) : AiProviderService {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val jsonMediaType = "application/json".toMediaType()
@@ -31,16 +34,26 @@ class OpenAiCompatibleProvider(
         reasoningEnabled: Boolean,
         onEvent: (AiStreamEvent) -> Unit
     ) = withContext(Dispatchers.IO) {
-        try {
-            val url = "$baseUrl/chat/completions"
+        if (apiKey.isBlank()) {
+            onEvent(
+                AiStreamEvent(
+                    AiStreamEventType.ERROR,
+                    content = "مفتاح $providerName API غير مضبوط"
+                )
+            )
+            return@withContext
+        }
 
+        try {
+            val endpoint = baseUrl.trimEnd('/') + "/chat/completions"
             val body = buildOpenAiBody(messages, model, toolsJson)
 
             val request = Request.Builder()
-                .url(url)
+                .url(endpoint)
                 .post(body.toRequestBody(jsonMediaType))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer $apiKey")
+                .header("Accept", "text/event-stream")
                 .build()
 
             val response = client.newCall(request).execute()
@@ -50,86 +63,239 @@ class OpenAiCompatibleProvider(
             }
 
             if (!response.isSuccessful) {
-                val errorStr = responseBody.string()
-                onEvent(AiStreamEvent(AiStreamEventType.ERROR, content = "API error ($baseUrl): $errorStr"))
+                val errorStr = sanitizeError(responseBody.string())
+                onEvent(
+                    AiStreamEvent(
+                        AiStreamEventType.ERROR,
+                        content = "$providerName error (${response.code}): $errorStr"
+                    )
+                )
+                return@withContext
+            }
+
+            val contentType = response.header("Content-Type") ?: ""
+            // Non-streaming JSON response
+            if (contentType.contains("application/json") && !contentType.contains("event-stream")) {
+                handleNonStreamJson(responseBody.string(), onEvent)
                 return@withContext
             }
 
             val reader = BufferedReader(InputStreamReader(responseBody.byteStream()))
             var line: String?
-            var currentText = StringBuilder()
-            var currentReasoning = StringBuilder()
+            var emittedAny = false
+            // Accumulate partial tool call deltas
+            val toolCallBuffers = mutableMapOf<Int, ToolCallBuffer>()
+            var lastFinish: String? = null
 
             while (reader.readLine().also { line = it } != null) {
                 val l = line ?: continue
-                if (!l.startsWith("data: ")) continue
-                val jsonStr = l.removePrefix("data: ").trim()
+                if (l.isBlank()) continue
+
+                val jsonStr = when {
+                    l.startsWith("data: ") -> l.removePrefix("data: ").trim()
+                    l.startsWith("{") -> l.trim()
+                    else -> continue
+                }
                 if (jsonStr == "[DONE]" || jsonStr.isEmpty()) continue
+
+                // HTML error mid-stream
+                if (jsonStr.startsWith("<!DOCTYPE", ignoreCase = true) ||
+                    jsonStr.startsWith("<html", ignoreCase = true)
+                ) {
+                    onEvent(
+                        AiStreamEvent(
+                            AiStreamEventType.ERROR,
+                            content = "$providerName: استجابة HTML — تحقق من الـ endpoint أو المفتاح"
+                        )
+                    )
+                    reader.close()
+                    return@withContext
+                }
 
                 try {
                     val json = JSONObject(jsonStr)
 
-                    val choices = json.optJSONArray("choices") ?: continue
-                    if (choices.length() == 0) continue
-                    val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
-                    val finishReason = choices.getJSONObject(0).optString("finish_reason", "")
-                    if (finishReason == "stop") {
-                        onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = "STOP"))
-                        continue
+                    if (json.has("error")) {
+                        val err = json.optJSONObject("error")
+                        val msg = err?.optString("message")
+                            ?: err?.optString("code")
+                            ?: json.toString()
+                        onEvent(AiStreamEvent(AiStreamEventType.ERROR, content = msg))
+                        reader.close()
+                        return@withContext
                     }
 
-                    if (finishReason == "tool_calls") {
-                        onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = "TOOL_CALLS"))
-                        continue
+                    val choices = json.optJSONArray("choices") ?: continue
+                    if (choices.length() == 0) continue
+                    val choice = choices.getJSONObject(0)
+                    val finishReason = choice.optString("finish_reason", "")
+                    if (finishReason.isNotEmpty() && finishReason != "null") {
+                        lastFinish = finishReason
                     }
+
+                    val delta = choice.optJSONObject("delta")
+                        ?: choice.optJSONObject("message")
+                        ?: continue
 
                     if (delta.has("reasoning_content")) {
                         val reasoning = delta.optString("reasoning_content", "")
                         if (reasoning.isNotEmpty()) {
-                            currentReasoning.append(reasoning)
+                            emittedAny = true
                             onEvent(AiStreamEvent(AiStreamEventType.REASONING_CHUNK, reasoningContent = reasoning))
                         }
                     }
 
-                    if (delta.has("content")) {
+                    // Some models put reasoning in "reasoning"
+                    if (delta.has("reasoning")) {
+                        val reasoning = delta.optString("reasoning", "")
+                        if (reasoning.isNotEmpty()) {
+                            emittedAny = true
+                            onEvent(AiStreamEvent(AiStreamEventType.REASONING_CHUNK, reasoningContent = reasoning))
+                        }
+                    }
+
+                    if (delta.has("content") && !delta.isNull("content")) {
                         val text = delta.optString("content", "")
                         if (text.isNotEmpty()) {
-                            currentText.append(text)
+                            emittedAny = true
                             onEvent(AiStreamEvent(AiStreamEventType.TEXT_CHUNK, content = text))
                         }
                     }
 
                     if (delta.has("tool_calls")) {
                         val toolCallsArray = delta.optJSONArray("tool_calls") ?: continue
-                        val calls = mutableListOf<AiToolCall>()
                         for (i in 0 until toolCallsArray.length()) {
                             val tc = toolCallsArray.getJSONObject(i)
-                            val func = tc.optJSONObject("function") ?: continue
-                            val call = AiToolCall(
-                                id = tc.optString("id", "tc_${i}_${System.currentTimeMillis()}"),
-                                name = func.optString("name", ""),
-                                arguments = try {
-                                    JSONObject(func.optString("arguments", "{}")).toMap()
-                                } catch (e: Exception) { emptyMap() }
-                            )
-                            calls.add(call)
-                        }
-                        if (calls.isNotEmpty()) {
-                            onEvent(AiStreamEvent(AiStreamEventType.TOOL_CALLS, toolCalls = calls))
+                            val index = tc.optInt("index", i)
+                            val buffer = toolCallBuffers.getOrPut(index) { ToolCallBuffer() }
+                            if (tc.has("id") && tc.optString("id").isNotEmpty()) {
+                                buffer.id = tc.optString("id")
+                            }
+                            val func = tc.optJSONObject("function")
+                            if (func != null) {
+                                if (func.has("name") && func.optString("name").isNotEmpty()) {
+                                    buffer.name = func.optString("name")
+                                }
+                                if (func.has("arguments")) {
+                                    buffer.argumentsJson.append(func.optString("arguments", ""))
+                                }
+                            }
                         }
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // skip malformed chunks
                 }
             }
+            reader.close()
 
-            if (currentText.isEmpty() && currentReasoning.isEmpty()) {
-                onEvent(AiStreamEvent(AiStreamEventType.DONE))
+            // Emit completed tool calls
+            if (toolCallBuffers.isNotEmpty()) {
+                val calls = toolCallBuffers.values.mapNotNull { buf ->
+                    if (buf.name.isEmpty()) return@mapNotNull null
+                    val args = try {
+                        JSONObject(buf.argumentsJson.toString().ifBlank { "{}" }).toMap()
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    AiToolCall(
+                        id = buf.id.ifEmpty { "tc_${buf.name}_${System.currentTimeMillis()}" },
+                        name = buf.name,
+                        arguments = args
+                    )
+                }
+                if (calls.isNotEmpty()) {
+                    emittedAny = true
+                    onEvent(AiStreamEvent(AiStreamEventType.TOOL_CALLS, toolCalls = calls))
+                    onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = "TOOL_CALLS"))
+                    return@withContext
+                }
             }
 
-            reader.close()
+            if (!emittedAny) {
+                onEvent(
+                    AiStreamEvent(
+                        AiStreamEventType.ERROR,
+                        content = "لم يتم استلام رد من $providerName"
+                    )
+                )
+            } else {
+                onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = lastFinish ?: "STOP"))
+            }
         } catch (e: Exception) {
             onEvent(AiStreamEvent(AiStreamEventType.ERROR, content = e.message ?: "Unknown error"))
+        }
+    }
+
+    private fun handleNonStreamJson(raw: String, onEvent: (AiStreamEvent) -> Unit) {
+        if (raw.trim().startsWith("<!DOCTYPE", ignoreCase = true) ||
+            raw.trim().startsWith("<html", ignoreCase = true)
+        ) {
+            onEvent(
+                AiStreamEvent(
+                    AiStreamEventType.ERROR,
+                    content = "$providerName: استجابة HTML — تحقق من الـ endpoint أو المفتاح"
+                )
+            )
+            return
+        }
+        try {
+            val json = JSONObject(raw)
+            if (json.has("error")) {
+                val err = json.optJSONObject("error")
+                onEvent(
+                    AiStreamEvent(
+                        AiStreamEventType.ERROR,
+                        content = err?.optString("message") ?: raw.take(300)
+                    )
+                )
+                return
+            }
+            val choices = json.optJSONArray("choices")
+            if (choices == null || choices.length() == 0) {
+                onEvent(AiStreamEvent(AiStreamEventType.ERROR, content = "Empty choices from $providerName"))
+                return
+            }
+            val message = choices.getJSONObject(0).optJSONObject("message")
+            val content = message?.optString("content") ?: ""
+            val reasoning = message?.optString("reasoning_content")
+                ?: message?.optString("reasoning")
+                ?: ""
+
+            if (reasoning.isNotEmpty()) {
+                onEvent(AiStreamEvent(AiStreamEventType.REASONING_CHUNK, reasoningContent = reasoning))
+            }
+            if (content.isNotEmpty()) {
+                onEvent(AiStreamEvent(AiStreamEventType.TEXT_CHUNK, content = content))
+            }
+
+            val toolCalls = message?.optJSONArray("tool_calls")
+            if (toolCalls != null && toolCalls.length() > 0) {
+                val calls = mutableListOf<AiToolCall>()
+                for (i in 0 until toolCalls.length()) {
+                    val tc = toolCalls.getJSONObject(i)
+                    val func = tc.optJSONObject("function") ?: continue
+                    calls.add(
+                        AiToolCall(
+                            id = tc.optString("id", "tc_$i"),
+                            name = func.optString("name", ""),
+                            arguments = try {
+                                JSONObject(func.optString("arguments", "{}")).toMap()
+                            } catch (_: Exception) {
+                                emptyMap()
+                            }
+                        )
+                    )
+                }
+                if (calls.isNotEmpty()) {
+                    onEvent(AiStreamEvent(AiStreamEventType.TOOL_CALLS, toolCalls = calls))
+                    onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = "TOOL_CALLS"))
+                    return
+                }
+            }
+
+            onEvent(AiStreamEvent(AiStreamEventType.DONE, finishReason = "STOP"))
+        } catch (e: Exception) {
+            onEvent(AiStreamEvent(AiStreamEventType.ERROR, content = sanitizeError(raw)))
         }
     }
 
@@ -154,15 +320,22 @@ class OpenAiCompatibleProvider(
                     m.put("role", "user")
                     if (!msg.imageUrls.isNullOrEmpty()) {
                         val contentArray = JSONArray()
-                        contentArray.put(JSONObject().apply {
-                            put("type", "text")
-                            put("text", msg.content)
-                        })
-                        for (url in msg.imageUrls) {
-                            val imageObj = JSONObject()
-                            imageObj.put("type", "image_url")
-                            imageObj.put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$url"))
-                            contentArray.put(imageObj)
+                        if (msg.content.isNotEmpty()) {
+                            contentArray.put(
+                                JSONObject()
+                                    .put("type", "text")
+                                    .put("text", msg.content)
+                            )
+                        }
+                        for (b64 in msg.imageUrls) {
+                            contentArray.put(
+                                JSONObject()
+                                    .put("type", "image_url")
+                                    .put(
+                                        "image_url",
+                                        JSONObject().put("url", "data:image/jpeg;base64,$b64")
+                                    )
+                            )
                         }
                         m.put("content", contentArray)
                     } else {
@@ -171,22 +344,23 @@ class OpenAiCompatibleProvider(
                 }
                 AiMessageRole.ASSISTANT -> {
                     m.put("role", "assistant")
-                    if (msg.reasoningContent != null) {
-                        m.put("reasoning_content", msg.reasoningContent)
-                    }
                     if (!msg.toolCalls.isNullOrEmpty()) {
                         val tcs = JSONArray()
                         for (tc in msg.toolCalls) {
-                            val tcObj = JSONObject()
-                            tcObj.put("id", tc.id)
-                            tcObj.put("type", "function")
-                            tcObj.put("function", JSONObject().apply {
-                                put("name", tc.name)
-                                put("arguments", JSONObject(tc.arguments).toString())
-                            })
-                            tcs.put(tcObj)
+                            tcs.put(
+                                JSONObject()
+                                    .put("id", tc.id)
+                                    .put("type", "function")
+                                    .put(
+                                        "function",
+                                        JSONObject()
+                                            .put("name", tc.name)
+                                            .put("arguments", JSONObject(tc.arguments).toString())
+                                    )
+                            )
                         }
                         m.put("tool_calls", tcs)
+                        if (msg.content.isNotEmpty()) m.put("content", msg.content)
                     } else {
                         m.put("content", msg.content)
                     }
@@ -208,20 +382,45 @@ class OpenAiCompatibleProvider(
             val parsedArray = JSONArray(toolsJson)
             for (i in 0 until parsedArray.length()) {
                 val tool = parsedArray.getJSONObject(i)
-                val t = JSONObject()
-                t.put("type", "function")
-                t.put("function", JSONObject().apply {
-                    put("name", tool.getString("name"))
-                    put("description", tool.optString("description", ""))
-                    put("parameters", tool.optJSONObject("parameters") ?: JSONObject())
-                })
-                toolsArray.put(t)
+                toolsArray.put(
+                    JSONObject()
+                        .put("type", "function")
+                        .put(
+                            "function",
+                            JSONObject()
+                                .put("name", tool.getString("name"))
+                                .put("description", tool.optString("description", ""))
+                                .put("parameters", tool.optJSONObject("parameters") ?: JSONObject())
+                        )
+                )
             }
             json.put("tools", toolsArray)
         }
 
         return json.toString()
     }
+
+    private fun sanitizeError(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("<!DOCTYPE", ignoreCase = true) ||
+            trimmed.startsWith("<html", ignoreCase = true)
+        ) {
+            return "استجابة HTML غير متوقعة — تحقق من الـ endpoint أو المفتاح"
+        }
+        return try {
+            val json = JSONObject(trimmed)
+            json.optJSONObject("error")?.optString("message")
+                ?: json.optString("message").ifBlank { trimmed.take(300) }
+        } catch (_: Exception) {
+            trimmed.take(300)
+        }
+    }
+
+    private data class ToolCallBuffer(
+        var id: String = "",
+        var name: String = "",
+        val argumentsJson: StringBuilder = StringBuilder()
+    )
 }
 
 private fun JSONObject.toMap(): Map<String, Any> {

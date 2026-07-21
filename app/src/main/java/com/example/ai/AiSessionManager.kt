@@ -26,6 +26,12 @@ class AiSessionManager(private val aiDao: AiDao) {
         return id
     }
 
+    fun setProviderAndModel(providerType: AiProviderType, modelId: String, reasoning: Boolean) {
+        currentProviderType = providerType
+        currentModelId = modelId
+        reasoningEnabled = reasoning
+    }
+
     fun loadSession(conversationId: String, entities: List<AiMessageEntity>) {
         currentConversationId = conversationId
         messages.clear()
@@ -39,10 +45,8 @@ class AiSessionManager(private val aiDao: AiDao) {
     fun getMessages(): List<AiChatMessage> = messages.toList()
 
     fun getContextMessages(): List<AiChatMessage> {
-        val systemMsg = messages.find { it.role == AiMessageRole.SYSTEM }
         val nonSystem = messages.filter { it.role != AiMessageRole.SYSTEM }
-        val recent = nonSystem.takeLast(MAX_CONTEXT_MESSAGES * 2)
-        return if (systemMsg != null) listOf(systemMsg) + recent else recent
+        return nonSystem.takeLast(MAX_CONTEXT_MESSAGES * 2)
     }
 
     fun addMessage(message: AiChatMessage) {
@@ -62,12 +66,29 @@ class AiSessionManager(private val aiDao: AiDao) {
     }
 
     fun isReasoningEnabled(): Boolean = reasoningEnabled
-
     fun getCurrentModelId(): String = currentModelId
-
     fun getCurrentProviderType(): AiProviderType = currentProviderType
 
+    suspend fun ensureConversationInDb(title: String = "محادثة جديدة"): String {
+        var conversationId = currentConversationId
+        if (conversationId == null) {
+            conversationId = startNewSession(currentProviderType, currentModelId, reasoningEnabled)
+        }
+        aiDao.upsertConversation(
+            AiConversationEntity(
+                id = conversationId,
+                title = title,
+                providerType = currentProviderType.name,
+                modelId = currentModelId,
+                reasoningEnabled = reasoningEnabled,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        return conversationId
+    }
+
     suspend fun saveMessage(message: AiChatMessage, conversationId: String) {
+        ensureConversationInDb()
         val entity = messageToEntity(message, conversationId)
         aiDao.insertMessage(entity)
         val count = aiDao.getMessageCount(conversationId)
@@ -75,18 +96,16 @@ class AiSessionManager(private val aiDao: AiDao) {
     }
 
     suspend fun saveConversation(title: String, conversationId: String) {
-        val existing = aiDao.getConversation(conversationId)
-        if (existing == null) {
-            aiDao.upsertConversation(
-                AiConversationEntity(
-                    id = conversationId,
-                    title = title,
-                    providerType = currentProviderType.name,
-                    modelId = currentModelId,
-                    reasoningEnabled = reasoningEnabled
-                )
+        aiDao.upsertConversation(
+            AiConversationEntity(
+                id = conversationId,
+                title = title,
+                providerType = currentProviderType.name,
+                modelId = currentModelId,
+                reasoningEnabled = reasoningEnabled,
+                updatedAt = System.currentTimeMillis()
             )
-        }
+        )
     }
 
     suspend fun updateConversationTitle(conversationId: String, title: String) {
@@ -96,6 +115,10 @@ class AiSessionManager(private val aiDao: AiDao) {
     suspend fun deleteConversation(conversationId: String) {
         aiDao.deleteMessages(conversationId)
         aiDao.deleteConversation(conversationId)
+        if (currentConversationId == conversationId) {
+            currentConversationId = null
+            messages.clear()
+        }
     }
 
     suspend fun loadMessagesFromDb(conversationId: String): List<AiMessageEntity> {
