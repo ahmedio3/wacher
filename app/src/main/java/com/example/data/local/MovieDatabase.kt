@@ -20,31 +20,35 @@ abstract class MovieDatabase : RoomDatabase() {
 
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS ai_messages")
+                db.execSQL("DROP TABLE IF EXISTS ai_conversations")
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS ai_conversations (" +
-                            "id TEXT NOT NULL PRIMARY KEY, " +
-                            "title TEXT NOT NULL, " +
-                            "providerType TEXT NOT NULL, " +
-                            "modelId TEXT NOT NULL, " +
-                            "reasoningEnabled INTEGER NOT NULL DEFAULT 0, " +
-                            "createdAt INTEGER NOT NULL, " +
-                            "updatedAt INTEGER NOT NULL, " +
-                            "messageCount INTEGER NOT NULL DEFAULT 0)"
+                    "CREATE TABLE IF NOT EXISTS `ai_conversations` (" +
+                            "`id` TEXT NOT NULL, " +
+                            "`title` TEXT NOT NULL, " +
+                            "`providerType` TEXT NOT NULL, " +
+                            "`modelId` TEXT NOT NULL, " +
+                            "`reasoningEnabled` INTEGER NOT NULL DEFAULT 0, " +
+                            "`createdAt` INTEGER NOT NULL, " +
+                            "`updatedAt` INTEGER NOT NULL, " +
+                            "`messageCount` INTEGER NOT NULL DEFAULT 0, " +
+                            "PRIMARY KEY(`id`))"
                 )
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS ai_messages (" +
-                            "id TEXT NOT NULL PRIMARY KEY, " +
-                            "conversationId TEXT NOT NULL, " +
-                            "role TEXT NOT NULL, " +
-                            "content TEXT NOT NULL, " +
-                            "reasoningContent TEXT, " +
-                            "toolCallsJson TEXT, " +
-                            "toolResultsJson TEXT, " +
-                            "imageUrlsJson TEXT, " +
-                            "createdAt INTEGER NOT NULL, " +
-                            "FOREIGN KEY(conversationId) REFERENCES ai_conversations(id) ON DELETE CASCADE)"
+                    "CREATE TABLE IF NOT EXISTS `ai_messages` (" +
+                            "`id` TEXT NOT NULL, " +
+                            "`conversationId` TEXT NOT NULL, " +
+                            "`role` TEXT NOT NULL, " +
+                            "`content` TEXT NOT NULL, " +
+                            "`reasoningContent` TEXT, " +
+                            "`toolCallsJson` TEXT, " +
+                            "`toolResultsJson` TEXT, " +
+                            "`imageUrlsJson` TEXT, " +
+                            "`createdAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`id`), " +
+                            "FOREIGN KEY(`conversationId`) REFERENCES `ai_conversations`(`id`) ON DELETE CASCADE)"
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_messages_conversationId ON ai_messages(conversationId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_messages_conversationId` ON `ai_messages`(`conversationId`)")
             }
         }
 
