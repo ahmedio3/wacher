@@ -35,8 +35,7 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.FitScreen
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -65,9 +64,7 @@ import java.io.File
 @Composable
 fun BrowserScreen(
     viewModel: MovieViewModel,
-    onBackClick: () -> Unit,
-    isBottomBarHidden: Boolean = false,
-    onToggleBottomBar: () -> Unit = {}
+    onBackClick: () -> Unit
 ) {
     // ---- WebView state ----
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -206,40 +203,76 @@ fun BrowserScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            Column {
-                // ---- Single compact header row ----
+            Column(
+                modifier = Modifier.statusBarsPadding()
+            ) {
+                // ---- iOS-style address bar ----
                 Surface(
-                    tonalElevation = 2.dp,
-                    color = Color(0xFFEFECE4)  // Same beige as ModernBottomNavBar
+                    tonalElevation = 0.dp,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 2.dp, vertical = 4.dp),
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // [←] History back
+                        // [←] Exit browser
                         IconButton(
-                            onClick = { webViewRef?.goBack() },
-                            enabled = canGoBack,
+                            onClick = onBackClick,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "الصفحة السابقة",
+                                contentDescription = "خروج",
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // [→] History forward
+                        // URL TextField (rounded pill)
+                        OutlinedTextField(
+                            value = urlInput,
+                            onValueChange = { urlInput = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            singleLine = true,
+                            placeholder = {
+                                Text(
+                                    "ابحث أو أدخل رابطاً",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            },
+                            textStyle = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { navigateTo(urlInput) }),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            )
+                        )
+
+                        // [🏠] Home
                         IconButton(
-                            onClick = { webViewRef?.goForward() },
-                            enabled = canGoForward,
+                            onClick = {
+                                currentUrl = "about:blank"
+                                urlInput = ""
+                                showHome = true
+                                webViewRef?.loadUrl("about:blank")
+                            },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = "الصفحة التالية",
+                                Icons.Default.Home,
+                                contentDescription = "الصفحة الرئيسية",
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -259,42 +292,20 @@ fun BrowserScreen(
                                 Icon(
                                     Icons.Default.Close,
                                     contentDescription = "إيقاف التحميل",
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             } else {
                                 Icon(
                                     Icons.Default.Refresh,
                                     contentDescription = "تحديث",
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        // URL TextField (expands to fill space)
-                        OutlinedTextField(
-                            value = urlInput,
-                            onValueChange = { urlInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            singleLine = true,
-                            placeholder = {
-                                Text(
-                                    "ابحث أو أدخل رابطاً",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodySmall,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                            keyboardActions = KeyboardActions(onGo = { navigateTo(urlInput) }),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
-                        )
-
-                        // [🖼️] Saved images (direct, no menu)
+                        // [🖼️] Saved images
                         IconButton(
                             onClick = { showSavedImages = true },
                             modifier = Modifier.size(36.dp)
@@ -302,25 +313,14 @@ fun BrowserScreen(
                             Icon(
                                 Icons.Default.PhotoLibrary,
                                 contentDescription = "الصور المحفوظة",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // [⛶] Toggle bottom bar
-                        IconButton(
-                            onClick = onToggleBottomBar,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                if (isBottomBarHidden) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                contentDescription = if (isBottomBarHidden) "إظهار الشريط" else "إخفاء الشريط",
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
-                // ---- Loading progress bar (A5) ----
+                // ---- Loading progress bar ----
                 AnimatedVisibility(visible = isLoading, enter = fadeIn(), exit = fadeOut()) {
                     LinearProgressIndicator(
                         progress = { loadProgress.coerceIn(0f, 1f) },

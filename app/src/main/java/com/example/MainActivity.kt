@@ -141,12 +141,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             outlinedIcon = Icons.Outlined.Home
         ),
         NavigationTabItem(
-            route = "browser",
-            label = "المتصفح",
-            filledIcon = Icons.Default.Public,
-            outlinedIcon = Icons.Outlined.Public
-        ),
-        NavigationTabItem(
             route = "explore",
             label = "استكشاف",
             filledIcon = Icons.Default.Explore,
@@ -166,19 +160,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         )
     )
 
-    // State for manual bottom bar hide (BrowserScreen fullscreen toggle)
-    var isBottomBarManuallyHidden by remember { mutableStateOf(false) }
-
-    // Hide Bottom bar on non-tab routes OR when manually hidden in browser
-    val shouldShowBottomBar = (currentRoute in listOf("home", "browser", "explore", "downloads", "settings"))
-        && !isBottomBarManuallyHidden
- 
-    LaunchedEffect(currentRoute) {
-        // Auto-restore bottom bar when leaving browser route
-        if (currentRoute != "browser") {
-            isBottomBarManuallyHidden = false
-        }
-    }
+    // Hide Bottom bar on tab routes only
+    val shouldShowBottomBar = currentRoute in listOf("home", "explore", "downloads", "settings")
 
     // Only navigate to the deep link once the NavHost graph is fully built (currentRoute
     // becomes non-null after the start destination "home" is committed). Navigating during
@@ -355,6 +338,9 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     },
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
+                    },
+                    onNavigateToBrowser = {
+                        navController.navigate("browser")
                     }
                 )
             }
@@ -362,9 +348,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             composable("browser") {
                 BrowserScreen(
                     viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() },
-                    isBottomBarHidden = isBottomBarManuallyHidden,
-                    onToggleBottomBar = { isBottomBarManuallyHidden = !isBottomBarManuallyHidden }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

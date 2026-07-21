@@ -68,6 +68,7 @@ fun HomeScreen(
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToWatchlist: () -> Unit = {},
+    onNavigateToBrowser: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -92,7 +93,7 @@ fun HomeScreen(
             .then(if (searchQuery.isEmpty()) Modifier.verticalScroll(scrollState) else Modifier)
     ) {
         // 1. iOS Top Header with Settings Instead of Cinema Logo
-        HomeHeader(onNavigateToSettings = onNavigateToSettings)
+        HomeHeader(onNavigateToBrowser = onNavigateToBrowser)
 
         // 2. Search Box right below the Header (Netflix / Apple TV design)
         Row(
@@ -481,7 +482,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeHeader(onNavigateToSettings: () -> Unit) {
+fun HomeHeader(onNavigateToBrowser: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -502,17 +503,17 @@ fun HomeHeader(onNavigateToSettings: () -> Unit) {
             )
         }
         
-        // Settings Button replaces Cinema Avatar for clean functional navigation
+        // Browser Button — opens the in-app web browser
         IconButton(
-            onClick = onNavigateToSettings,
+            onClick = onNavigateToBrowser,
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "الإعدادات",
+                imageVector = Icons.Default.Public,
+                contentDescription = "المتصفح",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
