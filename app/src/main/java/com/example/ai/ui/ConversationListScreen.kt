@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.data.AiConversationEntity
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
     conversations: List<AiConversationEntity>,

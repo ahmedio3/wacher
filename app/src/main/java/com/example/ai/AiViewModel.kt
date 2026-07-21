@@ -7,7 +7,7 @@ import com.example.BuildConfig
 import com.example.ai.data.AiConversationEntity
 import com.example.ai.data.AiDao
 import com.example.ai.data.AiMessageEntity
-import com.example.ai.data.MovieDatabase
+import com.example.data.local.MovieDatabase
 import com.example.ai.provider.AiProviderService
 import com.example.ai.provider.GeminiProvider
 import com.example.ai.provider.OpenAiCompatibleProvider
@@ -199,6 +199,9 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     finalizeMessage(conversationId)
                 }
+            }
+            AiStreamEventType.TOOL_RESULTS -> {
+                // handled by tool execution flow
             }
             AiStreamEventType.ERROR -> {
                 _state.update { it.copy(isStreaming = false, error = event.content) }

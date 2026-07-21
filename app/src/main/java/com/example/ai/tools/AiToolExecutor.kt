@@ -199,8 +199,10 @@ class AiToolExecutor(private val context: Context) {
         json.put("rating", details.voteAverage ?: 0.0)
         json.put("release_date", details.releaseDate ?: "")
         json.put("runtime_minutes", details.runtime ?: 0)
-        json.put("genres", JSONArray(details.genres?.map { it.name } ?: emptyList()))
-        json.put("cast", JSONArray(details.credits?.cast?.take(5)?.map { it.name } ?: emptyList()))
+        val genreNames: List<String> = details.genres?.mapNotNull { it.name } ?: emptyList()
+        json.put("genres", JSONArray(genreNames))
+        val castNames: List<String> = details.credits?.cast?.take(5)?.mapNotNull { it.name } ?: emptyList()
+        json.put("cast", JSONArray(castNames))
         return ToolResult.Success(json.toString(2))
     }
 
@@ -211,9 +213,12 @@ class AiToolExecutor(private val context: Context) {
         json.put("overview", details.overview ?: "")
         json.put("rating", details.voteAverage ?: 0.0)
         json.put("first_air_date", details.firstAirDate ?: "")
-        json.put("genres", JSONArray(details.genres?.map { it.name } ?: emptyList()))
-        json.put("seasons", JSONArray(details.seasons?.map { "${it.name} (${it.episodeCount} episodes)" } ?: emptyList()))
-        json.put("cast", JSONArray(details.credits?.cast?.take(5)?.map { it.name } ?: emptyList()))
+        val tvGenreNames: List<String> = details.genres?.mapNotNull { it.name } ?: emptyList()
+        json.put("genres", JSONArray(tvGenreNames))
+        val seasonSummaries: List<String> = details.seasons?.map { "${it.name ?: "?"} (${it.episodeCount ?: 0} episodes)" } ?: emptyList()
+        json.put("seasons", JSONArray(seasonSummaries))
+        val tvCastNames: List<String> = details.credits?.cast?.take(5)?.mapNotNull { it.name } ?: emptyList()
+        json.put("cast", JSONArray(tvCastNames))
         return ToolResult.Success(json.toString(2))
     }
 
