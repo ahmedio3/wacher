@@ -620,9 +620,9 @@ fun SeriesDetailPage(
                     if (!hasFetchedSubtitleOnce) {
                         item {
                             Text(
-                                text = "اجباري: اضغط مطولا على الحلقة > تحميل الترجمة.\nيمكنك عدم فعل ذلك، لأنه عند الدخول إلى الحلقة لمشاهدتها يتم جلب الترجمة تلقائيا في حالة وجود نت (غالبا يا غبي بتدخل الحلقة لما يكون مفيش نت، فاعمل الخطوة الأولى الإجبارية)",
+                                text = "لازم تضغط مطوّلًا على الحلقة > بعدين تحميل الترجمة. أو عمتا الترجمة بتتحمل تلقائي لما تفتح الحلقة بس لازم نت يعني فحمل الترجمة أضمن يا غبي",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
+                                color = Color.Black,
                                 modifier = Modifier.padding(bottom = 8.dp, start = 4.dp, end = 4.dp)
                             )
                         }

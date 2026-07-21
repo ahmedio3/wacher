@@ -74,31 +74,6 @@ fun ExploreScreen(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
             )
 
-            // Unsafe mode button
-            Button(
-                onClick = {
-                    if (unlocked) onNavigateToAdultContent("")
-                    else showVerifySheet = true
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("فتح الوضع الغير آمن", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Subtitle Downloads
             ExploreActionRow(
                 title = "الترجمات المحملة",
@@ -128,6 +103,31 @@ fun ExploreScreen(
                 },
                 onClick = onNavigateToWatchlist
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Unsafe mode button
+            Button(
+                onClick = {
+                    if (unlocked) onNavigateToAdultContent("")
+                    else showVerifySheet = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("فتح الوضع الغير آمن", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -170,9 +170,14 @@ fun ExploreScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ابعت صينة بتاعك",
+                    text = "ابعت صورة بتاعك",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "الطول: فوق 7 سنتي (اختياري)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
                 Button(
                     onClick = {
