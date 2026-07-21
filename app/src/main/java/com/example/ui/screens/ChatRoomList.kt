@@ -27,6 +27,7 @@ import com.example.chat.UserChat
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
@@ -35,6 +36,8 @@ fun ChatRoomList(
     onChatClick: (UserChat) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
+
     var chats by remember { mutableStateOf<List<UserChat>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -45,7 +48,7 @@ fun ChatRoomList(
             isLoading = false
             val partnerIds = chatList.mapNotNull { it.otherUserId.takeIf { id -> id.isNotEmpty() && it.roomType != "public" } }
             if (partnerIds.isNotEmpty()) {
-                UserManager.prefetchProfiles(partnerIds)
+                scope.launch { UserManager.prefetchProfiles(partnerIds) }
             }
         }
     }
