@@ -366,7 +366,46 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     },
                     onNavigateToChat = { roomId, isPublic ->
                         navController.navigate("chat/${Uri.encode(roomId)}/$isPublic")
+                    },
+                    onNavigateToAiChat = {
+                        navController.navigate("ai_chat")
                     }
+                )
+            }
+
+            composable("ai_chat") {
+                val aiViewModel: com.example.ai.AiViewModel = viewModel(
+                    factory = ViewModelFactory(context)
+                )
+                com.example.ai.ui.AiChatScreen(
+                    viewModel = aiViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onOpenConversations = {
+                        navController.navigate("ai_conversations")
+                    }
+                )
+            }
+
+            composable("ai_conversations") {
+                val aiViewModel: com.example.ai.AiViewModel = viewModel(
+                    factory = ViewModelFactory(context)
+                )
+                val state by aiViewModel.state.collectAsState()
+                com.example.ai.ui.ConversationListScreen(
+                    conversations = state.conversations,
+                    currentConversationId = state.currentConversationId,
+                    onConversationClick = { conversation ->
+                        aiViewModel.loadConversation(conversation)
+                        navController.popBackStack()
+                    },
+                    onNewConversation = {
+                        aiViewModel.startNewConversation()
+                        navController.popBackStack()
+                    },
+                    onDeleteConversation = { id ->
+                        aiViewModel.deleteConversation(id)
+                    },
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

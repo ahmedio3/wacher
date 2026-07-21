@@ -880,6 +880,10 @@ class ViewModelFactory(private val application: Application) : ViewModelProvider
             @Suppress("UNCHECKED_CAST")
             return com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel(repository) as T
         }
+        if (modelClass.isAssignableFrom(com.example.ai.AiViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return com.example.ai.AiViewModel(application) as T
+        }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

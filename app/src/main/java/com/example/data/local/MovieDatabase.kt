@@ -6,48 +6,45 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.ai.data.AiConversationEntity
+import com.example.ai.data.AiMessageEntity
 
-@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class], version = 13, exportSchema = false)
+@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, AiConversationEntity::class, AiMessageEntity::class], version = 14, exportSchema = false)
 abstract class MovieDatabase : RoomDatabase() {
     abstract val movieDao: MovieDao
+    abstract val aiDao: com.example.ai.data.AiDao
 
     companion object {
         @Volatile
         private var INSTANCE: MovieDatabase? = null
 
-        // v9 -> v10: add season_meta table for offline season-total caching (additive, non-destructive)
-        val MIGRATION_9_10 = object : Migration(9, 10) {
+        val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS season_meta (" +
-                            "tmdbId INTEGER NOT NULL, " +
-                            "seasonNumber INTEGER NOT NULL, " +
-                            "episodeCount INTEGER NOT NULL, " +
-                            "name TEXT NOT NULL, " +
-                            "lastFetchedAt INTEGER NOT NULL, " +
-                            "PRIMARY KEY(tmdbId, seasonNumber))"
+                    "CREATE TABLE IF NOT EXISTS ai_conversations (" +
+                            "id TEXT NOT NULL PRIMARY KEY, " +
+                            "title TEXT NOT NULL, " +
+                            "providerType TEXT NOT NULL, " +
+                            "modelId TEXT NOT NULL, " +
+                            "reasoningEnabled INTEGER NOT NULL DEFAULT 0, " +
+                            "createdAt INTEGER NOT NULL, " +
+                            "updatedAt INTEGER NOT NULL, " +
+                            "messageCount INTEGER NOT NULL DEFAULT 0)"
                 )
-            }
-        }
-
-        // v10 -> v11: add activity_log table for the history/activity feature
-        val MIGRATION_10_11 = object : Migration(10, 11) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS activity_log (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, timestamp INTEGER NOT NULL)")
-            }
-        }
-
-        // v11 -> v12: drop obsolete activity_log table (now stored in Firebase RTDB)
-        val MIGRATION_11_12 = object : Migration(11, 12) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("DROP TABLE IF EXISTS activity_log")
-            }
-        }
-
-        // v12 -> v13: drop obsolete chat_messages table
-        val MIGRATION_12_13 = object : Migration(12, 13) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("DROP TABLE IF EXISTS chat_messages")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS ai_messages (" +
+                            "id TEXT NOT NULL PRIMARY KEY, " +
+                            "conversationId TEXT NOT NULL, " +
+                            "role TEXT NOT NULL, " +
+                            "content TEXT NOT NULL, " +
+                            "reasoningContent TEXT, " +
+                            "toolCallsJson TEXT, " +
+                            "toolResultsJson TEXT, " +
+                            "imageUrlsJson TEXT, " +
+                            "createdAt INTEGER NOT NULL, " +
+                            "FOREIGN KEY(conversationId) REFERENCES ai_conversations(id) ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_messages_conversationId ON ai_messages(conversationId)")
             }
         }
 
@@ -57,7 +54,7 @@ abstract class MovieDatabase : RoomDatabase() {
                     context.applicationContext,
                     MovieDatabase::class.java,
                     "cinemios_database"
-                ).addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                ).addMigrations(MIGRATION_13_14)
                     .fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance

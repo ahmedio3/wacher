@@ -37,6 +37,7 @@ fun ExploreScreen(
     onNavigateToSubtitleDownloads: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToChat: (String, Boolean) -> Unit = { _, _ -> },
+    onNavigateToAiChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -72,6 +73,21 @@ fun ExploreScreen(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+
+            // AI Chat
+            ExploreActionRow(
+                title = "الذكاء الاصطناعي",
+                subtitle = "مساعد ذكي للبحث عن الأفلام والمسلسلات وإدارة محتواك",
+                icon = {
+                    Box(
+                        modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF6C5CE7)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = onNavigateToAiChat
             )
 
             // Subtitle Downloads

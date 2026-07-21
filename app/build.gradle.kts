@@ -23,11 +23,17 @@ android {
     val subdlApiKey = System.getenv("SUBDL_API_KEY") ?: project.findProperty("subdl.api.key") as? String ?: ""
     val opensubtitlesApiKey = System.getenv("OPENSUBTITLES_API_KEY") ?: project.findProperty("opensubtitles.api.key") as? String ?: ""
     val imgbbApiKey = System.getenv("IMGBB_API_KEY") ?: ""
+    val geminiApiKey = System.getenv("GEMINI_API_KEY") ?: ""
+    val opencodeZenApiKey = System.getenv("OPENCODE_ZEN_API_KEY") ?: ""
+    val bynaraApiKey = System.getenv("BYNARA_API_KEY") ?: ""
 
     buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey}\"")
     buildConfigField("String", "SUBDL_API_KEY", "\"${subdlApiKey}\"")
     buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${opensubtitlesApiKey}\"")
     buildConfigField("String", "IMGBB_API_KEY", "\"${imgbbApiKey}\"")
+    buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey}\"")
+    buildConfigField("String", "OPENCODE_ZEN_API_KEY", "\"${opencodeZenApiKey}\"")
+    buildConfigField("String", "BYNARA_API_KEY", "\"${bynaraApiKey}\"")
   }
 
   signingConfigs {
