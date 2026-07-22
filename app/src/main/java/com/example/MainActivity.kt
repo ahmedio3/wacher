@@ -74,7 +74,24 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            MainAppContainer(deepLinkState = deepLinkState)
+            val context = applicationContext
+            val prefs = context.getSharedPreferences("watchera_prefs", MODE_PRIVATE)
+            var isDarkMode by remember { mutableStateOf(prefs.getBoolean("dark_mode", false)) }
+
+            // Listen for preference changes
+            LaunchedEffect(Unit) {
+                while (true) {
+                    val current = prefs.getBoolean("dark_mode", false)
+                    if (current != isDarkMode) {
+                        isDarkMode = current
+                    }
+                    kotlinx.coroutines.delay(200)
+                }
+            }
+
+            MyApplicationTheme(darkTheme = isDarkMode) {
+                MainAppContainer(deepLinkState = deepLinkState)
+            }
         }
     }
 
@@ -87,10 +104,6 @@ class MainActivity : ComponentActivity() {
 
     private fun extractDeepLink(intent: Intent): String? {
         val uri = intent.data ?: return null
-        // Route to the existing, proven-working "detail" destination (which uses an Int
-        // mediaId). The old "deeplink_show" destination was never resolvable by NavController
-        // ("cannot be found in the navigation graph"), so we reuse "detail/{mediaId}/{mediaType}".
-        // Non-numeric ids (e.g. MovieBox subject ids) are ignored to avoid a crash.
         if (uri.scheme == "cinemios" && uri.host == "show") {
             val mediaType = uri.pathSegments.getOrNull(0)
             val id = uri.pathSegments.getOrNull(1)
@@ -117,16 +130,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     val navController = rememberNavController()
     val context = LocalContext.current.applicationContext as android.app.Application
     
-    // Instantiate MovieViewModel with proper context
     val movieViewModel: MovieViewModel = viewModel(
         factory = ViewModelFactory(context)
     )
 
-    val isDarkMode by movieViewModel.isDarkMode.collectAsState()
-
-    MyApplicationTheme(darkTheme = isDarkMode) {
-
-    // Resume downloading tasks on startup
     LaunchedEffect(Unit) {
         movieViewModel.resumePendingDownloads()
     }
@@ -134,7 +141,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Tab items listing for iOS Style Bar
     val tabItems = listOf(
         NavigationTabItem(
             route = "home",
@@ -162,13 +168,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         )
     )
 
-    // Hide Bottom bar on tab routes only
     val shouldShowBottomBar = currentRoute in listOf("home", "explore", "downloads", "settings")
 
-    // Only navigate to the deep link once the NavHost graph is fully built (currentRoute
-    // becomes non-null after the start destination "home" is committed). Navigating during
-    // the first composition, before the graph is ready, crashed with
-    // "Navigation destination ... cannot be found in the navigation graph".
     LaunchedEffect(deepLinkState.value, currentRoute) {
         if (deepLinkState.value != null && currentRoute != null) {
             navController.navigate(deepLinkState.value!!) {
@@ -178,12 +179,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         }
     }
 
-    val isDarkMode by movieViewModel.isDarkMode.collectAsState()
     val downloads by movieViewModel.downloads.collectAsState()
     val activeDownloads = downloads.filter { it.status == "downloading" || it.status == "paused" || it.status == "queued" }
     var showActiveDownloadsSheet by remember { mutableStateOf(false) }
 
-    // Draggable FAB position
     var fabOffsetX by remember { mutableFloatStateOf(0f) }
     var fabOffsetY by remember { mutableFloatStateOf(0f) }
 
@@ -202,7 +201,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     if (activeDownloads.isEmpty()) {
                         Text("لا يوجد تحميلات نشطة حالياً", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(bottom = 16.dp))
                     } else {
-                        // Descending order by addedAt
                         val sortedDls = remember(activeDownloads) { activeDownloads.sortedByDescending { it.addedAt } }
                         LazyColumn(modifier = Modifier.fillMaxWidth()) {
                             items(sortedDls) { item ->
@@ -241,7 +239,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 }
             },
             floatingActionButton = {
-                // Hide FAB on player, adult content routes
                 val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
                                     || currentRoute?.startsWith("player") == true
                                     || currentRoute == "adult_content"
@@ -250,9 +247,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     val config = LocalConfiguration.current
                     val screenWidthDp = config.screenWidthDp.toFloat()
                     val screenHeightDp = config.screenHeightDp.toFloat()
-                    val fabHalfSize = 28f // half of FAB size (56dp/2)
+                    val fabHalfSize = 28f
                     
-                    // Always show progress circle when active downloads exist
                     val overallProgress = remember(activeDownloads) {
                         val progresses = activeDownloads.map { it.progress }
                         if (progresses.isEmpty()) 0f 
@@ -268,10 +264,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
-                                    // RTL fix: negate horizontal drag
                                     fabOffsetX -= dragAmount.x
                                     fabOffsetY += dragAmount.y
-                                    // Clamp: allow only half the FAB to go off-screen
                                     fabOffsetX = fabOffsetX.coerceIn(
                                         -(screenWidthDp / 2 - fabHalfSize),
                                         (screenWidthDp / 2 - fabHalfSize)
@@ -386,7 +380,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 )
             }
 
-            // Adult +18 Full Page
             composable(
                 route = "adult_content?queries={queries}",
                 arguments = listOf(
@@ -495,7 +488,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 )
             }
 
-            // Media Detail screen router with safe argument parsing
             composable(
                 route = "detail/{mediaId}/{mediaType}",
                 arguments = listOf(
@@ -525,7 +517,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
 
         }
 
-        // Per-series downloaded-episodes full page (replaces the old ModalBottomSheet)
         composable(
             route = "series_downloads/{seriesId}",
             arguments = listOf(
@@ -579,7 +570,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 )
             }
 
-            // Dedicated Offline Native Video Player (Optimized for Downloads without interference)
             composable(
                 route = "offline_player/{mediaId}/{title}?localFilePath={localFilePath}",
                 enterTransition = { fadeIn() },
@@ -609,7 +599,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 }
             }
 
-            // Dedicated Native Video Player Cinema View (Supports online playing)
             composable(
                 route = "player/{mediaId}/{title}?localFilePath={localFilePath}",
                 enterTransition = { fadeIn() },
@@ -642,7 +631,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     }
 }
 
-// Custom Solid Integrated iOS Bottom Navigation Bar (flat, small, elegant)
 @Composable
 fun ModernBottomNavBar(
     navController: NavHostController,
