@@ -59,7 +59,6 @@ import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
 import com.example.data.local.DownloadEntity
 import com.example.data.local.SeasonMetaEntity
-import com.example.ui.theme.PalettePrimary
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.PaletteMutedRed
 import com.example.utils.isLatinText
@@ -554,13 +553,13 @@ fun SeriesDetailPage(
                         tonalElevation = 0.dp
                     ) {
                         DropdownMenuItem(
-                            text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = PalettePrimary) },
+                            text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 seasonMenuSeason = null
                                 selectionMode = true
                                 selectedIds = downloadedEpisodes.filter { it.season == s.seasonNumber }.map { it.id }.toSet()
                             },
-                            leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PalettePrimary, modifier = Modifier.size(18.dp)) }
+                            leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
                         )
                         DropdownMenuItem(
                             text = { Text("حذف جميع حلقات الموسم", color = PaletteMutedRed) },
@@ -1782,11 +1781,11 @@ fun CompactEpisodeRow(
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = PalettePrimary) },
+                text = { Text("تحديد متعدد", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
                 onClick = {
                     onEnterMultiSelect()
                 },
-                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PalettePrimary, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
             )
         }
     }

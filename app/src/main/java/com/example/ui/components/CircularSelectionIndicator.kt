@@ -14,10 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.example.ui.theme.PalettePrimary
-
-// Reusable circular selection indicator (replaces a Checkbox square).
-// Fill animates in/out; border + fill use the warm caramel-brown primary.
 @Composable
 fun CircularSelectionIndicator(
     isSelected: Boolean,
@@ -34,11 +30,11 @@ fun CircularSelectionIndicator(
             .clip(CircleShape)
             .border(
                 2.dp,
-                if (isSelected) PalettePrimary
+                if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                 CircleShape
             )
-            .background(PalettePrimary.copy(alpha = indicatorFill))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = indicatorFill))
             .clickable { onClick() }
     )
 }
