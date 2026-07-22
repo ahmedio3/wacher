@@ -67,7 +67,7 @@ fun AiHeader(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = !selectorExpanded,
                 enter = slideInVertically(tween(180)) { it / 2 } + fadeIn(tween(180)),
                 exit = slideOutVertically(tween(140)) { it / 2 } + fadeOut(tween(120))
@@ -92,7 +92,7 @@ fun AiHeader(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        AnimatedVisibility(
+                        androidx.compose.animation.AnimatedVisibility(
                             visible = showThinking,
                             enter = slideInHorizontally(tween(180)) { it / 2 } + fadeIn(tween(180)),
                             exit = fadeOut(tween(100))
