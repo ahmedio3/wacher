@@ -14,6 +14,18 @@ val PaletteOnSurface = Color(0xFF352B24)    // Accent body/title text
 val PaletteOnPrimary = Color(0xFFFDFBF7)    // Cozy white/cream text on buttons
 val PaletteNeutralGray = Color(0xFFE5E5EA)  // Neutral system-gray (reference header circles/pills)
 
+// Dark mode palette — GitHub-dark inspired
+val DarkBackground = Color(0xFF0D1117)       // GitHub dark bg
+val DarkSurface = Color(0xFF161B22)          // GitHub dark card/surface
+val DarkSurfaceVariant = Color(0xFF21262D)   // Slightly lighter for borders/dividers
+val DarkPrimary = Color(0xFFB58C66)          // Lightened caramel-brown for dark bg
+val DarkSecondary = Color(0xFFC9A07F)        // Lightened secondary brown
+val DarkTertiary = Color(0xFFE3B86E)         // Lightened gold accent
+val DarkOnBackground = Color(0xFFE1D9D0)    // Off-white text on dark bg
+val DarkOnSurface = Color(0xFFF0EAE2)        // Brighter text for titles
+val DarkOnPrimary = Color(0xFF0D1117)        // Dark text on primary buttons
+val DarkNeutralGray = Color(0xFF404854)      // Dark mode neutral gray
+
 // Accent colors
 val PaletteAppleBlue = Color(0xFF007AFF)    // Classic iOS style blue highlight
 val PaletteAppleRed = Color(0xFFFF3B30)     // Classic iOS error/delete red

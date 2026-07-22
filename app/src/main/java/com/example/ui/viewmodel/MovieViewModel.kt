@@ -76,6 +76,15 @@ class MovieViewModel(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+    // Dark mode toggle
+    private val _isDarkMode = MutableStateFlow(sharedPrefs.getBoolean("dark_mode", false))
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+
+    fun setDarkMode(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("dark_mode", enabled).apply()
+        _isDarkMode.value = enabled
+    }
+
     fun setArabicPosters(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("arabic_posters", enabled).apply()
         _isArabicPosters.value = enabled

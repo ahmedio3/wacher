@@ -74,9 +74,7 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            MyApplicationTheme {
-                MainAppContainer(deepLinkState = deepLinkState)
-            }
+            MainAppContainer(deepLinkState = deepLinkState)
         }
     }
 
@@ -123,6 +121,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     val movieViewModel: MovieViewModel = viewModel(
         factory = ViewModelFactory(context)
     )
+
+    val isDarkMode by movieViewModel.isDarkMode.collectAsState()
+
+    MyApplicationTheme(darkTheme = isDarkMode) {
 
     // Resume downloading tasks on startup
     LaunchedEffect(Unit) {
@@ -176,6 +178,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         }
     }
 
+    val isDarkMode by movieViewModel.isDarkMode.collectAsState()
     val downloads by movieViewModel.downloads.collectAsState()
     val activeDownloads = downloads.filter { it.status == "downloading" || it.status == "paused" || it.status == "queued" }
     var showActiveDownloadsSheet by remember { mutableStateOf(false) }
@@ -648,7 +651,7 @@ fun ModernBottomNavBar(
 ) {
     NavigationBar(
         modifier = Modifier.height(84.dp).padding(bottom = 6.dp),
-        containerColor = Color(0xFFEFECE4), // Base surface color
+        containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 4.dp
     ) {
@@ -659,11 +662,9 @@ fun ModernBottomNavBar(
                     onClick = {
                         if (currentRoute != tab.route) {
                             if (tab.route == "home") {
-                                // الخيار ج: home بدون restoreState لتفعيل transition
                                 navController.navigate("home") {
                                     popUpTo(0) { saveState = true }
                                     launchSingleTop = true
-                                    // NO restoreState — entry جديد لتفعيل AnimatedContent transition
                                 }
                             } else {
                                 navController.navigate(tab.route) {
@@ -696,7 +697,7 @@ fun ModernBottomNavBar(
                         unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         selectedTextColor = MaterialTheme.colorScheme.primary,
                         unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        indicatorColor = Color(0xFFD6C8B3) // A beige shade coordinating with overall Theme
+                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     )
                 )
             }
