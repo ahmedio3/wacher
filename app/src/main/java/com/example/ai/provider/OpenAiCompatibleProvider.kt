@@ -31,7 +31,7 @@ class OpenAiCompatibleProvider(
         messages: List<AiChatMessage>,
         model: String,
         toolsJson: String?,
-        reasoningEnabled: Boolean,
+        thinkingLevel: ThinkingLevel,
         onEvent: (AiStreamEvent) -> Unit
     ) = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
@@ -46,7 +46,7 @@ class OpenAiCompatibleProvider(
 
         try {
             val endpoint = baseUrl.trimEnd('/') + "/chat/completions"
-            val body = buildOpenAiBody(messages, model, toolsJson)
+            val body = buildOpenAiBody(messages, model, toolsJson, thinkingLevel)
 
             val request = Request.Builder()
                 .url(endpoint)
@@ -302,11 +302,16 @@ class OpenAiCompatibleProvider(
     private fun buildOpenAiBody(
         messages: List<AiChatMessage>,
         model: String,
-        toolsJson: String?
+        toolsJson: String?,
+        thinkingLevel: ThinkingLevel
     ): String {
         val json = JSONObject()
         json.put("model", model)
         json.put("stream", true)
+
+        if (thinkingLevel != ThinkingLevel.NONE) {
+            json.put("reasoning_effort", thinkingLevel.key)
+        }
 
         val msgsArray = JSONArray()
         for (msg in messages) {

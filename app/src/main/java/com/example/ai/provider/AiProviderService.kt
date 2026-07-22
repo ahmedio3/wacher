@@ -2,7 +2,7 @@ package com.example.ai.provider
 
 import com.example.ai.AiChatMessage
 import com.example.ai.AiStreamEvent
-import com.example.ai.AiToolCall
+import com.example.ai.ThinkingLevel
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -11,7 +11,7 @@ interface AiProviderService {
         messages: List<AiChatMessage>,
         model: String,
         toolsJson: String? = null,
-        reasoningEnabled: Boolean = false,
+        thinkingLevel: ThinkingLevel = ThinkingLevel.NONE,
         onEvent: (AiStreamEvent) -> Unit
     )
 }
@@ -19,152 +19,89 @@ interface AiProviderService {
 fun buildToolDeclarationsJson(): String {
     val tools = JSONArray()
 
-    val searchTmdb = JSONObject()
-    searchTmdb.put("name", "search_tmdb")
-    searchTmdb.put("description", "Search for movies and TV shows on TMDB. Returns results with titles, overviews, ratings, and poster paths.")
-    val searchParams = JSONObject()
-    searchParams.put("type", "object")
-    val searchProperties = JSONObject()
-    val queryProp = JSONObject()
-    queryProp.put("type", "string")
-    queryProp.put("description", "The search query (movie or TV show name)")
-    searchProperties.put("query", queryProp)
-    searchParams.put("properties", searchProperties)
-    searchParams.put("required", JSONArray(listOf("query")))
-    searchTmdb.put("parameters", searchParams)
-    tools.put(searchTmdb)
+    fun tool(name: String, description: String, params: JSONObject): JSONObject {
+        return JSONObject()
+            .put("name", name)
+            .put("description", description)
+            .put("parameters", params)
+    }
 
-    val getWatchlist = JSONObject()
-    getWatchlist.put("name", "get_watchlist")
-    getWatchlist.put("description", "Get the user's watchlist (favorites). Returns saved movies and TV shows with their status.")
-    val wlParams = JSONObject()
-    wlParams.put("type", "object")
-    val wlProperties = JSONObject()
-    val wlStatusProp = JSONObject()
-    wlStatusProp.put("type", "string")
-    wlStatusProp.put("description", "Filter by status: PLAN_TO_WATCH, WATCHING, COMPLETED, or empty for all")
-    wlStatusProp.put("enum", JSONArray(listOf("PLAN_TO_WATCH", "WATCHING", "COMPLETED", "")))
-    wlProperties.put("status", wlStatusProp)
-    wlParams.put("properties", wlProperties)
-    wlParams.put("required", JSONArray())
-    getWatchlist.put("parameters", wlParams)
-    tools.put(getWatchlist)
+    fun objProps(vararg pairs: Pair<String, JSONObject>): JSONObject {
+        val props = JSONObject()
+        pairs.forEach { (k, v) -> props.put(k, v) }
+        return JSONObject().put("type", "object").put("properties", props)
+    }
 
-    val getDownloads = JSONObject()
-    getDownloads.put("name", "get_downloads")
-    getDownloads.put("description", "Get the user's downloaded content list.")
-    val dlParams = JSONObject()
-    dlParams.put("type", "object")
-    val dlProperties = JSONObject()
-    val dlStatusProp = JSONObject()
-    dlStatusProp.put("type", "string")
-    dlStatusProp.put("description", "Filter by status: downloading, completed, paused, queued, or empty for all")
-    dlStatusProp.put("enum", JSONArray(listOf("downloading", "completed", "paused", "queued", "")))
-    dlProperties.put("status", dlStatusProp)
-    dlParams.put("properties", dlProperties)
-    dlParams.put("required", JSONArray())
-    getDownloads.put("parameters", dlParams)
-    tools.put(getDownloads)
+    fun prop(type: String, desc: String): JSONObject =
+        JSONObject().put("type", type).put("description", desc)
 
-    val getActivityLog = JSONObject()
-    getActivityLog.put("name", "get_activity_log")
-    getActivityLog.put("description", "Get the user's recent activity history (watched, downloaded, etc.).")
-    val alParams = JSONObject()
-    alParams.put("type", "object")
-    val alProperties = JSONObject()
-    val limitProp = JSONObject()
-    limitProp.put("type", "integer")
-    limitProp.put("description", "Number of recent activities to fetch (max 50)")
-    alProperties.put("limit", limitProp)
-    alParams.put("properties", alProperties)
-    alParams.put("required", JSONArray())
-    getActivityLog.put("parameters", alParams)
-    tools.put(getActivityLog)
-
-    val addToWatchlist = JSONObject()
-    addToWatchlist.put("name", "add_to_watchlist")
-    addToWatchlist.put("description", "Add a movie or TV show to the user's watchlist (favorites). Requires tmdb_id and media_type.")
-    val awParams = JSONObject()
-    awParams.put("type", "object")
-    val awProperties = JSONObject()
-    val idProp = JSONObject()
-    idProp.put("type", "integer")
-    idProp.put("description", "The TMDB ID of the movie or TV show")
-    awProperties.put("tmdb_id", idProp)
-    val mtProp = JSONObject()
-    mtProp.put("type", "string")
-    mtProp.put("description", "Either 'movie' or 'tv'")
-    awProperties.put("media_type", mtProp)
-    val titleProp = JSONObject()
-    titleProp.put("type", "string")
-    titleProp.put("description", "The title of the media")
-    awProperties.put("title", titleProp)
-    val posterProp = JSONObject()
-    posterProp.put("type", "string")
-    posterProp.put("description", "The poster path (e.g. /abc123.jpg)")
-    awProperties.put("poster_path", posterProp)
-    val ratingProp = JSONObject()
-    ratingProp.put("type", "number")
-    ratingProp.put("description", "The rating out of 10")
-    awProperties.put("rating", ratingProp)
-    awParams.put("properties", awProperties)
-    awParams.put("required", JSONArray(listOf("tmdb_id", "media_type", "title")))
-    addToWatchlist.put("parameters", awParams)
-    tools.put(addToWatchlist)
-
-    val getTmdbDetails = JSONObject()
-    getTmdbDetails.put("name", "get_tmdb_details")
-    getTmdbDetails.put("description", "Get detailed information about a specific movie or TV show from TMDB including overview, genres, cast, seasons (for TV), and runtime (for movies).")
-    val tdParams = JSONObject()
-    tdParams.put("type", "object")
-    val tdProperties = JSONObject()
-    val tdIdProp = JSONObject()
-    tdIdProp.put("type", "integer")
-    tdIdProp.put("description", "The TMDB ID")
-    tdProperties.put("tmdb_id", tdIdProp)
-    val tdMtProp = JSONObject()
-    tdMtProp.put("type", "string")
-    tdMtProp.put("description", "Either 'movie' or 'tv'")
-    tdProperties.put("media_type", tdMtProp)
-    tdParams.put("properties", tdProperties)
-    tdParams.put("required", JSONArray(listOf("tmdb_id", "media_type")))
-    getTmdbDetails.put("parameters", tdParams)
-    tools.put(getTmdbDetails)
-
-    val downloadContent = JSONObject()
-    downloadContent.put("name", "download_content")
-    downloadContent.put("description", "Download a movie episode or TV show episode. This action requires user approval before execution.")
-    val dcParams = JSONObject()
-    dcParams.put("type", "object")
-    val dcProperties = JSONObject()
-    val dcIdProp = JSONObject()
-    dcIdProp.put("type", "integer")
-    dcIdProp.put("description", "The TMDB ID")
-    dcProperties.put("tmdb_id", dcIdProp)
-    val dcMtProp = JSONObject()
-    dcMtProp.put("type", "string")
-    dcMtProp.put("description", "Either 'movie' or 'tv'")
-    dcProperties.put("media_type", dcMtProp)
-    val dcTitleProp = JSONObject()
-    dcTitleProp.put("type", "string")
-    dcTitleProp.put("description", "The title")
-    dcProperties.put("title", dcTitleProp)
-    val dcSeasonProp = JSONObject()
-    dcSeasonProp.put("type", "integer")
-    dcSeasonProp.put("description", "Season number (0 for movies)")
-    dcProperties.put("season", dcSeasonProp)
-    val dcEpisodeProp = JSONObject()
-    dcEpisodeProp.put("type", "integer")
-    dcEpisodeProp.put("description", "Episode number (0 for movies)")
-    dcProperties.put("episode", dcEpisodeProp)
-    val dcQualityProp = JSONObject()
-    dcQualityProp.put("type", "string")
-    dcQualityProp.put("description", "Video quality: 720p, 1080p, 4k")
-    dcProperties.put("quality", dcQualityProp)
-    dcParams.put("properties", dcProperties)
-    dcParams.put("required", JSONArray(listOf("tmdb_id", "media_type", "title")))
-    downloadContent.put("parameters", dcParams)
-    tools.put(downloadContent)
+    tools.put(
+        tool(
+            "search_tmdb",
+            "Search for movies and TV shows on TMDB.",
+            objProps("query" to prop("string", "Search query")).put("required", JSONArray(listOf("query")))
+        )
+    )
+    tools.put(
+        tool(
+            "get_watchlist",
+            "Get the user's watchlist (favorites).",
+            objProps("status" to prop("string", "PLAN_TO_WATCH, WATCHING, COMPLETED, or empty for all"))
+                .put("required", JSONArray())
+        )
+    )
+    tools.put(
+        tool(
+            "get_downloads",
+            "Get the user's downloaded content list.",
+            objProps("status" to prop("string", "downloading, completed, paused, queued, or empty"))
+                .put("required", JSONArray())
+        )
+    )
+    tools.put(
+        tool(
+            "get_activity_log",
+            "Get the user's recent activity history.",
+            objProps("limit" to prop("integer", "Number of activities (max 50)")).put("required", JSONArray())
+        )
+    )
+    tools.put(
+        tool(
+            "add_to_watchlist",
+            "Add a movie or TV show to the user's watchlist.",
+            objProps(
+                "tmdb_id" to prop("integer", "TMDB ID"),
+                "media_type" to prop("string", "movie or tv"),
+                "title" to prop("string", "Title"),
+                "poster_path" to prop("string", "Poster path"),
+                "rating" to prop("number", "Rating out of 10")
+            ).put("required", JSONArray(listOf("tmdb_id", "media_type", "title")))
+        )
+    )
+    tools.put(
+        tool(
+            "get_tmdb_details",
+            "Get detailed information about a movie or TV show from TMDB.",
+            objProps(
+                "tmdb_id" to prop("integer", "TMDB ID"),
+                "media_type" to prop("string", "movie or tv")
+            ).put("required", JSONArray(listOf("tmdb_id", "media_type")))
+        )
+    )
+    tools.put(
+        tool(
+            "download_content",
+            "Download a movie or TV episode. Requires user approval.",
+            objProps(
+                "tmdb_id" to prop("integer", "TMDB ID"),
+                "media_type" to prop("string", "movie or tv"),
+                "title" to prop("string", "Title"),
+                "season" to prop("integer", "Season (0 for movies)"),
+                "episode" to prop("integer", "Episode (0 for movies)"),
+                "quality" to prop("string", "720p, 1080p, 4k")
+            ).put("required", JSONArray(listOf("tmdb_id", "media_type", "title")))
+        )
+    )
 
     return tools.toString()
 }

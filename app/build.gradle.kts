@@ -26,6 +26,7 @@ android {
     val geminiApiKey = System.getenv("GEMINI_API_KEY") ?: ""
     val opencodeZenApiKey = System.getenv("OPENCODE_ZEN_API_KEY") ?: ""
     val bynaraApiKey = System.getenv("BYNARA_API_KEY") ?: ""
+    val agnesApiKey = System.getenv("AGNES_API_KEY") ?: ""
 
     buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey}\"")
     buildConfigField("String", "SUBDL_API_KEY", "\"${subdlApiKey}\"")
@@ -34,6 +35,7 @@ android {
     buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey}\"")
     buildConfigField("String", "OPENCODE_ZEN_API_KEY", "\"${opencodeZenApiKey}\"")
     buildConfigField("String", "BYNARA_API_KEY", "\"${bynaraApiKey}\"")
+    buildConfigField("String", "AGNES_API_KEY", "\"${agnesApiKey}\"")
   }
 
   signingConfigs {

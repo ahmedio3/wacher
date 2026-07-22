@@ -30,6 +30,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
           BYNARA_API_KEY: ${{ secrets.BYNARA_API_KEY }}
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
         run: gradle assembleDebug
 
       - name: Upload APK as Artifact

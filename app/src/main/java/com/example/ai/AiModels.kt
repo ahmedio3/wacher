@@ -6,7 +6,23 @@ import org.json.JSONObject
 enum class AiProviderType(val displayName: String) {
     GEMINI("Gemini"),
     OPENCODE_ZEN("OpenCode Zen"),
-    BYNARA("Bynara")
+    BYNARA("Bynara"),
+    AGNES_AI("Agnes AI")
+}
+
+/**
+ * Thinking effort levels sent to providers in real API requests.
+ */
+enum class ThinkingLevel(val label: String, val key: String) {
+    NONE("بدون", "none"),
+    LOW("منخفض", "low"),
+    MEDIUM("متوسط", "medium"),
+    HIGH("مرتفع", "high");
+
+    companion object {
+        fun fromKey(key: String): ThinkingLevel =
+            entries.find { it.key == key } ?: NONE
+    }
 }
 
 data class AiModelConfig(
@@ -14,7 +30,10 @@ data class AiModelConfig(
     val displayName: String,
     val providerType: AiProviderType,
     val supportsVision: Boolean = false,
-    val supportsReasoning: Boolean = true
+    val supportsReasoning: Boolean = true,
+    val reasoningLevels: List<ThinkingLevel> = listOf(
+        ThinkingLevel.NONE, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH
+    )
 )
 
 data class AiProviderConfig(
@@ -163,11 +182,9 @@ val PROVIDER_CONFIGS: Map<AiProviderType, AiProviderConfig> = mapOf(
         apiKey = "",
         baseUrl = "https://opencode.ai/zen/v1",
         models = listOf(
-            AiModelConfig("big-pickle", "Big Pickle", AiProviderType.OPENCODE_ZEN),
-            AiModelConfig("deepseek-v4-flash-free", "DeepSeek V4 Flash", AiProviderType.OPENCODE_ZEN),
-            AiModelConfig("mimo-v2.5-free", "Mimo 2.5 Free", AiProviderType.OPENCODE_ZEN, supportsVision = true),
             AiModelConfig("nemotron-3-ultra-free", "Nemotron 3 Ultra", AiProviderType.OPENCODE_ZEN),
-            AiModelConfig("north-mini-code-free", "North Mini Code", AiProviderType.OPENCODE_ZEN)
+            AiModelConfig("north-mini-code-free", "North Mini Code", AiProviderType.OPENCODE_ZEN),
+            AiModelConfig("laguna-s-2.1-free", "Laguna S 2.1 Free", AiProviderType.OPENCODE_ZEN, supportsReasoning = true)
         )
     ),
     AiProviderType.BYNARA to AiProviderConfig(
@@ -175,12 +192,19 @@ val PROVIDER_CONFIGS: Map<AiProviderType, AiProviderConfig> = mapOf(
         apiKey = "",
         baseUrl = "https://router.bynara.id/v1",
         models = listOf(
-            AiModelConfig("agnes-2.0-flash", "Agnes 2.0 Flash", AiProviderType.BYNARA),
             AiModelConfig("grok-4.5", "Grok 4.5", AiProviderType.BYNARA, supportsVision = true),
             AiModelConfig("mistral-large", "Mistral Large", AiProviderType.BYNARA),
             AiModelConfig("mistral-medium-3-5", "Mistral Medium 3.5", AiProviderType.BYNARA, supportsVision = true)
         )
+    ),
+    AiProviderType.AGNES_AI to AiProviderConfig(
+        type = AiProviderType.AGNES_AI,
+        apiKey = "",
+        baseUrl = "https://apihub.agnes-ai.com/v1",
+        models = listOf(
+            AiModelConfig("agnes-2.0-flash", "Agnes 2.0 Flash", AiProviderType.AGNES_AI, supportsVision = true, supportsReasoning = true)
+        )
     )
 )
 
-fun getDefaultModel(): AiModelConfig = PROVIDER_CONFIGS[AiProviderType.GEMINI]!!.models.first()
+fun getDefaultModel(): AiModelConfig = PROVIDER_CONFIGS[AiProviderType.AGNES_AI]!!.models.first()

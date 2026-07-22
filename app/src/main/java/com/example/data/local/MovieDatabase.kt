@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.ai.data.AiConversationEntity
 import com.example.ai.data.AiMessageEntity
 
-@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, AiConversationEntity::class, AiMessageEntity::class], version = 14, exportSchema = false)
+@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, AiConversationEntity::class, AiMessageEntity::class], version = 15, exportSchema = false)
 abstract class MovieDatabase : RoomDatabase() {
     abstract val movieDao: MovieDao
     abstract val aiDao: com.example.ai.data.AiDao
@@ -52,13 +52,47 @@ abstract class MovieDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS ai_messages")
+                db.execSQL("DROP TABLE IF EXISTS ai_conversations")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ai_conversations` (" +
+                            "`id` TEXT NOT NULL, " +
+                            "`title` TEXT NOT NULL, " +
+                            "`providerType` TEXT NOT NULL, " +
+                            "`modelId` TEXT NOT NULL, " +
+                            "`thinkingLevel` TEXT NOT NULL DEFAULT 'high', " +
+                            "`createdAt` INTEGER NOT NULL, " +
+                            "`updatedAt` INTEGER NOT NULL, " +
+                            "`messageCount` INTEGER NOT NULL DEFAULT 0, " +
+                            "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ai_messages` (" +
+                            "`id` TEXT NOT NULL, " +
+                            "`conversationId` TEXT NOT NULL, " +
+                            "`role` TEXT NOT NULL, " +
+                            "`content` TEXT NOT NULL, " +
+                            "`reasoningContent` TEXT, " +
+                            "`toolCallsJson` TEXT, " +
+                            "`toolResultsJson` TEXT, " +
+                            "`imageUrlsJson` TEXT, " +
+                            "`createdAt` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`id`), " +
+                            "FOREIGN KEY(`conversationId`) REFERENCES `ai_conversations`(`id`) ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_messages_conversationId` ON `ai_messages`(`conversationId`)")
+            }
+        }
+
         fun getDatabase(context: Context): MovieDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     MovieDatabase::class.java,
                     "cinemios_database"
-                ).addMigrations(MIGRATION_13_14)
+                ).addMigrations(MIGRATION_13_14, MIGRATION_14_15)
                     .fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance

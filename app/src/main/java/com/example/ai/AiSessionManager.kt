@@ -8,29 +8,35 @@ class AiSessionManager(private val aiDao: AiDao) {
 
     private var messages = mutableListOf<AiChatMessage>()
     private var currentConversationId: String? = null
-    private var currentProviderType: AiProviderType = AiProviderType.GEMINI
-    private var currentModelId: String = "gemini-3.1-flash-lite"
-    private var reasoningEnabled: Boolean = false
+    private var currentProviderType: AiProviderType = AiProviderType.AGNES_AI
+    private var currentModelId: String = "agnes-2.0-flash"
+    private var thinkingLevel: ThinkingLevel = ThinkingLevel.HIGH
 
     companion object {
         const val MAX_CONTEXT_MESSAGES = 15
     }
 
-    fun startNewSession(providerType: AiProviderType, modelId: String, reasoning: Boolean): String {
+    fun startNewSession(providerType: AiProviderType, modelId: String, level: ThinkingLevel): String {
         currentProviderType = providerType
         currentModelId = modelId
-        reasoningEnabled = reasoning
+        thinkingLevel = level
         val id = java.util.UUID.randomUUID().toString()
         currentConversationId = id
         messages.clear()
         return id
     }
 
-    fun setProviderAndModel(providerType: AiProviderType, modelId: String, reasoning: Boolean) {
+    fun setProviderAndModel(providerType: AiProviderType, modelId: String, level: ThinkingLevel) {
         currentProviderType = providerType
         currentModelId = modelId
-        reasoningEnabled = reasoning
+        thinkingLevel = level
     }
+
+    fun setThinkingLevel(level: ThinkingLevel) {
+        thinkingLevel = level
+    }
+
+    fun getThinkingLevel(): ThinkingLevel = thinkingLevel
 
     fun loadSession(conversationId: String, entities: List<AiMessageEntity>) {
         currentConversationId = conversationId
@@ -41,7 +47,6 @@ class AiSessionManager(private val aiDao: AiDao) {
     }
 
     fun getCurrentConversationId(): String? = currentConversationId
-
     fun getMessages(): List<AiChatMessage> = messages.toList()
 
     fun getContextMessages(): List<AiChatMessage> {
@@ -65,14 +70,13 @@ class AiSessionManager(private val aiDao: AiDao) {
         }
     }
 
-    fun isReasoningEnabled(): Boolean = reasoningEnabled
     fun getCurrentModelId(): String = currentModelId
     fun getCurrentProviderType(): AiProviderType = currentProviderType
 
     suspend fun ensureConversationInDb(title: String = "محادثة جديدة"): String {
         var conversationId = currentConversationId
         if (conversationId == null) {
-            conversationId = startNewSession(currentProviderType, currentModelId, reasoningEnabled)
+            conversationId = startNewSession(currentProviderType, currentModelId, thinkingLevel)
         }
         aiDao.upsertConversation(
             AiConversationEntity(
@@ -80,7 +84,7 @@ class AiSessionManager(private val aiDao: AiDao) {
                 title = title,
                 providerType = currentProviderType.name,
                 modelId = currentModelId,
-                reasoningEnabled = reasoningEnabled,
+                thinkingLevel = thinkingLevel.key,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -102,7 +106,7 @@ class AiSessionManager(private val aiDao: AiDao) {
                 title = title,
                 providerType = currentProviderType.name,
                 modelId = currentModelId,
-                reasoningEnabled = reasoningEnabled,
+                thinkingLevel = thinkingLevel.key,
                 updatedAt = System.currentTimeMillis()
             )
         )

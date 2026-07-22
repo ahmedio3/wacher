@@ -6,36 +6,31 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.ai.AiMessageRole
 import com.example.ai.AiViewModel
 import com.example.ai.PROVIDER_CONFIGS
-import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun AiChatScreen(
     onBackClick: () -> Unit,
-    onOpenConversations: () -> Unit,
     viewModel: AiViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var showModelSheet by remember { mutableStateOf(false) }
-    var showConversationSheet by remember { mutableStateOf(false) }
+    var selectorExpanded by remember { mutableStateOf(false) }
+    var drawerOpen by remember { mutableStateOf(false) }
 
     val currentModel = PROVIDER_CONFIGS[state.currentProviderType]?.models
         ?.find { it.id == state.currentModelId }
-
     val supportsVision = currentModel?.supportsVision ?: false
 
     LaunchedEffect(state.messages.size, state.isStreaming) {
@@ -79,7 +74,7 @@ fun AiChatScreen(
                                 .fillMaxWidth(),
                             contentPadding = PaddingValues(top = 56.dp, bottom = 8.dp)
                         ) {
-                            itemsIndexed(state.messages) { index, msg ->
+                            itemsIndexed(state.messages) { _, msg ->
                                 AiMessageBubble(message = msg)
                             }
 
@@ -98,9 +93,7 @@ fun AiChatScreen(
                             }
 
                             if (state.isStreaming) {
-                                item {
-                                    AiTypingIndicator()
-                                }
+                                item { AiTypingIndicator() }
                             }
 
                             item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -113,11 +106,6 @@ fun AiChatScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "✨",
-                                    fontSize = 48.sp
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = "كيف يمكنني مساعدتك؟",
                                     fontSize = 18.sp,
@@ -140,31 +128,71 @@ fun AiChatScreen(
                             viewModel.sendMessage(text, imageBase64)
                         },
                         supportsVision = supportsVision,
-                        isStreaming = state.isStreaming,
-                        modifier = Modifier
+                        isStreaming = state.isStreaming
                     )
                 }
 
+                // Header always on top
                 AiHeader(
                     providerType = state.currentProviderType,
                     modelId = state.currentModelId,
-                    reasoningEnabled = state.reasoningEnabled,
-                    isStreaming = state.isStreaming,
+                    thinkingLevel = state.thinkingLevel,
+                    selectorExpanded = selectorExpanded,
                     onBackClick = onBackClick,
-                    onModelClick = { showModelSheet = true },
-                    onMenuClick = { showConversationSheet = true },
-                    modifier = Modifier.align(Alignment.TopCenter)
+                    onModelClick = { selectorExpanded = true },
+                    onMenuClick = { drawerOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .zIndex(2f)
+                )
+
+                // Model selector overlay (expands from header area)
+                ModelSelectorPanel(
+                    expanded = selectorExpanded,
+                    currentProviderType = state.currentProviderType,
+                    currentModelId = state.currentModelId,
+                    currentThinkingLevel = state.thinkingLevel,
+                    onSelectModel = { provider, modelId ->
+                        viewModel.selectModel(provider, modelId)
+                    },
+                    onSelectThinking = { level ->
+                        viewModel.setThinkingLevel(level)
+                    },
+                    onDismiss = { selectorExpanded = false },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(3f)
                 )
             }
         }
+
+        // Conversations drawer
+        ConversationsDrawer(
+            visible = drawerOpen,
+            conversations = state.conversations,
+            currentConversationId = state.currentConversationId,
+            onConversationClick = { conversation ->
+                viewModel.loadConversation(conversation)
+                drawerOpen = false
+            },
+            onNewConversation = {
+                viewModel.startNewConversation()
+                drawerOpen = false
+            },
+            onDeleteConversation = { id ->
+                viewModel.deleteConversation(id)
+            },
+            onDismiss = { drawerOpen = false }
+        )
 
         if (state.error != null) {
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
                 action = {
-                    TextButton(onClick = { /* dismiss */ }) {
+                    TextButton(onClick = { viewModel.clearError() }) {
                         Text("حسناً")
                     }
                 }
@@ -172,17 +200,5 @@ fun AiChatScreen(
                 Text(state.error!!)
             }
         }
-    }
-
-    if (showModelSheet) {
-        ModelSelectorSheet(
-            currentProviderType = state.currentProviderType,
-            currentModelId = state.currentModelId,
-            onModelSelected = { providerType, modelId ->
-                viewModel.selectModel(providerType, modelId)
-                showModelSheet = false
-            },
-            onDismiss = { showModelSheet = false }
-        )
     }
 }

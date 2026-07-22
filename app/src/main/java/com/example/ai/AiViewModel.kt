@@ -1,12 +1,12 @@
 package com.example.ai
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
 import com.example.ai.data.AiConversationEntity
 import com.example.ai.data.AiDao
-import com.example.ai.data.AiMessageEntity
 import com.example.data.local.MovieDatabase
 import com.example.ai.provider.AiProviderService
 import com.example.ai.provider.GeminiProvider
@@ -24,9 +24,9 @@ data class AiChatUiState(
     val isStreaming: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val currentProviderType: AiProviderType = AiProviderType.GEMINI,
+    val currentProviderType: AiProviderType = AiProviderType.AGNES_AI,
     val currentModelId: String = getDefaultModel().id,
-    val reasoningEnabled: Boolean = false,
+    val thinkingLevel: ThinkingLevel = ThinkingLevel.HIGH,
     val conversations: List<AiConversationEntity> = emptyList(),
     val currentConversationId: String? = null,
     val currentConversationTitle: String = "محادثة جديدة",
@@ -54,6 +54,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     private val aiDao: AiDao = database.aiDao
     private val sessionManager = AiSessionManager(aiDao)
     private val toolExecutor = AiToolExecutor(application)
+    private val prefs = application.getSharedPreferences("ai_prefs", Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow(AiChatUiState())
     val state: StateFlow<AiChatUiState> = _state.asStateFlow()
@@ -62,11 +63,47 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadConversations()
-        val defaultModel = getDefaultModel()
-        updateProvider(defaultModel.providerType, defaultModel.id)
+        restoreLastSettings()
     }
 
-    private fun updateProvider(providerType: AiProviderType, modelId: String) {
+    private fun restoreLastSettings() {
+        val providerName = prefs.getString("last_provider", AiProviderType.AGNES_AI.name)
+            ?: AiProviderType.AGNES_AI.name
+        val modelId = prefs.getString("last_model", getDefaultModel().id) ?: getDefaultModel().id
+        val levelKey = prefs.getString("last_thinking", ThinkingLevel.HIGH.key) ?: ThinkingLevel.HIGH.key
+
+        val providerType = try {
+            AiProviderType.valueOf(providerName)
+        } catch (_: Exception) {
+            AiProviderType.AGNES_AI
+        }
+        val model = PROVIDER_CONFIGS[providerType]?.models?.find { it.id == modelId }
+            ?: getDefaultModel()
+        val level = ThinkingLevel.fromKey(levelKey).let { lvl ->
+            if (model.supportsReasoning && model.reasoningLevels.contains(lvl)) lvl
+            else if (model.supportsReasoning) ThinkingLevel.HIGH
+            else ThinkingLevel.NONE
+        }
+
+        updateProvider(model.providerType, model.id, level)
+        _state.update {
+            it.copy(
+                currentProviderType = model.providerType,
+                currentModelId = model.id,
+                thinkingLevel = level
+            )
+        }
+    }
+
+    private fun persistSettings(providerType: AiProviderType, modelId: String, level: ThinkingLevel) {
+        prefs.edit()
+            .putString("last_provider", providerType.name)
+            .putString("last_model", modelId)
+            .putString("last_thinking", level.key)
+            .apply()
+    }
+
+    private fun updateProvider(providerType: AiProviderType, modelId: String, level: ThinkingLevel) {
         currentProvider = when (providerType) {
             AiProviderType.GEMINI -> GeminiProvider(BuildConfig.GEMINI_API_KEY)
             AiProviderType.OPENCODE_ZEN -> OpenAiCompatibleProvider(
@@ -79,33 +116,51 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 apiKey = BuildConfig.BYNARA_API_KEY,
                 providerName = "Bynara"
             )
+            AiProviderType.AGNES_AI -> OpenAiCompatibleProvider(
+                baseUrl = PROVIDER_CONFIGS[AiProviderType.AGNES_AI]!!.baseUrl!!,
+                apiKey = BuildConfig.AGNES_API_KEY,
+                providerName = "Agnes AI"
+            )
         }
-        sessionManager.setProviderAndModel(providerType, modelId, _state.value.reasoningEnabled)
+        sessionManager.setProviderAndModel(providerType, modelId, level)
     }
 
     fun selectModel(providerType: AiProviderType, modelId: String) {
         val config = PROVIDER_CONFIGS[providerType] ?: return
-        if (config.models.none { it.id == modelId }) return
+        val model = config.models.find { it.id == modelId } ?: return
 
-        updateProvider(providerType, modelId)
-        // Keep current conversation messages; only switch provider/model for next request
+        val level = if (model.supportsReasoning) {
+            val current = _state.value.thinkingLevel
+            if (model.reasoningLevels.contains(current) && current != ThinkingLevel.NONE) current
+            else ThinkingLevel.HIGH
+        } else {
+            ThinkingLevel.NONE
+        }
+
+        updateProvider(providerType, modelId, level)
+        persistSettings(providerType, modelId, level)
         _state.update {
             it.copy(
                 currentProviderType = providerType,
                 currentModelId = modelId,
+                thinkingLevel = level,
                 error = null
             )
         }
     }
 
-    fun toggleReasoning() {
-        val enabled = !_state.value.reasoningEnabled
-        _state.update { it.copy(reasoningEnabled = enabled) }
+    fun setThinkingLevel(level: ThinkingLevel) {
+        val model = PROVIDER_CONFIGS[_state.value.currentProviderType]
+            ?.models?.find { it.id == _state.value.currentModelId }
+        if (model != null && !model.reasoningLevels.contains(level)) return
+
+        sessionManager.setThinkingLevel(level)
+        persistSettings(_state.value.currentProviderType, _state.value.currentModelId, level)
+        _state.update { it.copy(thinkingLevel = level) }
     }
 
     fun sendMessage(text: String, imageBase64: String? = null) {
-        val state = _state.value
-        if (state.isStreaming) return
+        if (_state.value.isStreaming) return
         if (text.isBlank() && imageBase64 == null) return
 
         viewModelScope.launch {
@@ -125,7 +180,6 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     sessionManager.saveMessage(userMsg, conversationId)
                 } catch (e: Exception) {
-                    // Don't crash UI if DB write fails
                     android.util.Log.e("AiViewModel", "saveMessage failed", e)
                 }
 
@@ -154,7 +208,6 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val systemPrompt = buildSystemPrompt()
-
         val allMessages = mutableListOf(
             AiChatMessage(role = AiMessageRole.SYSTEM, content = systemPrompt)
         )
@@ -165,7 +218,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 messages = allMessages,
                 model = _state.value.currentModelId,
                 toolsJson = buildToolDeclarationsJson(),
-                reasoningEnabled = _state.value.reasoningEnabled,
+                thinkingLevel = _state.value.thinkingLevel,
                 onEvent = { event ->
                     viewModelScope.launch {
                         handleStreamEvent(event, conversationId)
@@ -181,27 +234,16 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun handleStreamEvent(event: AiStreamEvent, conversationId: String) {
         when (event.type) {
-            AiStreamEventType.TEXT_CHUNK -> {
-                appendToLastAssistantMessage(event.content)
-            }
-            AiStreamEventType.REASONING_CHUNK -> {
-                appendToLastAssistantReasoning(event.reasoningContent ?: "")
-            }
-            AiStreamEventType.TOOL_CALLS -> {
-                event.toolCalls?.let { executeToolCalls(it, conversationId) }
-            }
+            AiStreamEventType.TEXT_CHUNK -> appendToLastAssistantMessage(event.content)
+            AiStreamEventType.REASONING_CHUNK -> appendToLastAssistantReasoning(event.reasoningContent ?: "")
+            AiStreamEventType.TOOL_CALLS -> event.toolCalls?.let { executeToolCalls(it, conversationId) }
             AiStreamEventType.DONE -> {
-                if (event.finishReason == "TOOL_CALLS" || event.finishReason == "tool_calls") {
-                    // Tool results will re-invoke provider
-                } else {
+                if (event.finishReason != "TOOL_CALLS" && event.finishReason != "tool_calls") {
                     finalizeMessage(conversationId)
                 }
             }
-            AiStreamEventType.TOOL_RESULTS -> {
-                // handled by tool execution flow
-            }
+            AiStreamEventType.TOOL_RESULTS -> {}
             AiStreamEventType.ERROR -> {
-                // Show clean short error (no HTML dumps)
                 val clean = event.content
                     .replace(Regex("<[^>]+>"), " ")
                     .replace(Regex("\\s+"), " ")
@@ -214,12 +256,15 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun executeToolCalls(toolCalls: List<AiToolCall>, conversationId: String) {
         for (call in toolCalls) {
-            val display = ToolExecutionDisplay(
-                toolName = call.name,
-                status = ToolExecutionStatus.RUNNING,
-                summary = "جارٍ التنفيذ..."
-            )
-            _state.update { it.copy(toolExecutions = it.toolExecutions + display) }
+            _state.update {
+                it.copy(
+                    toolExecutions = it.toolExecutions + ToolExecutionDisplay(
+                        toolName = call.name,
+                        status = ToolExecutionStatus.RUNNING,
+                        summary = "جارٍ التنفيذ..."
+                    )
+                )
+            }
 
             val result = withContext(Dispatchers.IO) {
                 toolExecutor.executeTool(call.name, call.arguments)
@@ -227,25 +272,17 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
             when (result) {
                 is ToolResult.Success -> {
-                    updateToolExecution(call.name, ToolExecutionStatus.SUCCESS, "تم بنجاح ✅")
-                    val toolResult = AiToolResult(
-                        toolCallId = call.id,
-                        name = call.name,
-                        content = result.data
+                    updateToolExecution(call.name, ToolExecutionStatus.SUCCESS, "تم بنجاح")
+                    sessionManager.addToolMessages(
+                        listOf(AiToolResult(call.id, call.name, result.data))
                     )
-                    sessionManager.addToolMessages(listOf(toolResult))
-
-                    // Send tool results back to the provider
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.Error -> {
                     updateToolExecution(call.name, ToolExecutionStatus.ERROR, result.message)
-                    val toolResult = AiToolResult(
-                        toolCallId = call.id,
-                        name = call.name,
-                        content = "خطأ: ${result.message}"
+                    sessionManager.addToolMessages(
+                        listOf(AiToolResult(call.id, call.name, "خطأ: ${result.message}"))
                     )
-                    sessionManager.addToolMessages(listOf(toolResult))
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.NeedsApproval -> {
@@ -277,31 +314,36 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             val result = withContext(Dispatchers.IO) {
                 toolExecutor.executeTool(approval.toolName, approval.args)
             }
-
             val conversationId = sessionManager.getCurrentConversationId() ?: return@launch
 
             when (result) {
                 is ToolResult.Success -> {
-                    val toolResult = AiToolResult(
-                        toolCallId = "approved_${System.currentTimeMillis()}",
-                        name = approval.toolName,
-                        content = "تم التنفيذ بعد موافقة المستخدم: ${result.data}"
+                    sessionManager.addToolMessages(
+                        listOf(
+                            AiToolResult(
+                                "approved_${System.currentTimeMillis()}",
+                                approval.toolName,
+                                "تم التنفيذ بعد موافقة المستخدم: ${result.data}"
+                            )
+                        )
                     )
-                    sessionManager.addToolMessages(listOf(toolResult))
-                    updateToolExecution(approval.toolName, ToolExecutionStatus.SUCCESS, "تم التنفيذ ✅")
+                    updateToolExecution(approval.toolName, ToolExecutionStatus.SUCCESS, "تم التنفيذ")
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.Error -> {
-                    val toolResult = AiToolResult(
-                        toolCallId = "approved_${System.currentTimeMillis()}",
-                        name = approval.toolName,
-                        content = "خطأ بعد الموافقة: ${result.message}"
+                    sessionManager.addToolMessages(
+                        listOf(
+                            AiToolResult(
+                                "approved_${System.currentTimeMillis()}",
+                                approval.toolName,
+                                "خطأ بعد الموافقة: ${result.message}"
+                            )
+                        )
                     )
-                    sessionManager.addToolMessages(listOf(toolResult))
                     updateToolExecution(approval.toolName, ToolExecutionStatus.ERROR, result.message)
                     reInvokeProvider(conversationId)
                 }
-                is ToolResult.NeedsApproval -> { /* ignore recursive approval */ }
+                is ToolResult.NeedsApproval -> {}
             }
         }
     }
@@ -312,21 +354,22 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val conversationId = sessionManager.getCurrentConversationId() ?: return@launch
-
-            val toolResult = AiToolResult(
-                toolCallId = "rejected_${System.currentTimeMillis()}",
-                name = approval.toolName,
-                content = "تم رفض الإجراء من قبل المستخدم: ${approval.description}"
+            sessionManager.addToolMessages(
+                listOf(
+                    AiToolResult(
+                        "rejected_${System.currentTimeMillis()}",
+                        approval.toolName,
+                        "تم رفض الإجراء من قبل المستخدم: ${approval.description}"
+                    )
+                )
             )
-            sessionManager.addToolMessages(listOf(toolResult))
-            updateToolExecution(approval.toolName, ToolExecutionStatus.ERROR, "تم الرفض ❌")
+            updateToolExecution(approval.toolName, ToolExecutionStatus.ERROR, "تم الرفض")
             reInvokeProvider(conversationId)
         }
     }
 
     private suspend fun reInvokeProvider(conversationId: String) {
         val provider = currentProvider ?: return
-
         val systemPrompt = buildSystemPrompt()
         val allMessages = mutableListOf(
             AiChatMessage(role = AiMessageRole.SYSTEM, content = systemPrompt)
@@ -337,11 +380,9 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             messages = allMessages,
             model = _state.value.currentModelId,
             toolsJson = buildToolDeclarationsJson(),
-            reasoningEnabled = _state.value.reasoningEnabled,
+            thinkingLevel = _state.value.thinkingLevel,
             onEvent = { event ->
-                viewModelScope.launch {
-                    handleStreamEvent(event, conversationId)
-                }
+                viewModelScope.launch { handleStreamEvent(event, conversationId) }
             }
         )
     }
@@ -363,8 +404,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         val lastIdx = msgs.lastIndex
         if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
             val last = msgs[lastIdx]
-            val currentReasoning = last.reasoningContent ?: ""
-            msgs[lastIdx] = last.copy(reasoningContent = currentReasoning + chunk)
+            msgs[lastIdx] = last.copy(reasoningContent = (last.reasoningContent ?: "") + chunk)
         } else {
             msgs.add(AiChatMessage(role = AiMessageRole.ASSISTANT, content = "", reasoningContent = chunk))
         }
@@ -373,10 +413,11 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateToolExecution(toolName: String, status: ToolExecutionStatus, summary: String) {
         _state.update { state ->
-            val updated = state.toolExecutions.map {
-                if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
-            }
-            state.copy(toolExecutions = updated)
+            state.copy(
+                toolExecutions = state.toolExecutions.map {
+                    if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
+                }
+            )
         }
     }
 
@@ -385,18 +426,14 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             val msgs = _state.value.messages
             val lastAssistant = msgs.lastOrNull { it.role == AiMessageRole.ASSISTANT }
             if (lastAssistant != null) {
-                // Avoid double-adding if already in session
-                val sessionMsgs = sessionManager.getMessages()
-                val alreadyInSession = sessionMsgs.any {
+                val alreadyInSession = sessionManager.getMessages().any {
                     it.role == AiMessageRole.ASSISTANT && it.content == lastAssistant.content
                 }
-                if (!alreadyInSession) {
-                    sessionManager.addMessage(lastAssistant)
-                }
+                if (!alreadyInSession) sessionManager.addMessage(lastAssistant)
                 try {
                     sessionManager.saveMessage(lastAssistant, conversationId)
                 } catch (e: Exception) {
-                    android.util.Log.e("AiViewModel", "save assistant message failed", e)
+                    android.util.Log.e("AiViewModel", "save assistant failed", e)
                 }
             }
 
@@ -412,10 +449,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             try {
-                sessionManager.saveConversation(
-                    _state.value.currentConversationTitle,
-                    conversationId
-                )
+                sessionManager.saveConversation(_state.value.currentConversationTitle, conversationId)
             } catch (_: Exception) {}
         } finally {
             _state.update { it.copy(isStreaming = false) }
@@ -426,9 +460,13 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val providerType = try {
                 AiProviderType.valueOf(conversationEntity.providerType)
-            } catch (e: Exception) { AiProviderType.GEMINI }
+            } catch (_: Exception) {
+                AiProviderType.AGNES_AI
+            }
+            val level = ThinkingLevel.fromKey(conversationEntity.thinkingLevel)
 
-            updateProvider(providerType, conversationEntity.modelId)
+            updateProvider(providerType, conversationEntity.modelId, level)
+            persistSettings(providerType, conversationEntity.modelId, level)
 
             val entities = sessionManager.loadMessagesFromDb(conversationEntity.id)
             sessionManager.loadSession(conversationEntity.id, entities)
@@ -437,7 +475,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 it.copy(
                     currentProviderType = providerType,
                     currentModelId = conversationEntity.modelId,
-                    reasoningEnabled = conversationEntity.reasoningEnabled,
+                    thinkingLevel = level,
                     currentConversationId = conversationEntity.id,
                     currentConversationTitle = conversationEntity.title,
                     messages = sessionManager.getMessages(),
@@ -465,7 +503,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         val conversationId = sessionManager.startNewSession(
             state.currentProviderType,
             state.currentModelId,
-            state.reasoningEnabled
+            state.thinkingLevel
         )
         viewModelScope.launch {
             try {
@@ -495,6 +533,10 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+
     private fun buildSystemPrompt(): String {
         return """
 أنت مساعد ذكي ومفيد لتطبيق "واتشر" (Watcher) لإدارة ومشاهدة الأفلام والمسلسلات.
@@ -509,11 +551,10 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 6. قراءة تفاصيل أي فيلم أو مسلسل
 
 ملاحظات مهمة:
-- إجراء "تحميل حلقة أو مسلسل" يتطلب موافقة المستخدم أولاً - اطلب الموافقة وانتظرها
+- إجراء "تحميل حلقة أو مسلسل" يتطلب موافقة المستخدم أولاً
 - استخدم الأدوات المتاحة فقط للإجابة على أسئلة المستخدم
-- أجب بنفس لغة المستخدم (إذا كتب عربي أجب عربي، إذا كتب إنجليزي أجب إنجليزي)
+- أجب بنفس لغة المستخدم
 - كن موجزاً ومفيداً في إجاباتك
-- عندما تبحث عن شيء، اشرح للمستخدم ماذا تفعل
         """.trimIndent()
     }
 }

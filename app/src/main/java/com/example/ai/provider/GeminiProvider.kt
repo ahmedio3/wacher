@@ -27,7 +27,7 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
         messages: List<AiChatMessage>,
         model: String,
         toolsJson: String?,
-        reasoningEnabled: Boolean,
+        thinkingLevel: ThinkingLevel,
         onEvent: (AiStreamEvent) -> Unit
     ) = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
@@ -37,7 +37,7 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
 
         try {
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:streamGenerateContent?alt=sse&key=$apiKey"
-            val body = buildGeminiRequestBody(messages, toolsJson)
+            val body = buildGeminiRequestBody(messages, toolsJson, thinkingLevel)
 
             val request = Request.Builder()
                 .url(url)
@@ -123,7 +123,7 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
                             val text = part.optString("text", "")
                             if (text.isNotEmpty()) {
                                 emittedAny = true
-                                if (part.optBoolean("thought", false) && reasoningEnabled) {
+                                if (part.optBoolean("thought", false) && thinkingLevel != ThinkingLevel.NONE) {
                                     onEvent(AiStreamEvent(AiStreamEventType.REASONING_CHUNK, reasoningContent = text))
                                 } else {
                                     onEvent(AiStreamEvent(AiStreamEventType.TEXT_CHUNK, content = text))
@@ -152,7 +152,7 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
         }
     }
 
-    private fun buildGeminiRequestBody(messages: List<AiChatMessage>, toolsJson: String?): String {
+    private fun buildGeminiRequestBody(messages: List<AiChatMessage>, toolsJson: String?, thinkingLevel: ThinkingLevel): String {
         val json = JSONObject()
         val contents = JSONArray()
         var systemInstruction: String? = null
@@ -272,12 +272,23 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
             )
         }
 
-        json.put(
-            "generationConfig",
-            JSONObject()
-                .put("temperature", 0.7)
-                .put("maxOutputTokens", 8192)
-        )
+        val generationConfig = JSONObject()
+            .put("temperature", 0.7)
+            .put("maxOutputTokens", 8192)
+
+        if (thinkingLevel != ThinkingLevel.NONE) {
+            val budget = when (thinkingLevel) {
+                ThinkingLevel.LOW -> 1024
+                ThinkingLevel.MEDIUM -> 8192
+                ThinkingLevel.HIGH -> 24576
+                else -> 0
+            }
+            generationConfig.put(
+                "thinkingConfig",
+                JSONObject().put("thinkingBudget", budget)
+            )
+        }
+        json.put("generationConfig", generationConfig)
 
         return json.toString()
     }

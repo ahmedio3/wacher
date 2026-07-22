@@ -9,7 +9,7 @@ data class AiConversationEntity(
     val title: String,
     val providerType: String,
     val modelId: String,
-    val reasoningEnabled: Boolean = false,
+    val thinkingLevel: String = "high", // stores ThinkingLevel.key: none/low/medium/high
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val messageCount: Int = 0
