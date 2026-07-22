@@ -14,13 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.AiChatMessage
 import com.example.ai.AiMessageRole
+import com.example.ui.theme.IBMPlexSansArabicFontFamily
 
 @Composable
 fun AiMessageBubble(
@@ -65,7 +65,7 @@ fun AiMessageBubble(
                         fontSize = 15.sp,
                         lineHeight = 22.sp,
                         color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface,
-                        fontFamily = if (isUser) FontFamily.Default else FontFamily.Default
+                        fontFamily = IBMPlexSansArabicFontFamily
                     )
                 }
             }
@@ -101,12 +101,13 @@ fun ReasoningSection(
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (expanded) "إخفاء التفكير" else "إظهار التفكير",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary
-            )
+                Text(
+                    text = if (expanded) "إخفاء التفكير" else "إظهار التفكير",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = IBMPlexSansArabicFontFamily,
+                    color = MaterialTheme.colorScheme.primary
+                )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = if (expanded) "▲" else "▼",
@@ -119,6 +120,7 @@ fun ReasoningSection(
                 text = reasoningContent,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
+                fontFamily = IBMPlexSansArabicFontFamily,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
             )

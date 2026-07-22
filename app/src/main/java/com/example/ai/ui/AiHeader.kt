@@ -1,6 +1,6 @@
 package com.example.ai.ui
 
-import androidx.compose.animation.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,13 +19,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.AiProviderType
 import com.example.ai.PROVIDER_CONFIGS
 import com.example.ai.ThinkingLevel
+import com.example.ui.theme.JetBrainsMonoFontFamily
 
 @Composable
 fun AiHeader(
@@ -67,19 +70,21 @@ fun AiHeader(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !selectorExpanded,
-                enter = slideInVertically(tween(180)) { it / 2 } + fadeIn(tween(180)),
-                exit = slideOutVertically(tween(140)) { it / 2 } + fadeOut(tween(120))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .clickable(onClick = onModelClick)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .animateContentSize(animationSpec = tween(220))
+                    .then(
+                        if (selectorExpanded) Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 320.dp)
+                        else Modifier
+                    )
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White)
-                        .clickable(onClick = onModelClick)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                        .animateContentSize(animationSpec = tween(220))
-                ) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -88,19 +93,17 @@ fun AiHeader(
                             text = model?.displayName ?: modelId,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
+                            fontFamily = JetBrainsMonoFontFamily,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showThinking,
-                            enter = slideInHorizontally(tween(180)) { it / 2 } + fadeIn(tween(180)),
-                            exit = fadeOut(tween(100))
-                        ) {
+                        if (showThinking) {
                             Text(
                                 text = thinkingLevel.key,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
+                                fontFamily = JetBrainsMonoFontFamily,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                                 maxLines = 1
                             )

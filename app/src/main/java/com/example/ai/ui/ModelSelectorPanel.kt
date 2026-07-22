@@ -6,12 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
@@ -32,15 +31,10 @@ import androidx.compose.ui.unit.sp
 import com.example.ai.AiProviderType
 import com.example.ai.PROVIDER_CONFIGS
 import com.example.ai.ThinkingLevel
+import com.example.ui.theme.JetBrainsMonoFontFamily
 
 private enum class SelectorPage { PROVIDERS, MODELS, THINKING }
 
-/**
- * Inline model selector that expands from the header pill.
- * Navigation: Providers -> Models -> Thinking levels
- * Forward: slide start + fade | Back: slide end + fade
- * RTL-aware via LocalLayoutDirection.
- */
 @Composable
 fun ModelSelectorPanel(
     expanded: Boolean,
@@ -55,6 +49,7 @@ fun ModelSelectorPanel(
     var page by remember { mutableStateOf(SelectorPage.PROVIDERS) }
     var selectedProvider by remember { mutableStateOf(currentProviderType) }
     var selectedModelId by remember { mutableStateOf(currentModelId) }
+    var pendingThinkingLevel by remember { mutableStateOf<ThinkingLevel?>(null) }
     var isForward by remember { mutableStateOf(true) }
 
     LaunchedEffect(expanded) {
@@ -62,137 +57,127 @@ fun ModelSelectorPanel(
             page = SelectorPage.PROVIDERS
             selectedProvider = currentProviderType
             selectedModelId = currentModelId
+            pendingThinkingLevel = null
             isForward = true
         }
     }
 
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    // In RTL "start" is right; forward enter from start (right), exit to end (left)
-    val forwardEnter = if (isRtl) {
-        slideInHorizontally(tween(220)) { it / 3 } + fadeIn(tween(220))
-    } else {
-        slideInHorizontally(tween(220)) { -it / 3 } + fadeIn(tween(220))
-    }
-    val forwardExit = if (isRtl) {
-        slideOutHorizontally(tween(220)) { -it / 3 } + fadeOut(tween(220))
-    } else {
-        slideOutHorizontally(tween(220)) { it / 3 } + fadeOut(tween(220))
-    }
-    val backEnter = if (isRtl) {
-        slideInHorizontally(tween(220)) { -it / 3 } + fadeIn(tween(220))
-    } else {
-        slideInHorizontally(tween(220)) { it / 3 } + fadeIn(tween(220))
-    }
-    val backExit = if (isRtl) {
-        slideOutHorizontally(tween(220)) { it / 3 } + fadeOut(tween(220))
-    } else {
-        slideOutHorizontally(tween(220)) { -it / 3 } + fadeOut(tween(220))
+    val applyAndDismiss = {
+        onSelectModel(selectedProvider, selectedModelId)
+        pendingThinkingLevel?.let { onSelectThinking(it) }
+        onDismiss()
     }
 
-    Box(modifier = modifier.fillMaxWidth()) {
-        // Scrim
-        AnimatedVisibility(
-            visible = expanded,
-            enter = fadeIn(tween(180)),
-            exit = fadeOut(tween(180))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.18f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss
-                    )
-            )
-        }
+    val forwardEnter = slideInHorizontally(tween(220)) { it / 3 } + fadeIn(tween(220))
+    val forwardExit = slideOutHorizontally(tween(220)) { -it / 3 } + fadeOut(tween(220))
+    val backEnter = slideInHorizontally(tween(220)) { -it / 3 } + fadeIn(tween(220))
+    val backExit = slideOutHorizontally(tween(220)) { it / 3 } + fadeOut(tween(220))
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(top = 9.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Box(modifier = modifier.fillMaxWidth()) {
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically(
-                    animationSpec = tween(280),
-                    expandFrom = Alignment.Top
-                ) + fadeIn(tween(200)),
-                exit = shrinkVertically(
-                    animationSpec = tween(260),
-                    shrinkTowards = Alignment.Top
-                ) + fadeOut(tween(180))
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(180))
             ) {
                 Box(
                     modifier = Modifier
-                        .widthIn(min = 200.dp, max = 320.dp)
-                        .shadow(8.dp, RoundedCornerShape(20.dp))
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White)
-                        .animateContentSize(animationSpec = tween(260))
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.18f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = {}
+                            onClick = onDismiss
                         )
-                        .padding(vertical = 8.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 9.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(
+                        animationSpec = tween(280),
+                        expandFrom = Alignment.Top
+                    ) + fadeIn(tween(200)),
+                    exit = shrinkVertically(
+                        animationSpec = tween(260),
+                        shrinkTowards = Alignment.Top
+                    ) + fadeOut(tween(180))
                 ) {
-                    AnimatedContent(
-                        targetState = page,
-                        transitionSpec = {
-                            if (isForward) {
-                                forwardEnter togetherWith forwardExit
-                            } else {
-                                backEnter togetherWith backExit
-                            }
-                        },
-                        label = "selector_page"
-                    ) { currentPage ->
-                        when (currentPage) {
-                            SelectorPage.PROVIDERS -> ProvidersPage(
-                                currentProviderType = currentProviderType,
-                                onProviderClick = { provider ->
-                                    selectedProvider = provider
-                                    isForward = true
-                                    page = SelectorPage.MODELS
-                                }
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = 200.dp, max = 320.dp)
+                            .shadow(8.dp, RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White)
+                            .animateContentSize(animationSpec = tween(260))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {}
                             )
-                            SelectorPage.MODELS -> ModelsPage(
-                                providerType = selectedProvider,
-                                currentModelId = currentModelId,
-                                onBack = {
-                                    isForward = false
-                                    page = SelectorPage.PROVIDERS
-                                },
-                                onModelClick = { modelId ->
-                                    selectedModelId = modelId
-                                    val model = PROVIDER_CONFIGS[selectedProvider]
-                                        ?.models?.find { it.id == modelId }
-                                    onSelectModel(selectedProvider, modelId)
-                                    if (model != null && model.supportsReasoning && model.reasoningLevels.size > 1) {
+                            .padding(vertical = 8.dp)
+                    ) {
+                        AnimatedContent(
+                            targetState = page,
+                            transitionSpec = {
+                                if (isForward) {
+                                    forwardEnter togetherWith forwardExit
+                                } else {
+                                    backEnter togetherWith backExit
+                                }
+                            },
+                            label = "selector_page"
+                        ) { currentPage ->
+                            when (currentPage) {
+                                SelectorPage.PROVIDERS -> ProvidersPage(
+                                    currentProviderType = currentProviderType,
+                                    onProviderClick = { provider ->
+                                        selectedProvider = provider
                                         isForward = true
-                                        page = SelectorPage.THINKING
-                                    } else {
-                                        onDismiss()
+                                        page = SelectorPage.MODELS
                                     }
-                                }
-                            )
-                            SelectorPage.THINKING -> ThinkingPage(
-                                providerType = selectedProvider,
-                                modelId = selectedModelId,
-                                currentLevel = currentThinkingLevel,
-                                onBack = {
-                                    isForward = false
-                                    page = SelectorPage.MODELS
-                                },
-                                onLevelClick = { level ->
-                                    onSelectThinking(level)
-                                    onDismiss()
-                                }
-                            )
+                                )
+                                SelectorPage.MODELS -> ModelsPage(
+                                    providerType = selectedProvider,
+                                    currentModelId = currentModelId,
+                                    onBack = {
+                                        isForward = false
+                                        page = SelectorPage.PROVIDERS
+                                    },
+                                    onModelClick = { modelId ->
+                                        selectedModelId = modelId
+                                        pendingThinkingLevel = null
+                                        val model = PROVIDER_CONFIGS[selectedProvider]
+                                            ?.models?.find { it.id == modelId }
+                                        if (model != null && model.supportsReasoning && model.reasoningLevels.size > 1) {
+                                            isForward = true
+                                            page = SelectorPage.THINKING
+                                        } else {
+                                            applyAndDismiss()
+                                        }
+                                    }
+                                )
+                                SelectorPage.THINKING -> ThinkingPage(
+                                    providerType = selectedProvider,
+                                    modelId = selectedModelId,
+                                    selectedLevel = pendingThinkingLevel,
+                                    onBack = {
+                                        isForward = false
+                                        page = SelectorPage.MODELS
+                                    },
+                                    onLevelClick = { level ->
+                                        pendingThinkingLevel = level
+                                        applyAndDismiss()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -208,9 +193,10 @@ private fun ProvidersPage(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "المزود",
+            text = "Provider",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
+            fontFamily = JetBrainsMonoFontFamily,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
         )
@@ -248,18 +234,19 @@ private fun ModelsPage(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowLeft,
-                contentDescription = "رجوع",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = providerType.displayName,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
+                fontFamily = JetBrainsMonoFontFamily,
                 color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowLeft,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
             )
         }
         models.forEach { model ->
@@ -304,7 +291,7 @@ private fun ModelsPage(
 private fun ThinkingPage(
     providerType: AiProviderType,
     modelId: String,
-    currentLevel: ThinkingLevel,
+    selectedLevel: ThinkingLevel?,
     onBack: () -> Unit,
     onLevelClick: (ThinkingLevel) -> Unit
 ) {
@@ -319,31 +306,32 @@ private fun ThinkingPage(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowLeft,
-                contentDescription = "رجوع",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "مستوى التفكير",
+                text = "Thinking",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
+                fontFamily = JetBrainsMonoFontFamily,
                 color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowLeft,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
             )
         }
         levels.forEach { level ->
             SelectorRow(
                 title = when (level) {
-                    ThinkingLevel.NONE -> "بدون (تعطيل)"
-                    ThinkingLevel.LOW -> "منخفض (low)"
-                    ThinkingLevel.MEDIUM -> "متوسط (medium)"
-                    ThinkingLevel.HIGH -> "مرتفع (high)"
+                    ThinkingLevel.NONE -> "none"
+                    ThinkingLevel.LOW -> "low"
+                    ThinkingLevel.MEDIUM -> "medium"
+                    ThinkingLevel.HIGH -> "high"
                 },
-                selected = level == currentLevel,
+                selected = level == selectedLevel,
                 trailing = {
-                    if (level == currentLevel) {
+                    if (level == selectedLevel) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
@@ -376,16 +364,17 @@ private fun SelectorRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        trailing()
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = title,
             fontSize = 14.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontFamily = JetBrainsMonoFontFamily,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        trailing()
     }
 }
