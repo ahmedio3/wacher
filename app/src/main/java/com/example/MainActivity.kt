@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
+import androidx.core.view.WindowCompat
 
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -87,6 +88,11 @@ class MainActivity : ComponentActivity() {
                     }
                     kotlinx.coroutines.delay(200)
                 }
+            }
+
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView)
+                    .isAppearanceLightStatusBars = !isDarkMode
             }
 
             MyApplicationTheme(darkTheme = isDarkMode) {

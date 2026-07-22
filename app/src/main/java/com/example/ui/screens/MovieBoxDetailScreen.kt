@@ -134,7 +134,7 @@ fun MovieBoxDetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
@@ -146,7 +146,7 @@ fun MovieBoxDetailScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(Color.White)
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(

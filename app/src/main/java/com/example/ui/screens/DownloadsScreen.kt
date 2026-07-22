@@ -304,7 +304,7 @@ fun PillHeader(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronRight,
@@ -317,7 +317,7 @@ fun PillHeader(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Color.White)
+                    .background(MaterialTheme.colorScheme.surface)
                     .then(if (onPillClick != null) Modifier.clickable { onPillClick.invoke() } else Modifier)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,

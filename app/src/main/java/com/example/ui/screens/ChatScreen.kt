@@ -318,7 +318,7 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
@@ -331,7 +331,7 @@ fun ChatScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(Color.White)
+                                .background(MaterialTheme.colorScheme.surface)
                                 .then(
                                     if (isPublic) Modifier.clickable { headerImagePicker.launch("image/*") }
                                     else Modifier

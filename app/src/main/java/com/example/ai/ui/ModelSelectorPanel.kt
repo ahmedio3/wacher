@@ -115,7 +115,7 @@ fun ModelSelectorPanel(
                             .widthIn(min = 200.dp, max = 320.dp)
                             .shadow(8.dp, RoundedCornerShape(20.dp))
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White)
+                            .background(MaterialTheme.colorScheme.surface)
                             .animateContentSize(animationSpec = tween(260))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },

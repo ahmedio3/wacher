@@ -19,7 +19,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,7 +57,7 @@ fun AiHeader(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronRight,
@@ -74,7 +73,7 @@ fun AiHeader(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Color.White)
+                    .background(MaterialTheme.colorScheme.surface)
                     .clickable(onClick = onModelClick)
                     .padding(horizontal = 14.dp, vertical = 8.dp)
                     .animateContentSize(animationSpec = tween(220))
@@ -119,7 +118,7 @@ fun AiHeader(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
         ) {
             Icon(
                 imageVector = Icons.Default.Menu,

@@ -164,7 +164,7 @@ fun DetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
@@ -176,7 +176,7 @@ fun DetailScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(Color.White)
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(
@@ -1037,7 +1037,7 @@ fun TvDetailContent(
                                         .fillMaxWidth()
                                         .height(90.dp)
                                         .clip(RoundedCornerShape(14.dp))
-                                        .background(Brush.linearGradient(listOf(Color(0xFFEFECE4), Color(0xFFE5DDD0))))
+                                        .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)))
                                 )
                             }
                         }
@@ -1236,7 +1236,7 @@ fun DetailSkeleton() {
                 .fillMaxWidth()
                 .height(200.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFEFECE4), Color(0xFFE5DDD0))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)))
         )
         Spacer(modifier = Modifier.height(16.dp))
         Box(
@@ -1244,7 +1244,7 @@ fun DetailSkeleton() {
                 .height(24.dp)
                 .fillMaxWidth(0.5f)
                 .clip(RoundedCornerShape(4.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFEFECE4), Color(0xFFE5DDD0))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)))
         )
         Spacer(modifier = Modifier.height(12.dp))
         Box(
@@ -1252,7 +1252,7 @@ fun DetailSkeleton() {
                 .height(14.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(4.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFEFECE4), Color(0xFFE5DDD0))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)))
         )
         Spacer(modifier = Modifier.height(6.dp))
         Box(
@@ -1260,7 +1260,7 @@ fun DetailSkeleton() {
                 .height(14.dp)
                 .fillMaxWidth(0.8f)
                 .clip(RoundedCornerShape(4.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFEFECE4), Color(0xFFE5DDD0))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)))
         )
     }
 }

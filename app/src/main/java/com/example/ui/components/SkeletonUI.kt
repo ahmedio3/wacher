@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -17,11 +18,13 @@ fun shimmerBrush(
     showShimmer: Boolean = true,
     targetValue: Float = 1000f
 ): Brush {
+    val baseColor = MaterialTheme.colorScheme.surface
+    val shimmerColor = MaterialTheme.colorScheme.surfaceVariant
     return if (showShimmer) {
         val shimmerColors = listOf(
-            Color(0xFFEFECE4),
-            Color(0xFFE5DDD0),
-            Color(0xFFEFECE4)
+            baseColor,
+            shimmerColor,
+            baseColor
         )
 
         val transition = rememberInfiniteTransition(label = "shimmer")
