@@ -24,11 +24,13 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Upcoming
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -292,6 +294,120 @@ fun HomeScreen(
                 title = "المسلسلات الأكثر شهرة",
                 icon = Icons.Default.LiveTv,
                 state = popularTvState,
+                onItemClick = { onNavigateToDetails(it.id, "tv") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // D. Trending Movies (الأفلام الرائجة)
+            val trendingMoviesState by viewModel.trendingMovies.collectAsState()
+            MediaCategoryCarousel(
+                title = "الأفلام الرائجة هذا الأسبوع",
+                icon = Icons.Default.TrendingUp,
+                state = trendingMoviesState,
+                onItemClick = { onNavigateToDetails(it.id, "movie") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // E. Trending TV Shows (المسلسلات الرائجة)
+            val trendingTvState by viewModel.trendingTv.collectAsState()
+            MediaCategoryCarousel(
+                title = "المسلسلات الرائجة هذا الأسبوع",
+                icon = Icons.Default.TrendingUp,
+                state = trendingTvState,
+                onItemClick = { onNavigateToDetails(it.id, "tv") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // F. Top Rated Movies (الأفلام الأعلى تقييماً)
+            val topRatedMoviesState by viewModel.topRatedMovies.collectAsState()
+            MediaCategoryCarousel(
+                title = "الأفلام الأعلى تقييماً",
+                icon = Icons.Default.Star,
+                state = topRatedMoviesState,
+                onItemClick = { onNavigateToDetails(it.id, "movie") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // G. Top Rated TV Shows (المسلسلات الأعلى تقييماً)
+            val topRatedTvState by viewModel.topRatedTv.collectAsState()
+            MediaCategoryCarousel(
+                title = "المسلسلات الأعلى تقييماً",
+                icon = Icons.Default.Star,
+                state = topRatedTvState,
+                onItemClick = { onNavigateToDetails(it.id, "tv") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // H. Now Playing Movies (المعروض حالياً في السينما)
+            val nowPlayingState by viewModel.nowPlayingMovies.collectAsState()
+            MediaCategoryCarousel(
+                title = "المعروض حالياً في السينما",
+                icon = Icons.Default.PlayCircle,
+                state = nowPlayingState,
+                onItemClick = { onNavigateToDetails(it.id, "movie") },
+                isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
+                onToggleMyList = { item ->
+                    viewModel.toggleWatchlist(item.id.toString(), item.title ?: item.name ?: "", item.posterPath ?: "", item.mediaType ?: "movie", item.voteAverage ?: 0.0)
+                },
+                onShare = { item ->
+                    pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
+                    showShareSheet = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // I. On The Air TV Shows (المسلسلات المعروضة حالياً)
+            val onTheAirState by viewModel.onTheAirTv.collectAsState()
+            MediaCategoryCarousel(
+                title = "المسلسلات المعروضة حالياً",
+                icon = Icons.Default.PlayCircle,
+                state = onTheAirState,
                 onItemClick = { onNavigateToDetails(it.id, "tv") },
                 isInMyList = { watchlistItems.any { w -> w.id == it.id.toString() } },
                 onToggleMyList = { item ->

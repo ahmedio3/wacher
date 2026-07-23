@@ -92,6 +92,10 @@ class MovieViewModel(
         _movieDetails.value = emptyMap()
         _tvDetails.value = emptyMap()
         _seasonDetails.value = emptyMap()
+        _movieSimilar.value = emptyMap()
+        _movieRecommendations.value = emptyMap()
+        _tvSimilar.value = emptyMap()
+        _tvRecommendations.value = emptyMap()
         if (_searchQuery.value.isNotBlank()) searchMedia(_searchQuery.value)
         fetchHomeContent()
     }
@@ -149,6 +153,42 @@ class MovieViewModel(
 
     private val _seasonDetails = MutableStateFlow<Map<String, RequestState<TmdbSeasonDetails>>>(emptyMap())
     val seasonDetails: StateFlow<Map<String, RequestState<TmdbSeasonDetails>>> = _seasonDetails.asStateFlow()
+
+    private val _movieCertifications = MutableStateFlow<Map<Int, RequestState<String>>>(emptyMap())
+    val movieCertifications: StateFlow<Map<Int, RequestState<String>>> = _movieCertifications.asStateFlow()
+
+    private val _tvContentRatings = MutableStateFlow<Map<Int, RequestState<String>>>(emptyMap())
+    val tvContentRatings: StateFlow<Map<Int, RequestState<String>>> = _tvContentRatings.asStateFlow()
+
+    private val _movieSimilar = MutableStateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>>(emptyMap())
+    val movieSimilar: StateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>> = _movieSimilar.asStateFlow()
+
+    private val _movieRecommendations = MutableStateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>>(emptyMap())
+    val movieRecommendations: StateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>> = _movieRecommendations.asStateFlow()
+
+    private val _tvSimilar = MutableStateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>>(emptyMap())
+    val tvSimilar: StateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>> = _tvSimilar.asStateFlow()
+
+    private val _tvRecommendations = MutableStateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>>(emptyMap())
+    val tvRecommendations: StateFlow<Map<Int, RequestState<List<TmdbMediaItem>>>> = _tvRecommendations.asStateFlow()
+
+    private val _trendingMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val trendingMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _trendingMovies.asStateFlow()
+
+    private val _trendingTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val trendingTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _trendingTv.asStateFlow()
+
+    private val _topRatedMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val topRatedMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _topRatedMovies.asStateFlow()
+
+    private val _topRatedTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val topRatedTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _topRatedTv.asStateFlow()
+
+    private val _nowPlayingMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val nowPlayingMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _nowPlayingMovies.asStateFlow()
+
+    private val _onTheAirTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
+    val onTheAirTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _onTheAirTv.asStateFlow()
 
     private val _downloadErrorDetails = MutableStateFlow<String?>(null)
     val downloadErrorDetails: StateFlow<String?> = _downloadErrorDetails.asStateFlow()
@@ -303,6 +343,12 @@ class MovieViewModel(
             // Load in parallel
             launch { fetchPopularMovies() }
             launch { fetchPopularTvShows() }
+            launch { fetchTrendingMovies() }
+            launch { fetchTrendingTv() }
+            launch { fetchTopRatedMovies() }
+            launch { fetchTopRatedTv() }
+            launch { fetchNowPlayingMovies() }
+            launch { fetchOnTheAirTv() }
         }
     }
 
@@ -344,6 +390,72 @@ class MovieViewModel(
             } catch (e: Exception) {
                 _searchResults.value = RequestState.Error(e.localizedMessage ?: "فشل البحث، حاول مرة أخرى")
             }
+        }
+    }
+
+    private suspend fun fetchTrendingMovies() {
+        _trendingMovies.value = RequestState.Loading
+        try {
+            val response = repository.getTrendingMovies(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
+            _trendingMovies.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _trendingMovies.value = RequestState.Error(e.localizedMessage ?: "خطأ")
+        }
+    }
+
+    private suspend fun fetchTrendingTv() {
+        _trendingTv.value = RequestState.Loading
+        try {
+            val response = repository.getTrendingTv(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
+            _trendingTv.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _trendingTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
+        }
+    }
+
+    private suspend fun fetchTopRatedMovies() {
+        _topRatedMovies.value = RequestState.Loading
+        try {
+            val response = repository.getTopRatedMovies(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
+            _topRatedMovies.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _topRatedMovies.value = RequestState.Error(e.localizedMessage ?: "خطأ")
+        }
+    }
+
+    private suspend fun fetchTopRatedTv() {
+        _topRatedTv.value = RequestState.Loading
+        try {
+            val response = repository.getTopRatedTv(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
+            _topRatedTv.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _topRatedTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
+        }
+    }
+
+    private suspend fun fetchNowPlayingMovies() {
+        _nowPlayingMovies.value = RequestState.Loading
+        try {
+            val response = repository.getNowPlayingMovies(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
+            _nowPlayingMovies.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _nowPlayingMovies.value = RequestState.Error(e.localizedMessage ?: "خطأ")
+        }
+    }
+
+    private suspend fun fetchOnTheAirTv() {
+        _onTheAirTv.value = RequestState.Loading
+        try {
+            val response = repository.getOnTheAirTv(language = currentLang)
+            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
+            _onTheAirTv.value = RequestState.Success(list)
+        } catch (e: Exception) {
+            _onTheAirTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
         }
     }
 
@@ -406,6 +518,136 @@ class MovieViewModel(
                 val updatedMap = _seasonDetails.value.toMutableMap()
                 updatedMap[key] = RequestState.Error(e.localizedMessage ?: "فشل تحميل تفاصيل الموسم")
                 _seasonDetails.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchMovieCertification(movieId: Int) {
+        if (_movieCertifications.value.containsKey(movieId) && _movieCertifications.value[movieId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _movieCertifications.value.toMutableMap()
+            currentMap[movieId] = RequestState.Loading
+            _movieCertifications.value = currentMap
+            try {
+                val response = repository.getMovieReleaseDates(movieId)
+                val usCert = response.results
+                    ?.firstOrNull { it.iso31661 == "US" }
+                    ?.releaseDates
+                    ?.firstOrNull { !it.certification.isNullOrEmpty() }
+                    ?.certification
+                val updatedMap = _movieCertifications.value.toMutableMap()
+                updatedMap[movieId] = if (usCert != null) RequestState.Success(usCert)
+                    else RequestState.Error("No certification")
+                _movieCertifications.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _movieCertifications.value.toMutableMap()
+                updatedMap[movieId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _movieCertifications.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchTvContentRating(tvId: Int) {
+        if (_tvContentRatings.value.containsKey(tvId) && _tvContentRatings.value[tvId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _tvContentRatings.value.toMutableMap()
+            currentMap[tvId] = RequestState.Loading
+            _tvContentRatings.value = currentMap
+            try {
+                val response = repository.getTvContentRatings(tvId)
+                val usRating = response.results?.firstOrNull { it.iso31661 == "US" }?.rating
+                val updatedMap = _tvContentRatings.value.toMutableMap()
+                updatedMap[tvId] = if (usRating != null) RequestState.Success(usRating)
+                    else RequestState.Error("No rating")
+                _tvContentRatings.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _tvContentRatings.value.toMutableMap()
+                updatedMap[tvId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _tvContentRatings.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchMovieSimilar(movieId: Int) {
+        if (_movieSimilar.value.containsKey(movieId) && _movieSimilar.value[movieId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _movieSimilar.value.toMutableMap()
+            currentMap[movieId] = RequestState.Loading
+            _movieSimilar.value = currentMap
+            try {
+                val response = repository.getMovieSimilar(movieId, language = currentLang)
+                val list = response.results?.filter { !it.posterPath.isNullOrEmpty() } ?: emptyList()
+                val updatedMap = _movieSimilar.value.toMutableMap()
+                updatedMap[movieId] = if (list.isNotEmpty()) RequestState.Success(list)
+                    else RequestState.Error("No similar")
+                _movieSimilar.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _movieSimilar.value.toMutableMap()
+                updatedMap[movieId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _movieSimilar.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchMovieRecommendations(movieId: Int) {
+        if (_movieRecommendations.value.containsKey(movieId) && _movieRecommendations.value[movieId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _movieRecommendations.value.toMutableMap()
+            currentMap[movieId] = RequestState.Loading
+            _movieRecommendations.value = currentMap
+            try {
+                val response = repository.getMovieRecommendations(movieId, language = currentLang)
+                val list = response.results?.filter { !it.posterPath.isNullOrEmpty() } ?: emptyList()
+                val updatedMap = _movieRecommendations.value.toMutableMap()
+                updatedMap[movieId] = if (list.isNotEmpty()) RequestState.Success(list)
+                    else RequestState.Error("No recommendations")
+                _movieRecommendations.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _movieRecommendations.value.toMutableMap()
+                updatedMap[movieId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _movieRecommendations.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchTvSimilar(tvId: Int) {
+        if (_tvSimilar.value.containsKey(tvId) && _tvSimilar.value[tvId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _tvSimilar.value.toMutableMap()
+            currentMap[tvId] = RequestState.Loading
+            _tvSimilar.value = currentMap
+            try {
+                val response = repository.getTvSimilar(tvId, language = currentLang)
+                val list = response.results?.filter { !it.posterPath.isNullOrEmpty() } ?: emptyList()
+                val updatedMap = _tvSimilar.value.toMutableMap()
+                updatedMap[tvId] = if (list.isNotEmpty()) RequestState.Success(list)
+                    else RequestState.Error("No similar")
+                _tvSimilar.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _tvSimilar.value.toMutableMap()
+                updatedMap[tvId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _tvSimilar.value = updatedMap
+            }
+        }
+    }
+
+    fun fetchTvRecommendations(tvId: Int) {
+        if (_tvRecommendations.value.containsKey(tvId) && _tvRecommendations.value[tvId] is RequestState.Success) return
+        viewModelScope.launch {
+            val currentMap = _tvRecommendations.value.toMutableMap()
+            currentMap[tvId] = RequestState.Loading
+            _tvRecommendations.value = currentMap
+            try {
+                val response = repository.getTvRecommendations(tvId, language = currentLang)
+                val list = response.results?.filter { !it.posterPath.isNullOrEmpty() } ?: emptyList()
+                val updatedMap = _tvRecommendations.value.toMutableMap()
+                updatedMap[tvId] = if (list.isNotEmpty()) RequestState.Success(list)
+                    else RequestState.Error("No recommendations")
+                _tvRecommendations.value = updatedMap
+            } catch (e: Exception) {
+                val updatedMap = _tvRecommendations.value.toMutableMap()
+                updatedMap[tvId] = RequestState.Error(e.localizedMessage ?: "فشل")
+                _tvRecommendations.value = updatedMap
             }
         }
     }

@@ -9,6 +9,38 @@ data class TmdbSearchResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class TmdbCertificationResponse(
+    val id: Int?,
+    val results: List<TmdbReleaseDatesResult>?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReleaseDatesResult(
+    @Json(name = "iso_3166_1") val iso31661: String?,
+    @Json(name = "release_dates") val releaseDates: List<TmdbReleaseDateItem>?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReleaseDateItem(
+    val certification: String?,
+    val type: Int?,
+    @Json(name = "release_date") val releaseDate: String?,
+    val note: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbContentRatingsResponse(
+    val id: Int?,
+    val results: List<TmdbContentRatingItem>?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbContentRatingItem(
+    @Json(name = "iso_3166_1") val iso31661: String?,
+    val rating: String?
+)
+
+@JsonClass(generateAdapter = true)
 data class TmdbMediaItem(
     val id: Int,
     val title: String?,

@@ -163,4 +163,52 @@ class MovieRepository(private val movieDao: MovieDao) {
     suspend fun getSeasonMeta(tvId: Int): List<SeasonMetaEntity> {
         return movieDao.getSeasonMeta(tvId)
     }
+
+    suspend fun getMovieSimilar(movieId: Int, language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getMovieSimilar(movieId, apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getMovieRecommendations(movieId: Int, language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getMovieRecommendations(movieId, apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getTvSimilar(tvId: Int, language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTvSimilar(tvId, apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getTvRecommendations(tvId: Int, language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTvRecommendations(tvId, apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getMovieReleaseDates(movieId: Int): TmdbCertificationResponse {
+        return tmdbService.getMovieReleaseDates(movieId, apiKey = BuildConfig.TMDB_API_KEY)
+    }
+
+    suspend fun getTvContentRatings(tvId: Int): TmdbContentRatingsResponse {
+        return tmdbService.getTvContentRatings(tvId, apiKey = BuildConfig.TMDB_API_KEY)
+    }
+
+    suspend fun getTrendingMovies(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTrendingMovies(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getTrendingTv(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTrendingTv(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getTopRatedMovies(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTopRatedMovies(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getTopRatedTv(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getTopRatedTv(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getNowPlayingMovies(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getNowPlayingMovies(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
+
+    suspend fun getOnTheAirTv(language: String = "ar", page: Int = 1): TmdbSearchResponse {
+        return tmdbService.getOnTheAirTv(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
+    }
 }

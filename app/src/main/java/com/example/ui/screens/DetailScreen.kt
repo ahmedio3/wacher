@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.example.ui.components.bouncyOverscroll
+import com.example.ui.components.rememberPressState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -67,6 +68,7 @@ fun DetailScreen(
     viewModel: MovieViewModel,
     onBackClick: () -> Unit,
     onNavigateToPlayer: (String, String, String) -> Unit,
+    onNavigateToDetails: (Int, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -76,6 +78,12 @@ fun DetailScreen(
     val tvDetailsMap by viewModel.tvDetails.collectAsState()
     val seasonDetailsMap by viewModel.seasonDetails.collectAsState()
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
+    val movieCertificationsMap by viewModel.movieCertifications.collectAsState()
+    val tvContentRatingsMap by viewModel.tvContentRatings.collectAsState()
+    val movieSimilarMap by viewModel.movieSimilar.collectAsState()
+    val movieRecommendationsMap by viewModel.movieRecommendations.collectAsState()
+    val tvSimilarMap by viewModel.tvSimilar.collectAsState()
+    val tvRecommendationsMap by viewModel.tvRecommendations.collectAsState()
 
     // Subtitle sheet state
     var showSubtitleSheet by remember { mutableStateOf(false) }
@@ -108,8 +116,14 @@ fun DetailScreen(
     LaunchedEffect(mediaId) {
         if (mediaType == "movie") {
             viewModel.fetchMovieDetails(mediaId)
+            viewModel.fetchMovieCertification(mediaId)
+            viewModel.fetchMovieSimilar(mediaId)
+            viewModel.fetchMovieRecommendations(mediaId)
         } else {
             viewModel.fetchTvDetails(mediaId)
+            viewModel.fetchTvContentRating(mediaId)
+            viewModel.fetchTvSimilar(mediaId)
+            viewModel.fetchTvRecommendations(mediaId)
         }
     }
 
@@ -209,8 +223,18 @@ fun DetailScreen(
                                 val activeLocalDownload = downloadsList.find { it.id == movie.id.toString() && it.status == "completed" }
                                 val activeLocalFilePath = activeLocalDownload?.localFilePath ?: ""
 
+                                    val movieCertState = movieCertificationsMap[movie.id]
+                                    val movieCertification = if (movieCertState is RequestState.Success) movieCertState.data else null
+                                    val movieSimState = movieSimilarMap[movie.id]
+                                    val movieSimilarList = if (movieSimState is RequestState.Success) movieSimState.data else emptyList()
+                                    val movieRecState = movieRecommendationsMap[movie.id]
+                                    val movieRecommendationsList = if (movieRecState is RequestState.Success) movieRecState.data else emptyList()
+
                                     MovieDetailContent(
                                         movie = movie,
+                                        certification = movieCertification,
+                                        similarShows = movieSimilarList,
+                                        recommendations = movieRecommendationsList,
                                         viewModel = viewModel,
                                         isPlayerPlaying = false,
                                         onPlayClick = {
@@ -244,7 +268,8 @@ fun DetailScreen(
                                                 rating = movie.voteAverage ?: 0.0
                                             )
                                             showStatusPicker = true
-                                        }
+                                        },
+                                        onNavigateToDetails = { id, type -> onNavigateToDetails(id, type) }
                                     )
                             }
                             is RequestState.Loading -> DetailSkeleton()
@@ -256,8 +281,18 @@ fun DetailScreen(
                         when (state) {
                             is RequestState.Success -> {
                                 val tv = state.data
+                                    val tvCertState = tvContentRatingsMap[tv.id]
+                                    val tvCertification = if (tvCertState is RequestState.Success) tvCertState.data else null
+                                    val tvSimState = tvSimilarMap[tv.id]
+                                    val tvSimilarList = if (tvSimState is RequestState.Success) tvSimState.data else emptyList()
+                                    val tvRecState = tvRecommendationsMap[tv.id]
+                                    val tvRecommendationsList = if (tvRecState is RequestState.Success) tvRecState.data else emptyList()
+
                                     TvDetailContent(
                                         tv = tv,
+                                        certification = tvCertification,
+                                        similarShows = tvSimilarList,
+                                        recommendations = tvRecommendationsList,
                                         viewModel = viewModel,
                                         seasonDetailsMap = seasonDetailsMap,
                                         isPlayerPlaying = false,
@@ -307,16 +342,43 @@ fun DetailScreen(
                                                 rating = tv.voteAverage ?: 0.0
                                             )
                                             showStatusPicker = true
-                                        }
+                                        },
+                                        onNavigateToDetails = { id, type -> onNavigateToDetails(id, type) }
                                     )
                             }
                             is RequestState.Loading -> DetailSkeleton()
                             is RequestState.Error -> ErrorContent(state.message)
                             else -> {}
-                        }
-                    }
-                }
             }
+
+            // Similar Shows
+            if (similarShows.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "مسلسلات مشابهة",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShowsHorizontalRow(shows = similarShows, onItemClick = onNavigateToDetails)
+            }
+
+            // Recommendations
+            if (recommendations.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "قد يعجبك أيضاً",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShowsHorizontalRow(shows = recommendations, onItemClick = onNavigateToDetails)
+            }
+        }
+    }
+}
         }
 
         // CUSTOM iOS PREMIUM QUALITY SELECTION BOTTOM SHEET / CARD DIALOG
@@ -440,12 +502,16 @@ fun DetailScreen(
 @Composable
 fun MovieDetailContent(
     movie: TmdbMovieDetails,
+    certification: String? = null,
+    similarShows: List<TmdbMediaItem> = emptyList(),
+    recommendations: List<TmdbMediaItem> = emptyList(),
     viewModel: MovieViewModel,
     isPlayerPlaying: Boolean,
     onPlayClick: () -> Unit,
     onDownloadClick: (String, String, String, String) -> Unit,
     onSubtitleDownloadClick: (String, String, String) -> Unit = { _, _, _ -> },
-    onLongPressWatchlist: () -> Unit = {}
+    onLongPressWatchlist: () -> Unit = {},
+    onNavigateToDetails: (Int, String) -> Unit = { _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${movie.posterPath}"
@@ -513,7 +579,7 @@ fun MovieDetailContent(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Badges row: Year | Rating | Duration
+            // Badges row: Year | Rating | Duration | Certification
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -557,6 +623,27 @@ fun MovieDetailContent(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (certification != null) {
+                    Text(
+                        text = "•",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = certification,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            fontFamily = JetBrainsMonoFontFamily,
+                            textDirection = TextDirection.Ltr
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -703,6 +790,32 @@ fun MovieDetailContent(
                     }
                 }
             }
+
+            // Similar Shows
+            if (similarShows.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "عروض مشابهة",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShowsHorizontalRow(shows = similarShows, onItemClick = onNavigateToDetails)
+            }
+
+            // Recommendations
+            if (recommendations.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "قد يعجبك أيضاً",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShowsHorizontalRow(shows = recommendations, onItemClick = onNavigateToDetails)
+            }
         }
     }
 }
@@ -711,6 +824,9 @@ fun MovieDetailContent(
 @Composable
 fun TvDetailContent(
     tv: TmdbTvDetails,
+    certification: String? = null,
+    similarShows: List<TmdbMediaItem> = emptyList(),
+    recommendations: List<TmdbMediaItem> = emptyList(),
     viewModel: MovieViewModel,
     seasonDetailsMap: Map<String, RequestState<TmdbSeasonDetails>>,
     isPlayerPlaying: Boolean,
@@ -718,7 +834,8 @@ fun TvDetailContent(
     onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit,
     onDownloadFullSeries: () -> Unit = {},
     onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
-    onLongPressWatchlist: () -> Unit = {}
+    onLongPressWatchlist: () -> Unit = {},
+    onNavigateToDetails: (Int, String) -> Unit = { _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${tv.backdropPath ?: tv.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${tv.posterPath}"
@@ -794,7 +911,7 @@ fun TvDetailContent(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Badges row: Year | Rating | Seasons count
+            // Badges row: Year | Rating | Seasons | Certification
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -838,6 +955,27 @@ fun TvDetailContent(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (certification != null) {
+                    Text(
+                        text = "•",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = certification,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            fontFamily = JetBrainsMonoFontFamily,
+                            textDirection = TextDirection.Ltr
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1278,6 +1416,117 @@ fun ErrorContent(msg: String) {
         contentAlignment = Alignment.Center
     ) {
         Text(text = "تعذر تعبئة التفاصيل: $msg", color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+fun ShowsHorizontalRow(
+    shows: List<TmdbMediaItem>,
+    onItemClick: (Int, String) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .bouncyOverscroll(isVertical = false)
+            .fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+    ) {
+        items(shows.take(20)) { show ->
+            ShowsHorizontalCard(show = show, onClick = onItemClick)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ShowsHorizontalCard(
+    show: TmdbMediaItem,
+    onClick: (Int, String) -> Unit
+) {
+    val posterUrl = "https://image.tmdb.org/t/p/w185${show.posterPath}"
+    val title = show.title ?: show.name ?: "غير معروف"
+    val type = show.mediaType ?: "movie"
+    val (interactionSource, pressed) = rememberPressState()
+    val pressScale by animateFloatAsState(if (pressed) 0.95f else 1f, animationSpec = tween(150))
+
+    Column(
+        modifier = Modifier
+            .width(120.dp)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(14.dp))
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = { onClick(show.id, type) }
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.71f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (!show.posterPath.isNullOrEmpty()) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            val voteAvg = show.voteAverage
+            if (voteAvg != null && voteAvg > 0) {
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                        .align(Alignment.BottomStart)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(8.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = String.format("%.1f", show.voteAverage),
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
     }
 }
 

@@ -50,4 +50,90 @@ interface TmdbService {
         @Query("api_key") apiKey: String,
         @Query("language") language: String = "ar"
     ): TmdbSeasonDetails
+
+    @GET("movie/{movie_id}/similar")
+    suspend fun getMovieSimilar(
+        @Path("movie_id") movieId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("movie/{movie_id}/recommendations")
+    suspend fun getMovieRecommendations(
+        @Path("movie_id") movieId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("tv/{tv_id}/similar")
+    suspend fun getTvSimilar(
+        @Path("tv_id") tvId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("tv/{tv_id}/recommendations")
+    suspend fun getTvRecommendations(
+        @Path("tv_id") tvId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("movie/{movie_id}/release_dates")
+    suspend fun getMovieReleaseDates(
+        @Path("movie_id") movieId: Int,
+        @Query("api_key") apiKey: String
+    ): TmdbCertificationResponse
+
+    @GET("tv/{tv_id}/content_ratings")
+    suspend fun getTvContentRatings(
+        @Path("tv_id") tvId: Int,
+        @Query("api_key") apiKey: String
+    ): TmdbContentRatingsResponse
+
+    @GET("trending/movie/week")
+    suspend fun getTrendingMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("trending/tv/week")
+    suspend fun getTrendingTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("movie/top_rated")
+    suspend fun getTopRatedMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("tv/top_rated")
+    suspend fun getTopRatedTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("movie/now_playing")
+    suspend fun getNowPlayingMovies(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
+
+    @GET("tv/on_the_air")
+    suspend fun getOnTheAirTv(
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("page") page: Int = 1
+    ): TmdbSearchResponse
 }
