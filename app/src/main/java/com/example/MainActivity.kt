@@ -47,6 +47,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.ui.platform.LocalOverscrollConfiguration
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -56,6 +57,7 @@ import com.example.ui.navigation.isForwardNavigation
 import com.example.ui.navigation.slideIn
 import com.example.ui.navigation.slideOut
 import com.example.ui.screens.*
+import com.example.ui.components.bouncyOverscroll
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.ViewModelFactory
@@ -95,8 +97,10 @@ class MainActivity : ComponentActivity() {
                     .isAppearanceLightStatusBars = !isDarkMode
             }
 
-            MyApplicationTheme(darkTheme = isDarkMode) {
-                MainAppContainer(deepLinkState = deepLinkState)
+            CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
+                MyApplicationTheme(darkTheme = isDarkMode) {
+                    MainAppContainer(deepLinkState = deepLinkState)
+                }
             }
         }
     }
@@ -208,7 +212,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                         Text("لا يوجد تحميلات نشطة حالياً", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(bottom = 16.dp))
                     } else {
                         val sortedDls = remember(activeDownloads) { activeDownloads.sortedByDescending { it.addedAt } }
-                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().bouncyOverscroll()) {
                             items(sortedDls) { item ->
                                 com.example.ui.screens.DownloadItemRow(
                                     item = item,

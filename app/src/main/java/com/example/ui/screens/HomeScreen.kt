@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -91,7 +92,7 @@ fun HomeScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
-            .then(if (searchQuery.isEmpty()) Modifier.verticalScroll(scrollState) else Modifier)
+            .then(if (searchQuery.isEmpty()) Modifier.verticalScroll(scrollState).bouncyOverscroll() else Modifier)
     ) {
         // 1. iOS Top Header with Settings Instead of Cinema Logo
         HomeHeader(onNavigateToBrowser = onNavigateToBrowser)
@@ -179,7 +180,7 @@ fun HomeScreen(
                 androidx.compose.foundation.lazy.LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth()
                 ) {
                     items(customSectionItems, key = { it.id }) { item ->
                         CustomSectionItemCard(
@@ -244,7 +245,7 @@ fun HomeScreen(
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth()
                 ) {
                     items(watchlistItems, key = { it.id }) { item ->
                         WatchlistPosterCard(
@@ -538,7 +539,7 @@ fun FeaturedCarousel(
         )
         
         LazyRow(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -664,6 +665,7 @@ fun MediaCategoryCarousel(
         when (state) {
             is RequestState.Success -> {
                 LazyRow(
+                    modifier = Modifier.bouncyOverscroll(isVertical = false),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -680,6 +682,7 @@ fun MediaCategoryCarousel(
             }
             is RequestState.Loading -> {
                 LazyRow(
+                    modifier = Modifier.bouncyOverscroll(isVertical = false),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     userScrollEnabled = false

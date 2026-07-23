@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -231,7 +232,7 @@ fun MovieBoxDownloadSheet(
                                 // Season selector
                                 if (availableSeasons.size > 1 && (seasonInfo == null || seasonInfo <= 0)) {
                                     LazyRow(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                        modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth().padding(bottom = 12.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         contentPadding = PaddingValues(horizontal = 4.dp)
                                     ) {
@@ -316,8 +317,8 @@ fun MovieBoxDownloadSheet(
                                 }
 
                                 LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.bouncyOverscroll().fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     episodesMap.forEach { (episodeId, files) ->
                                         item {
@@ -400,8 +401,8 @@ fun MovieBoxDownloadSheet(
                             val availableQualities = links.distinctBy { it.resolution }.sortedByDescending { it.resolution }
                             
                             LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.bouncyOverscroll().fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(availableQualities) { videoFile ->
                                     QualityItem(

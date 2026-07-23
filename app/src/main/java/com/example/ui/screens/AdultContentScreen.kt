@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -105,6 +106,7 @@ fun AdultContentScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
+                .bouncyOverscroll()
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
@@ -119,7 +121,10 @@ fun AdultContentScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Flow-like row of chips (using LazyRow)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyRow(
+                        modifier = Modifier.bouncyOverscroll(isVertical = false),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         items(ADULT_KEYWORDS) { kw ->
                             val isSelected = kw in selectedKeywords
                             val canSelect = selectedKeywords.size < MAX_KEYWORDS

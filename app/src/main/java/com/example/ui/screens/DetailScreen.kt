@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -197,6 +198,7 @@ fun DetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
+                        .bouncyOverscroll()
                         .padding(bottom = 44.dp)
                 ) {
                     if (mediaType == "movie") {
@@ -693,7 +695,7 @@ fun MovieDetailContent(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
                 ) {
                     items(castList.take(10)) { cast ->
@@ -966,6 +968,7 @@ fun TvDetailContent(
                 // Season Selector Horizontal Row
                 LazyRow(
                     modifier = Modifier
+                        .bouncyOverscroll(isVertical = false)
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
@@ -1159,7 +1162,8 @@ fun FlowGenresRow(genres: List<TmdbGenre>) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .horizontalScroll(rememberScrollState())
+            .bouncyOverscroll(isVertical = false),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
     ) {
         genres.forEach { genre ->

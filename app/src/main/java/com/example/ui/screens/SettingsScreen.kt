@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import coil.compose.AsyncImage
 import androidx.compose.foundation.background
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -161,7 +162,8 @@ fun SettingsScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
                 .padding(horizontal = 20.dp, vertical = 10.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .bouncyOverscroll(),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Profile Card (Firebase Auth)

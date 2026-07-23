@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -506,7 +507,10 @@ fun PlayerScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyRow(
+                        modifier = Modifier.bouncyOverscroll(isVertical = false),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         itemsIndexed(
                             listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
                         ) { _, speed ->
@@ -538,6 +542,7 @@ fun PlayerScreen(
                     )
                     LazyRow(
                         modifier = Modifier
+                            .bouncyOverscroll(isVertical = false)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

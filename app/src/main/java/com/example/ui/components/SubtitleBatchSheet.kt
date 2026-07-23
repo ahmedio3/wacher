@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -85,7 +86,10 @@ fun SubtitleBatchSheet(
                 HorizontalDivider()
                 Spacer(Modifier.height(8.dp))
 
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(
+                    modifier = Modifier.bouncyOverscroll(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     items(batchGroup.items.withIndex().toList()) { (index, item) ->
                         SubtitleDownloadEpisodeRow(
                             item = item,

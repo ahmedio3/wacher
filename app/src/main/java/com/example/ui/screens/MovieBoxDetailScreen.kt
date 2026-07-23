@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -168,6 +169,7 @@ fun MovieBoxDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
+                        .bouncyOverscroll()
                         .padding(bottom = 44.dp)
                 ) {
                     if (isLoading) {
@@ -291,7 +293,7 @@ fun MovieBoxDetailScreen(
                             val genres = itemDetail?.genre ?: emptyList()
                             if (genres.isNotEmpty()) {
                                 LazyRow(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                                 ) {
                                     items(genres) { genre ->
@@ -466,7 +468,7 @@ fun MovieBoxDetailScreen(
 
                                 if (availableSeasons.size > 1) {
                                     LazyRow(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth().padding(vertical = 4.dp),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
                                     ) {
                                         items(availableSeasons) { s ->

@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.app.Application
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
+import com.example.ui.components.bouncyOverscroll
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
@@ -175,7 +176,7 @@ fun DownloadsScreen(
                             EmptyDownloadsView(message = "لا تملك مسلسلات منزلة بعد. قم بتحميل حلقات مسلسل لتنظيمها وعرضها هنا.")
                         } else {
                             LazyColumn(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.bouncyOverscroll().weight(1f),
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
@@ -206,7 +207,7 @@ fun DownloadsScreen(
                             EmptyDownloadsView(message = "لا توجد أفلام أو تنزيلات فردية")
                         } else {
                             LazyColumn(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.bouncyOverscroll().weight(1f),
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
@@ -493,6 +494,7 @@ fun SeriesDetailPage(
         // Active Tab bar seasons list with statistics: e.g. "الموسم 1 (1/7)"
         LazyRow(
             modifier = Modifier
+                .bouncyOverscroll(isVertical = false)
                 .fillMaxWidth()
                 .alpha(dimAlpha)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -612,6 +614,7 @@ fun SeriesDetailPage(
             } else {
                 LazyColumn(
                     modifier = Modifier
+                        .bouncyOverscroll()
                         .fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1963,7 +1966,7 @@ fun LocalFilesTab(
                 modifier = Modifier.padding(vertical = 4.dp)
             )
             LazyColumn(
-                modifier = Modifier.height((playlists.size * 60).dp.coerceAtMost(180.dp)),
+                modifier = Modifier.bouncyOverscroll().height((playlists.size * 60).dp.coerceAtMost(180.dp)),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(playlists, key = { it.id }) { pl ->
@@ -2004,7 +2007,7 @@ fun LocalFilesTab(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.bouncyOverscroll().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(localFiles, key = { it.id }) { video ->
