@@ -362,10 +362,10 @@ private fun SelectorRow(
                 else Color.Transparent
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         trailing()
-        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = title,
             fontSize = 14.sp,
@@ -373,8 +373,7 @@ private fun SelectorRow(
             fontFamily = JetBrainsMonoFontFamily,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
