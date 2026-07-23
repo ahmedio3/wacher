@@ -15,6 +15,7 @@ enum class AiProviderType(val displayName: String) {
  */
 enum class ThinkingLevel(val label: String, val key: String) {
     NONE("بدون", "none"),
+    MINIMAL("أدنى", "minimal"),
     LOW("منخفض", "low"),
     MEDIUM("متوسط", "medium"),
     HIGH("مرتفع", "high");
@@ -32,7 +33,7 @@ data class AiModelConfig(
     val supportsVision: Boolean = false,
     val supportsReasoning: Boolean = true,
     val reasoningLevels: List<ThinkingLevel> = listOf(
-        ThinkingLevel.NONE, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH
+        ThinkingLevel.NONE, ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH
     )
 )
 
@@ -173,8 +174,34 @@ val PROVIDER_CONFIGS: Map<AiProviderType, AiProviderConfig> = mapOf(
         type = AiProviderType.GEMINI,
         apiKey = "",
         models = listOf(
-            AiModelConfig("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", AiProviderType.GEMINI, supportsVision = true),
-            AiModelConfig("gemini-3.5-flash", "Gemini 3.5 Flash", AiProviderType.GEMINI)
+            AiModelConfig(
+                "gemini-3.6-flash", 
+                "Gemini 3.6 Flash", 
+                AiProviderType.GEMINI, 
+                supportsVision = true,
+                reasoningLevels = listOf(ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH)
+            ),
+            AiModelConfig(
+                "gemini-3.5-flash", 
+                "Gemini 3.5 Flash", 
+                AiProviderType.GEMINI, 
+                supportsVision = true,
+                reasoningLevels = listOf(ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH)
+            ),
+            AiModelConfig(
+                "gemini-3.5-flash-lite", 
+                "Gemini 3.5 Flash Lite", 
+                AiProviderType.GEMINI, 
+                supportsVision = true,
+                reasoningLevels = listOf(ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH)
+            ),
+            AiModelConfig(
+                "gemini-3.1-flash-lite", 
+                "Gemini 3.1 Flash Lite", 
+                AiProviderType.GEMINI, 
+                supportsVision = true,
+                reasoningLevels = listOf(ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH)
+            )
         )
     ),
     AiProviderType.OPENCODE_ZEN to AiProviderConfig(

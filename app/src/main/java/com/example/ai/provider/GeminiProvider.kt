@@ -277,15 +277,16 @@ class GeminiProvider(private val apiKey: String) : AiProviderService {
             .put("maxOutputTokens", 8192)
 
         if (thinkingLevel != ThinkingLevel.NONE) {
-            val budget = when (thinkingLevel) {
-                ThinkingLevel.LOW -> 1024
-                ThinkingLevel.MEDIUM -> 8192
-                ThinkingLevel.HIGH -> 24576
-                else -> 0
+            val level = when (thinkingLevel) {
+                ThinkingLevel.MINIMAL -> "minimal"
+                ThinkingLevel.LOW -> "low"
+                ThinkingLevel.MEDIUM -> "medium"
+                ThinkingLevel.HIGH -> "high"
+                else -> "minimal" // fallback
             }
             generationConfig.put(
                 "thinkingConfig",
-                JSONObject().put("thinkingBudget", budget)
+                JSONObject().put("thinkingLevel", level)
             )
         }
         json.put("generationConfig", generationConfig)
