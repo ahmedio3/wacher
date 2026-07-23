@@ -48,20 +48,20 @@ fun ConversationsDrawer(
                     .clickable(onClick = onDismiss)
             )
 
-            // RTL: CenterStart = right edge; slide from +X = from right
+            // RTL: CenterEnd = left edge; slide from -X = from left
             Surface(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
+                    .align(Alignment.CenterEnd)
                     .fillMaxHeight()
                     .fillMaxWidth(0.82f)
                     .statusBarsPadding()
                     .animateEnterExit(
-                        enter = slideInHorizontally(tween(280)) { it },
-                        exit = slideOutHorizontally(tween(240)) { it }
+                        enter = slideInHorizontally(tween(280)) { -it },
+                        exit = slideOutHorizontally(tween(240)) { -it }
                     ),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 12.dp,
-                shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+                shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(

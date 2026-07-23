@@ -11,8 +11,11 @@ interface AiDao {
     @Query("SELECT * FROM ai_conversations WHERE id = :id LIMIT 1")
     suspend fun getConversation(id: String): AiConversationEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertConversation(conversation: AiConversationEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertConversation(conversation: AiConversationEntity): Long
+
+    @Query("UPDATE ai_conversations SET updatedAt = :now WHERE id = :id")
+    suspend fun updateConversationTimestamp(id: String, now: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM ai_conversations WHERE id = :id")
     suspend fun deleteConversation(id: String)

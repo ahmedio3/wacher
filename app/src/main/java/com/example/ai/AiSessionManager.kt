@@ -75,10 +75,12 @@ class AiSessionManager(private val aiDao: AiDao) {
 
     suspend fun ensureConversationInDb(title: String = "محادثة جديدة"): String {
         var conversationId = currentConversationId
+        var isNew = false
         if (conversationId == null) {
             conversationId = startNewSession(currentProviderType, currentModelId, thinkingLevel)
+            isNew = true
         }
-        aiDao.upsertConversation(
+        val id = aiDao.insertConversation(
             AiConversationEntity(
                 id = conversationId,
                 title = title,
@@ -88,6 +90,9 @@ class AiSessionManager(private val aiDao: AiDao) {
                 updatedAt = System.currentTimeMillis()
             )
         )
+        if (id == -1L && !isNew) {
+            aiDao.updateConversationTimestamp(conversationId)
+        }
         return conversationId
     }
 
@@ -100,7 +105,7 @@ class AiSessionManager(private val aiDao: AiDao) {
     }
 
     suspend fun saveConversation(title: String, conversationId: String) {
-        aiDao.upsertConversation(
+        val id = aiDao.insertConversation(
             AiConversationEntity(
                 id = conversationId,
                 title = title,
@@ -110,6 +115,9 @@ class AiSessionManager(private val aiDao: AiDao) {
                 updatedAt = System.currentTimeMillis()
             )
         )
+        if (id == -1L) {
+            aiDao.updateConversationTitle(conversationId, title)
+        }
     }
 
     suspend fun updateConversationTitle(conversationId: String, title: String) {
