@@ -3,22 +3,25 @@ package com.example.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.composed
 import androidx.compose.ui.unit.Velocity
 
 private const val MAX_OVERSCROLL_PX = 250f
 
-fun Modifier.bouncyOverscroll(isVertical: Boolean = true): Modifier = composed {
+@Composable
+fun Modifier.bouncyOverscroll(isVertical: Boolean = true): Modifier {
     val overscrollState = remember { Animatable(0f) }
-    var currentOverscroll by remember { mutableFloatStateOf(0f) }
+    var currentOverscroll by remember { mutableStateOf(0f) }
 
     val connection = remember {
         object : NestedScrollConnection {
@@ -28,7 +31,6 @@ fun Modifier.bouncyOverscroll(isVertical: Boolean = true): Modifier = composed {
                     if (delta * currentOverscroll < 0f) {
                         val consumed = delta.coerceIn(-currentOverscroll, -currentOverscroll)
                         currentOverscroll += consumed
-                        overscrollState.snapTo(currentOverscroll)
                         return if (isVertical) Offset(0f, consumed) else Offset(consumed, 0f)
                     }
                 }
@@ -45,7 +47,6 @@ fun Modifier.bouncyOverscroll(isVertical: Boolean = true): Modifier = composed {
                     if (delta != 0f) {
                         currentOverscroll =
                             (currentOverscroll + delta).coerceIn(-MAX_OVERSCROLL_PX, MAX_OVERSCROLL_PX)
-                        overscrollState.snapTo(currentOverscroll)
                         return available
                     }
                 }
@@ -68,7 +69,7 @@ fun Modifier.bouncyOverscroll(isVertical: Boolean = true): Modifier = composed {
         }
     }
 
-    this
+    return this
         .nestedScroll(connection)
         .graphicsLayer {
             if (isVertical) translationY = currentOverscroll
