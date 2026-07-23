@@ -47,6 +47,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -97,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     .isAppearanceLightStatusBars = !isDarkMode
             }
 
+            @OptIn(ExperimentalFoundationApi::class)
             CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
                 MyApplicationTheme(darkTheme = isDarkMode) {
                     MainAppContainer(deepLinkState = deepLinkState)
