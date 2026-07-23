@@ -18,12 +18,12 @@ val PaletteNeutralGray = Color(0xFFE5E5EA)  // Neutral system-gray (reference he
 val DarkBackground = Color(0xFF0D1117)       // GitHub dark bg
 val DarkSurface = Color(0xFF161B22)          // GitHub dark card/surface
 val DarkSurfaceVariant = Color(0xFF21262D)   // Slightly lighter for borders/dividers
-val DarkPrimary = Color(0xFF1F6FEB)           // GitHub button blue primary
+val DarkPrimary = Color(0xFF3B4A6B)           // Custom dark blue primary
 val DarkSecondary = Color(0xFF8B7A6A)         // Muted warm taupe secondary
 val DarkTertiary = Color(0xFFE3B86E)          // Warm gold accent remains
 val DarkOnBackground = Color(0xFFE1D9D0)     // Off-white text on dark bg
 val DarkOnSurface = Color(0xFFF0EAE2)         // Brighter text for titles
-val DarkOnPrimary = Color(0xFF0D1117)         // Dark bg text on blue primary
+val DarkOnPrimary = Color(0xFFFDFBF7)         // Cream text on dark primary
 val DarkNeutralGray = Color(0xFF404854)       // Dark mode neutral gray
 
 // Accent colors
