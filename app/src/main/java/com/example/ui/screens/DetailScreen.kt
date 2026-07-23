@@ -608,14 +608,14 @@ fun MovieDetailContent(
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(
-                            text = certification,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            textDirection = TextDirection.Ltr
-                        )
+                            Text(
+                                text = certification,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFontFamily,
+                                style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr)
+                            )
                     }
                 }
             }
@@ -940,14 +940,14 @@ fun TvDetailContent(
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(
-                            text = certification,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            textDirection = TextDirection.Ltr
-                        )
+                            Text(
+                                text = certification,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFontFamily,
+                                style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr)
+                            )
                     }
                 }
             }
