@@ -349,36 +349,10 @@ fun DetailScreen(
                             is RequestState.Loading -> DetailSkeleton()
                             is RequestState.Error -> ErrorContent(state.message)
                             else -> {}
+                        }
+                    }
+                }
             }
-
-            // Similar Shows
-            if (similarShows.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(28.dp))
-                Text(
-                    text = "مسلسلات مشابهة",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    textAlign = TextAlign.Right,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                ShowsHorizontalRow(shows = similarShows, onItemClick = onNavigateToDetails)
-            }
-
-            // Recommendations
-            if (recommendations.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(28.dp))
-                Text(
-                    text = "قد يعجبك أيضاً",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    textAlign = TextAlign.Right,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                ShowsHorizontalRow(shows = recommendations, onItemClick = onNavigateToDetails)
-            }
-        }
-    }
-}
         }
 
         // CUSTOM iOS PREMIUM QUALITY SELECTION BOTTOM SHEET / CARD DIALOG
