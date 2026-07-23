@@ -328,6 +328,7 @@ private fun ThinkingPage(
                     ThinkingLevel.LOW -> "low"
                     ThinkingLevel.MEDIUM -> "medium"
                     ThinkingLevel.HIGH -> "high"
+                    ThinkingLevel.MINIMAL -> "minimal"
                 },
                 selected = level == selectedLevel,
                 trailing = {
