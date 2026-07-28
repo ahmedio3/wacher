@@ -2,7 +2,7 @@
 
 # 🎬 واتشر — Watcher (Cinemios)
 
-**تطبيق Android متكامل لعرض وتحميل الأفلام والمسلسلات مع دعم كامل للترجمة العربية**
+**تطبيق Android متكامل لعرض وتحميل الأفلام والمسلسلات مع دعم كامل للترجمية العربية**
 
 [![Build Debug APK](https://github.com/ahmedio3/wacher/actions/workflows/build.yml/badge.svg)](https://github.com/ahmedio3/wacher/actions/workflows/build.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-blue.svg)](https://kotlinlang.org)
