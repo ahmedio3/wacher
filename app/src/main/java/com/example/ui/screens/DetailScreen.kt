@@ -493,6 +493,7 @@ fun MovieDetailContent(
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
     val posterUrl = "https://image.tmdb.org/t/p/w342${movie.posterPath}"
     val isFavorited by viewModel.isItemInWatchlist(movie.id.toString()).collectAsState(initial = false)
+    var showNativeShare by remember { mutableStateOf(false) }
 
     Column {
         if (!isPlayerPlaying) {

@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TrendingUp
@@ -61,6 +63,7 @@ import com.example.ui.components.shimmerBrush
 import com.example.ui.components.ShowShareSheet
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.RequestState
+import kotlinx.coroutines.delay
 
 data class PendingShare(val title: String, val id: String, val mediaType: String)
 
@@ -375,7 +378,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -393,7 +397,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -450,7 +455,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -469,7 +475,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -488,7 +495,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -507,7 +515,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -526,7 +535,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -545,7 +555,8 @@ fun HomeScreen(
                 onShare = { item ->
                     pendingShare = PendingShare(item.title ?: item.name ?: "", item.id.toString(), item.mediaType ?: "movie")
                     showShareSheet = true
-                }
+                },
+                onRetry = { viewModel.fetchHomeContent() }
             )
                 } else {
                     // B. Show Search Results Grid — collect only inside this branch
@@ -886,7 +897,8 @@ fun MediaCategoryCarousel(
     onItemClick: (TmdbMediaItem) -> Unit,
     isInMyList: (TmdbMediaItem) -> Boolean = { false },
     onToggleMyList: (TmdbMediaItem) -> Unit = {},
-    onShare: (TmdbMediaItem) -> Unit = {}
+    onShare: (TmdbMediaItem) -> Unit = {},
+    onRetry: () -> Unit = {}
 ) {
     Column {
         Row(
@@ -953,7 +965,7 @@ fun MediaCategoryCarousel(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("خطأ في الاتصال بالشبكة.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
                                 Spacer(Modifier.height(8.dp))
-                                TextButton(onClick = { viewModel.fetchHomeContent() }) {
+                                TextButton(onClick = onRetry) {
                                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
                                     Text("إعادة المحاولة", fontSize = 12.sp)

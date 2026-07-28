@@ -23,6 +23,7 @@ import com.example.ai.AiMessageRole
 import com.example.ui.theme.IBMPlexSansArabicFontFamily
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import kotlinx.coroutines.delay
 
 @Composable
 fun AiMessageBubble(
