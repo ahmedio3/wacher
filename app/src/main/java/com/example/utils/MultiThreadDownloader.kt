@@ -27,6 +27,7 @@ object MultiThreadDownloader {
                 connection.requestMethod = "HEAD"
                 connection.connectTimeout = 10000
                 connection.readTimeout = 10000
+                connection.setRequestProperty("User-Agent", "okhttp/4.10.0")
                 val fileSize = connection.contentLengthLong
                 connection.disconnect()
 
@@ -91,6 +92,7 @@ object MultiThreadDownloader {
                                     val chunkConnection = URL(url).openConnection() as HttpURLConnection
                                     chunkConnection.connectTimeout = 15000
                                     chunkConnection.readTimeout = 15000
+                                    chunkConnection.setRequestProperty("User-Agent", "okhttp/4.10.0")
                                     chunkConnection.setRequestProperty("Range", "bytes=$startByte-$endByte")
                                     chunkConnection.connect()
 
