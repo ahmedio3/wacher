@@ -27,7 +27,8 @@ data class Message(
     val imageUrl: String = "",
     val type: String = "text",
     val replyTo: ReplyTo? = null,
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
+    val reactions: Map<String, Int> = emptyMap()
 )
 
 data class ReplyTo(

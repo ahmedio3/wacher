@@ -136,4 +136,12 @@ interface TmdbService {
         @Query("language") language: String = "ar",
         @Query("page") page: Int = 1
     ): TmdbSearchResponse
+
+    @GET("person/{person_id}")
+    suspend fun getPersonDetails(
+        @Path("person_id") personId: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "ar",
+        @Query("append_to_response") appendToResponse: String = "combined_credits,external_ids"
+    ): TmdbPersonDetails
 }

@@ -147,6 +147,65 @@ fun ExploreScreen(
                 Text("فتح الوضع الغير آمن", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
 
+            // Genre Browsing Section
+            Text(
+                text = "تصفح حسب النوع",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+            val genres = listOf("أكشن" to Icons.Default.Whatshot, "كوميديا" to Icons.Default.SentimentSatisfied, "دراما" to Icons.Default.TheaterComedy, "رعب" to Icons.Default.Dangerous, "خيال علمي" to Icons.Default.Rocket, "رومانسية" to Icons.Default.Favorite)
+            LazyRow(
+                modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(genres) { (name, icon) ->
+                    Column(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .clickable { /* Navigate to genre filter */ }
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text(name, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // New Releases section
+            Text(
+                text = "الإصدارات الجديدة",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+            ExploreActionRow(
+                title = "الأفلام الجديدة",
+                subtitle = "أحدث الأفلام المضافة للمنصة",
+                icon = {
+                    Box(modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFFFF6B6B)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = { /* Navigate to new movies */ }
+            )
+            ExploreActionRow(
+                title = "المسلسلات الجديدة",
+                subtitle = "أحدث المسلسلات المتاحة للمشاهدة",
+                icon = {
+                    Box(modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF4ECDC4)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White)
+                    }
+                },
+                onClick = { /* Navigate to new TV shows */ }
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             if (currentUserId.isNotEmpty()) {

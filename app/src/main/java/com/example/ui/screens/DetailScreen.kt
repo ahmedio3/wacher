@@ -85,6 +85,9 @@ fun DetailScreen(
     val tvSimilarMap by viewModel.tvSimilar.collectAsState()
     val tvRecommendationsMap by viewModel.tvRecommendations.collectAsState()
 
+    // Share state
+    var showNativeShare by remember { mutableStateOf(false) }
+
     // Subtitle sheet state
     var showSubtitleSheet by remember { mutableStateOf(false) }
     var subtitleSheetTmdbId by remember { mutableStateOf("") }
@@ -719,27 +722,55 @@ fun MovieDetailContent(
                         tint = Color.Black
                     )
                 }
+
+                // Share action circle
+                IconButton(
+                    onClick = { showNativeShare = true },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "مشاركة",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Overviews block
-            Text(
-                text = "قصة الفيلم",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.Right,
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Overviews block - expandable
+            var overviewExpanded by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "قصة الفيلم",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Right
+                )
+                if ((movie.overview?.length ?: 0) > 150) {
+                    TextButton(onClick = { overviewExpanded = !overviewExpanded }) {
+                        Text(if (overviewExpanded) "أقل" else "المزيد", fontSize = 12.sp)
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(6.dp))
+            val displayOverview = if (movie.overview.isNullOrEmpty()) "لا يتوفر نص القصة باللغة العربية حالياً." else movie.overview
+            val finalOverview = if (!overviewExpanded && (displayOverview.length > 150)) displayOverview.take(150) + "..." else displayOverview
             Text(
-                text = if (movie.overview.isNullOrEmpty()) "لا يتوفر نص القصة باللغة العربية حالياً." else movie.overview,
+                text = finalOverview,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     lineHeight = 22.sp,
-                    fontFamily = if (isLatinText(movie.overview ?: "")) JetBrainsMonoFontFamily else null,
-                    textDirection = if (isLatinText(movie.overview ?: "")) TextDirection.Ltr else TextDirection.Unspecified
+                    fontFamily = if (isLatinText(displayOverview)) JetBrainsMonoFontFamily else null,
+                    textDirection = if (isLatinText(displayOverview)) TextDirection.Ltr else TextDirection.Unspecified
                 ),
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                textAlign = if (isLatinText(movie.overview ?: "")) TextAlign.Left else TextAlign.Right,
+                textAlign = if (isLatinText(displayOverview)) TextAlign.Left else TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -790,7 +821,20 @@ fun MovieDetailContent(
                 Spacer(modifier = Modifier.height(10.dp))
                 ShowsHorizontalRow(shows = recommendations, onItemClick = onNavigateToDetails)
             }
+
+            // Spacer for bottom area
+            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Share dialog
+    if (showNativeShare) {
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, "شاهد ${movie.title ?: "هذا الفيلم"} على ووتشيرا!\nhttps://watchera.com/show/movie/${movie.id}")
+        }
+        androidx.compose.ui.platform.LocalContext.current.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة"))
+        showNativeShare = false
     }
 }
 

@@ -86,6 +86,23 @@ fun HomeScreen(
 
     var showShareSheet by remember { mutableStateOf(false) }
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+    
+    // Pull-to-refresh state
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullRefreshEnabled = searchQuery.isEmpty()
+
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            viewModel.fetchHomeContent()
+            delay(800)
+            isRefreshing = false
+        }
+    }
+
+    // Search history
+    val prefs = context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+    var recentSearches by remember { mutableStateOf(prefs.getString("recent_searches", "")?.split("|")?.filter { it.isNotBlank() } ?: emptyList()) }
+    var showRecentSearches by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -94,10 +111,27 @@ fun HomeScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
-            .then(if (searchQuery.isEmpty()) Modifier.verticalScroll(scrollState).bouncyOverscroll() else Modifier)
+            .then(if (pullRefreshEnabled) Modifier.verticalScroll(scrollState).bouncyOverscroll() else Modifier)
     ) {
-        // 1. iOS Top Header with Settings Instead of Cinema Logo
-        HomeHeader(onNavigateToBrowser = onNavigateToBrowser)
+        // Pull-to-refresh indicator
+        if (isRefreshing) {
+            Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+            }
+        }
+        
+        // 1. iOS Top Header with time-based greeting
+        val calendar = java.util.Calendar.getInstance()
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val greeting = when {
+            hour < 12 -> "صباح الخير"
+            hour < 18 -> "مساء الخير"
+            else -> "مساء النور"
+        }
+        HomeHeader(
+            greeting = greeting,
+            onNavigateToBrowser = onNavigateToBrowser
+        )
 
         // 2. Search Box right below the Header (Netflix / Apple TV design)
         Row(
@@ -145,7 +179,16 @@ fun HomeScreen(
                     unfocusedBorderColor = Color.Transparent
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { viewModel.triggerSearch() })
+                keyboardActions = KeyboardActions(onSearch = {
+                    val q = searchQuery.trim()
+                    if (q.length >= 3) {
+                        val history = prefs.getString("recent_searches", "") ?: ""
+                        val updated = "$q|${history.split("|").filter { it != q }.take(9).joinToString("|")}"
+                        prefs.edit().putString("recent_searches", updated).apply()
+                        recentSearches = listOf(q) + recentSearches.filter { it != q }.take(9)
+                    }
+                    viewModel.triggerSearch()
+                })
             )
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -166,6 +209,54 @@ fun HomeScreen(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // Recent searches chips (shown when search is empty and there's history)
+        if (searchQuery.isEmpty() && recentSearches.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).bouncyOverscroll(isVertical = false).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                recentSearches.take(5).forEach { term ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                viewModel.setSearchQueryOnly(term)
+                                viewModel.triggerSearch()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                            Text(term, fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Quick category chips
+        if (searchQuery.isEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("الكل", "أفلام", "مسلسلات", "الأكثر تقييماً", "الأحدث").forEach { cat ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { /* Category filter - future expansion */ }
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(cat, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         // 3. Conditional Layout: Empty Search (Standard Feed) vs Search Results
         if (searchQuery.isEmpty()) {
@@ -307,7 +398,45 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // D. Trending Movies (الأفلام الرائجة)
+                // Continue Watching Section
+            val downloads by viewModel.downloads.collectAsState()
+            val continueWatching = downloads.filter { it.status == "completed" || it.progress in 1..99 }
+            if (continueWatching.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("متابعة المشاهدة", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+                    TextButton(onClick = onNavigateToWatchlist) { Text("عرض الكل", style = MaterialTheme.typography.labelMedium) }
+                }
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth()
+                ) {
+                    items(continueWatching.take(10), key = { it.id }) { item ->
+                        Column(modifier = Modifier.width(140.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.71f).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
+                                val thumbUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w342${item.posterPath}"
+                                AsyncImage(model = thumbUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                                Box(
+                                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.3f))
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(fraction = item.progress / 100f).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+                                }
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp).align(Alignment.Center))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(item.title, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onBackground)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+        // D. Trending Movies (الأفلام الرائجة)
             val trendingMoviesState by viewModel.trendingMovies.collectAsState()
             MediaCategoryCarousel(
                 title = "الأفلام الرائجة هذا الأسبوع",
@@ -600,7 +729,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeHeader(onNavigateToBrowser: () -> Unit) {
+fun HomeHeader(greeting: String = "مرحباً", onNavigateToBrowser: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -610,7 +739,7 @@ fun HomeHeader(onNavigateToBrowser: () -> Unit) {
     ) {
         Column {
             Text(
-                text = "مرحباً بك في",
+                text = greeting,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
             )
@@ -621,20 +750,22 @@ fun HomeHeader(onNavigateToBrowser: () -> Unit) {
             )
         }
         
-        // Browser Button — opens the in-app web browser
-        IconButton(
-            onClick = onNavigateToBrowser,
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Public,
-                contentDescription = "المتصفح",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Browser Button — opens the in-app web browser
+            IconButton(
+                onClick = onNavigateToBrowser,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = "المتصفح",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
@@ -812,16 +943,24 @@ fun MediaCategoryCarousel(
                     }
                 }
             }
-            is RequestState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(130.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("خطأ في الاتصال بالشبكة.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-                }
-            }
+                    is RequestState.Error -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("خطأ في الاتصال بالشبكة.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                                Spacer(Modifier.height(8.dp))
+                                TextButton(onClick = { viewModel.fetchHomeContent() }) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("إعادة المحاولة", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
             else -> {}
         }
     }

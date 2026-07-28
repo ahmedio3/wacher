@@ -21,14 +21,26 @@ import androidx.compose.ui.unit.sp
 import com.example.ai.AiChatMessage
 import com.example.ai.AiMessageRole
 import com.example.ui.theme.IBMPlexSansArabicFontFamily
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 @Composable
 fun AiMessageBubble(
     message: AiChatMessage,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onCopy: ((String) -> Unit)? = null
 ) {
     val isUser = message.role == AiMessageRole.USER
     val isAssistant = message.role == AiMessageRole.ASSISTANT
+    val clipboardManager = LocalClipboardManager.current
+    var showCopiedToast by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showCopiedToast) {
+        if (showCopiedToast) {
+            delay(1500)
+            showCopiedToast = false
+        }
+    }
 
     Column(
         modifier = modifier
@@ -66,6 +78,37 @@ fun AiMessageBubble(
                         lineHeight = 22.sp,
                         color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface,
                         fontFamily = IBMPlexSansArabicFontFamily
+                    )
+                }
+                // Copy button for assistant messages
+                if (!isUser && message.content.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(message.content))
+                                showCopiedToast = true
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "نسخ",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+                if (showCopiedToast) {
+                    Text(
+                        text = "تم النسخ",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(if (isUser) Alignment.End else Alignment.Start)
                     )
                 }
             }

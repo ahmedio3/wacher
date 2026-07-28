@@ -211,4 +211,8 @@ class MovieRepository(private val movieDao: MovieDao) {
     suspend fun getOnTheAirTv(language: String = "ar", page: Int = 1): TmdbSearchResponse {
         return tmdbService.getOnTheAirTv(apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page)
     }
+
+    suspend fun getPersonDetails(personId: Int, language: String = "ar"): TmdbPersonDetails {
+        return tmdbService.getPersonDetails(personId, apiKey = BuildConfig.TMDB_API_KEY, language = language)
+    }
 }

@@ -124,3 +124,43 @@ data class TmdbEpisode(
     val overview: String?,
     @Json(name = "still_path") val stillPath: String?
 )
+
+@JsonClass(generateAdapter = true)
+data class TmdbPersonDetails(
+    val id: Int,
+    val name: String?,
+    @Json(name = "profile_path") val profilePath: String?,
+    val biography: String?,
+    @Json(name = "birthday") val birthday: String?,
+    @Json(name = "place_of_birth") val placeOfBirth: String?,
+    @Json(name = "known_for_department") val knownForDepartment: String?,
+    @Json(name = "also_known_as") val alsoKnownAs: List<String>?,
+    val gender: Int?,
+    @Json(name = "combined_credits") val combinedCredits: TmdbPersonCredits?,
+    @Json(name = "external_ids") val externalIds: TmdbExternalIds?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPersonCredits(
+    val cast: List<TmdbPersonCastItem>?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPersonCastItem(
+    val id: Int,
+    val title: String?,
+    val name: String?,
+    @Json(name = "poster_path") val posterPath: String?,
+    @Json(name = "media_type") val mediaType: String?,
+    @Json(name = "character") val character: String?,
+    @Json(name = "release_date") val releaseDate: String?,
+    @Json(name = "first_air_date") val firstAirDate: String?,
+    @Json(name = "vote_average") val voteAverage: Double?
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbExternalIds(
+    @Json(name = "imdb_id") val imdbId: String?,
+    @Json(name = "instagram_id") val instagramId: String?,
+    @Json(name = "twitter_id") val twitterId: String?
+)

@@ -31,3 +31,27 @@ val PaletteAppleBlue = Color(0xFF007AFF)    // Classic iOS style blue highlight
 val PaletteAppleRed = Color(0xFFFF3B30)     // Classic iOS error/delete red
 val PaletteMutedRed = Color(0xFFB35447)      // Muted warm clay/brick red — less jarring delete action
 val PaletteSuccess = Color(0xFF34C759)      // Classic iOS success green
+
+// Dynamic accent color options for user customization
+val AccentColors = mapOf(
+    "ذهبي" to Color(0xFFD6A45C),
+    "أزرق" to Color(0xFF007AFF),
+    "أخضر" to Color(0xFF34C759),
+    "بنفسجي" to Color(0xFF6C5CE7),
+    "أحمر" to Color(0xFFFF3B30),
+    "وردي" to Color(0xFFFF2D55),
+    "برتقالي" to Color(0xFFFF9500),
+    "تركواز" to Color(0xFF00C7BE)
+)
+
+// Secondary accent colors (muted versions)
+val AccentColorsSecondary = mapOf(
+    "ذهبي" to Color(0xFFE3B86E),
+    "أزرق" to Color(0xFF5AC8FA),
+    "أخضر" to Color(0xFF30D158),
+    "بنفسجي" to Color(0xFF8B7CF6),
+    "أحمر" to Color(0xFFFF6961),
+    "وردي" to Color(0xFFFF6482),
+    "برتقالي" to Color(0xFFFFB340),
+    "تركواز" to Color(0xFF66D4D1)
+)

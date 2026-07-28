@@ -289,6 +289,24 @@ fun PlayerScreen(
         onDispose { exoPlayer.release() }
     }
 
+    // --- Sleep timer ---
+    var sleepTimerMinutes by remember { mutableIntStateOf(0) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(sleepTimerMinutes) {
+        if (sleepTimerMinutes > 0) {
+            delay(sleepTimerMinutes * 60_000L)
+            if (exoPlayer.isPlaying) {
+                exoPlayer.pause()
+            }
+            sleepTimerMinutes = 0
+        }
+    }
+
+    // --- Brightness control ---
+    val brightnessSettings = context.contentResolver
+    var currentBrightness by remember { mutableFloatStateOf(0.5f) }
+    var showBrightnessOverlay by remember { mutableStateOf(false) }
+
     // --- Playback speed state ---
     var playbackSpeed by remember { mutableStateOf(1f) }
     LaunchedEffect(playbackSpeed) {
@@ -493,6 +511,52 @@ fun PlayerScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
 
+                // Sleep timer button
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("مؤقت النوم", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    TextButton(onClick = { showSleepTimerDialog = true }) {
+                        Text(
+                            if (sleepTimerMinutes > 0) "${sleepTimerMinutes} د" else "إيقاف",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                // Sleep timer dialog
+                if (showSleepTimerDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showSleepTimerDialog = false },
+                        title = { Text("مؤقت النوم") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(15, 30, 45, 60, 90).forEach { min ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            sleepTimerMinutes = min
+                                            showSleepTimerDialog = false
+                                        }.padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("$min دقيقة", fontWeight = FontWeight.Medium)
+                                        if (sleepTimerMinutes == min) Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                sleepTimerMinutes = 0
+                                showSleepTimerDialog = false
+                            }) { Text("إلغاء المؤقت") }
+                        }
+                    )
+                }
+
                 // Speed selector
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -531,6 +595,49 @@ fun PlayerScreen(
                     color = Color.Gray,
                     fontSize = 12.sp
                 )
+
+                // Quality selector row
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Spacer(Modifier.width(6.dp))
+                    Text("الجودة:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Spacer(Modifier.width(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        itemsIndexed(listOf("تلقائي", "480p", "720p", "1080p", "4K")) { _, q ->
+                            FilterChip(selected = q == "تلقائي", onClick = {}, label = { Text(q, fontSize = 10.sp) }, shape = RoundedCornerShape(8.dp))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                // Next episode suggestion
+                if (isTv) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("الحلقة التالية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                                Text("الموسم $startSeason - الحلقة ${startEpisode + 1}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                            }
+                            Button(
+                                onClick = { /* Play next episode */ },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) { Text("تشغيل", fontSize = 12.sp) }
+                        }
+                    }
+                }
 
                 // Subtitle selector
                 if (activeSubtitles.isNotEmpty()) {
@@ -624,7 +731,7 @@ private fun GestureOverlay(
         )
     }
 
-    // Volume swipe — rightmost 15%, outside the gesture Box to avoid overlap
+            // Volume swipe — rightmost 15%, outside the gesture Box to avoid overlap
     Box(
         modifier = Modifier
             .fillMaxHeight()
@@ -643,6 +750,10 @@ private fun GestureOverlay(
                             currentVol = newVol
                             onVolumeChange(newVol)
                         }
+                    }
+                    // Left side brightness gesture
+                    if (change.position.x < size.width * 0.15f) {
+                        change.consume()
                     }
                 }
             }

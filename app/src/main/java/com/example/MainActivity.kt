@@ -81,16 +81,25 @@ class MainActivity : ComponentActivity() {
             val context = applicationContext
             val prefs = context.getSharedPreferences("watchera_prefs", MODE_PRIVATE)
             var isDarkMode by remember { mutableStateOf(prefs.getBoolean("dark_mode", false)) }
+            var accentColorName by remember { mutableStateOf(prefs.getString("accent_color", "") ?: "") }
 
             // Listen for preference changes
             LaunchedEffect(Unit) {
                 while (true) {
                     val current = prefs.getBoolean("dark_mode", false)
+                    val currentAccent = prefs.getString("accent_color", "") ?: ""
                     if (current != isDarkMode) {
                         isDarkMode = current
                     }
+                    if (currentAccent != accentColorName) {
+                        accentColorName = currentAccent
+                    }
                     kotlinx.coroutines.delay(200)
                 }
+            }
+
+            val accentColor = remember(accentColorName) {
+                if (accentColorName.isNotEmpty()) com.example.ui.theme.AccentColors[accentColorName] else null
             }
 
             SideEffect {
@@ -100,7 +109,7 @@ class MainActivity : ComponentActivity() {
 
             @OptIn(ExperimentalFoundationApi::class)
             CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
-                MyApplicationTheme(darkTheme = isDarkMode) {
+                MyApplicationTheme(darkTheme = isDarkMode, accentColor = accentColor) {
                     MainAppContainer(deepLinkState = deepLinkState)
                 }
             }

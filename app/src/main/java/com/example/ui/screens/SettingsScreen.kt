@@ -4,6 +4,9 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,13 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +41,8 @@ import com.example.auth.AuthManager
 import com.example.auth.UserManager
 import com.example.auth.UserProfile
 import com.example.auth.ActivityLogManager
+import com.example.ui.theme.AccentColors
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -414,6 +413,331 @@ fun SettingsScreen(
                             checked = isDarkMode,
                             onCheckedChange = { viewModel.setDarkMode(it) }
                         )
+                    }
+                }
+            }
+
+            // Storage & Cache Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("التخزين والذاكرة", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    // Cache size display
+                    var cacheSizeText by remember { mutableStateOf("جاري الحساب...") }
+                    LaunchedEffect(Unit) {
+                        try {
+                            val cacheDir = context.cacheDir
+                            var size = 0L
+                            cacheDir.walkTopDown().forEach { size += it.length() }
+                            cacheSizeText = if (size > 1048576) String.format("%.1f MB", size / 1048576f) else String.format("%.1f KB", size / 1024f)
+                        } catch (_: Exception) { cacheSizeText = "غير معروف" }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("حجم ذاكرة التخزين المؤقت", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        Text(cacheSizeText, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    Button(
+                        onClick = {
+                            try {
+                                context.cacheDir.deleteRecursively()
+                                context.cacheDir.mkdirs()
+                            } catch (_: Exception) {}
+                            cacheSizeText = "0 KB"
+                            android.widget.Toast.makeText(context, "تم مسح ذاكرة التخزين المؤقت", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("مسح ذاكرة التخزين المؤقت", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    // Downloads size
+                    var dlSizeText by remember { mutableStateOf("جاري الحساب...") }
+                    LaunchedEffect(Unit) {
+                        try {
+                            val dlDir = File(context.filesDir, "downloads")
+                            var size = 0L
+                            if (dlDir.exists()) dlDir.walkTopDown().forEach { size += it.length() }
+                            dlSizeText = if (size > 1048576) String.format("%.1f MB", size / 1048576f) else String.format("%.1f KB", size / 1024f)
+                        } catch (_: Exception) { dlSizeText = "غير معروف" }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("حجم التحميلات", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        Text(dlSizeText, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                }
+            }
+
+            // Download Settings Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("إعدادات التحميل", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    var defaultQuality by remember { mutableStateOf(context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).getString("default_quality", "1080p") ?: "1080p") }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("الجودة الافتراضية", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        var expandQuality by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(onClick = { expandQuality = true }) { Text(defaultQuality, fontWeight = FontWeight.Bold) }
+                            DropdownMenu(expanded = expandQuality, onDismissRequest = { expandQuality = false }) {
+                                listOf("480p", "720p", "1080p", "2160p").forEach { q ->
+                                    DropdownMenuItem(text = { Text(q) }, onClick = {
+                                        defaultQuality = q
+                                        context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).edit().putString("default_quality", q).apply()
+                                        expandQuality = false
+                                    })
+                                }
+                            }
+                        }
+                    }
+
+                    var wifiOnly by remember { mutableStateOf(context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).getBoolean("wifi_only_download", false)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("التحميل عبر WiFi فقط", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Text("يمنع التحميل عبر بيانات الجوال", fontSize = 10.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                        Switch(checked = wifiOnly, onCheckedChange = {
+                            wifiOnly = it
+                            context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).edit().putBoolean("wifi_only_download", it).apply()
+                        })
+                    }
+
+                    var dataSaver by remember { mutableStateOf(context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).getBoolean("data_saver", false)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("توفير البيانات", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Text("تحميل صور بجودة منخفضة", fontSize = 10.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                        Switch(checked = dataSaver, onCheckedChange = {
+                            dataSaver = it
+                            context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).edit().putBoolean("data_saver", it).apply()
+                        })
+                    }
+                }
+            }
+
+            // Display Settings Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.DisplaySettings, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("إعدادات العرض", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    var autoPlay by remember { mutableStateOf(context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).getBoolean("auto_play_trailers", false)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("تشغيل تلقائي للعروض", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Text("عرض دعاية الفيلم تلقائياً", fontSize = 10.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                        Switch(checked = autoPlay, onCheckedChange = {
+                            autoPlay = it
+                            context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE).edit().putBoolean("auto_play_trailers", it).apply()
+                        })
+                    }
+
+                    // Font scale
+                    val prefs = context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
+                    var fontSizeScale by remember { mutableIntStateOf(prefs.getInt("font_scale", 0)) }
+                    val scaleLabels = listOf("صغير", "وسط", "كبير", "كبير جداً")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("حجم الخط", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            scaleLabels.forEachIndexed { idx, label ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (fontSizeScale == idx) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable {
+                                            fontSizeScale = idx
+                                            prefs.edit().putInt("font_scale", idx).apply()
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (fontSizeScale == idx) Color.White else MaterialTheme.colorScheme.onBackground)
+                                }
+                            }
+                        }
+                    }
+
+                    // Accent color picker
+                    val currentAccent = prefs.getString("accent_color", "") ?: ""
+                    Text("لون التطبيق", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        items(AccentColors.toList()) { (name, color) ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(color)
+                                        .clickable { prefs.edit().putString("accent_color", name).apply() }
+                                        .then(
+                                            if (currentAccent == name) Modifier.border(3.dp, MaterialTheme.colorScheme.onBackground, androidx.compose.foundation.shape.CircleShape)
+                                            else Modifier
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (currentAccent == name) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
+                                Text(name, fontSize = 8.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // About Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("حول التطبيق", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("الإصدار", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        Text("1.0.0 (build 1)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("المطور", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+                        Text("فريق ووتشيرا", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                    Text(
+                        text = "ووتشيرا هو تطبيق لمشاهدة وتحميل الأفلام والمسلسلات مع دعم الذكاء الاصطناعي والترجمة.",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        lineHeight = 18.sp
+                    )
+                    // Rate app button
+                    Button(
+                        onClick = {
+                            try {
+                                val uri = android.net.Uri.parse("market://details?id=${context.packageName}")
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+                            } catch (_: Exception) {
+                                val uri = android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.2f), contentColor = Color(0xFFB8860B))
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("تقييم التطبيق", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    // Share app button
+                    Button(
+                        onClick = {
+                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, "جرب ووتشيرا لمشاهدة وتحميل الأفلام والمسلسلات!\nhttps://watchera.com")
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة ووتشيرا"))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("مشاركة التطبيق", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    // Feedback button
+                    Button(
+                        onClick = {
+                            val emailIntent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                data = android.net.Uri.parse("mailto:watchera@example.com")
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "اقتراح بخصوص ووتشيرا")
+                            }
+                            context.startActivity(emailIntent)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Feedback, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("إرسال اقتراح", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // Player Settings Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("إعدادات المشغل", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground)
+                    }
+                    val playerPrefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
+                    var backgroundPlayback by remember { mutableStateOf(playerPrefs.getBoolean("background_playback", false)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("التشغيل في الخلفية", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Text("استمرار الصوت عند تصغير التطبيق", fontSize = 10.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                        Switch(checked = backgroundPlayback, onCheckedChange = {
+                            backgroundPlayback = it
+                            playerPrefs.edit().putBoolean("background_playback", it).apply()
+                        })
+                    }
+                    var pipMode by remember { mutableStateOf(playerPrefs.getBoolean("pip_mode", false)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("صورة داخل صورة (PiP)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
+                            Text("مشاهدة مصغرة أثناء استخدام تطبيقات أخرى", fontSize = 10.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                        Switch(checked = pipMode, onCheckedChange = {
+                            pipMode = it
+                            playerPrefs.edit().putBoolean("pip_mode", it).apply()
+                        })
                     }
                 }
             }

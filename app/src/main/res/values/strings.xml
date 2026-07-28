@@ -1,3 +1,35 @@
 <resources>
     <string name="app_name">Watchera</string>
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_explore">استكشاف</string>
+    <string name="nav_downloads">التحميلات</string>
+    <string name="nav_settings">الإعدادات</string>
+    <!-- Common actions -->
+    <string name="action_play">مشاهدة الآن</string>
+    <string name="action_download">تحميل</string>
+    <string name="action_share">مشاركة</string>
+    <string name="action_search">بحث</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_retry">إعادة المحاولة</string>
+    <!-- Player -->
+    <string name="player_speed">السرعة</string>
+    <string name="player_fullscreen">ملء الشاشة</string>
+    <string name="player_sleep_timer">مؤقت النوم</string>
+    <string name="player_next_episode">الحلقة التالية</string>
+    <!-- Downloads -->
+    <string name="download_wifi_only">WiFi فقط</string>
+    <string name="download_quality">الجودة</string>
+    <string name="download_paused">متوقف</string>
+    <string name="download_completed">مكتمل</string>
+    <string name="download_error">خطأ</string>
+    <!-- AI -->
+    <string name="ai_chat_title">المساعد الذكي</string>
+    <string name="ai_input_hint">اسأل عن فيلم أو مسلسل...</string>
+    <!-- Errors -->
+    <string name="error_network">تعذر الاتصال بالشبكة</string>
+    <string name="error_generic">حدث خطأ غير متوقع</string>
+    <string name="error_empty_results">لا توجد نتائج</string>
 </resources>

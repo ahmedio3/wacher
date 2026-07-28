@@ -28,6 +28,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.chat.Message
 import com.example.chat.ReplyTo
+import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private const val SWIPE_THRESHOLD = 100f
@@ -162,6 +164,23 @@ fun ChatMessageBubble(
                             fontSize = 15.sp,
                             color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface
                         )
+                    }
+
+                    // Reactions row
+                    if (message.reactions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            message.reactions.forEach { (emoji, count) ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isMine) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("$emoji $count", fontSize = 11.sp, color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
                     }
                 }
             }

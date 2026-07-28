@@ -303,6 +303,39 @@ class MovieViewModel(
         _isMovieBoxSearchMode.value = isMovieBox
     }
 
+    // ---- Category Filter State ----
+    private val _activeCategory = MutableStateFlow("الكل")
+    val activeCategory: StateFlow<String> = _activeCategory.asStateFlow()
+
+    fun setActiveCategory(category: String) {
+        _activeCategory.value = category
+        fetchHomeContent() // Refresh with category filter
+    }
+
+    // ---- Continue Watching ----
+    val continueWatching: StateFlow<List<DownloadEntity>> = downloads.map { list ->
+        list.filter { it.status == "completed" || (it.progress > 0 && it.progress < 100) }
+            .sortedByDescending { it.addedAt }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ---- Download Speed Limit ----
+    private val _downloadSpeedLimit = MutableStateFlow(sharedPrefs.getInt("download_speed_limit", 0))
+    val downloadSpeedLimit: StateFlow<Int> = _downloadSpeedLimit.asStateFlow()
+
+    fun setDownloadSpeedLimit(kbps: Int) {
+        sharedPrefs.edit().putInt("download_speed_limit", kbps).apply()
+        _downloadSpeedLimit.value = kbps
+    }
+
+    // ---- WiFi Only Download ----
+    private val _wifiOnlyDownload = MutableStateFlow(sharedPrefs.getBoolean("wifi_only_download", false))
+    val wifiOnlyDownload: StateFlow<Boolean> = _wifiOnlyDownload.asStateFlow()
+
+    fun setWifiOnlyDownload(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("wifi_only_download", enabled).apply()
+        _wifiOnlyDownload.value = enabled
+    }
+
     fun setSearchQueryOnly(query: String) {
         _searchQuery.value = query
         if (query.isEmpty()) {
@@ -1092,6 +1125,34 @@ class MovieViewModel(
             val image = repository.getSavedImageById(id) ?: return@launch
             File(image.localFilePath).delete()
             repository.removeSavedImage(id)
+        }
+    }
+
+    // ---- Person/Actor details ----
+    private val _personDetails = MutableStateFlow<RequestState<TmdbPersonDetails>?>(null)
+    val personDetails: StateFlow<RequestState<TmdbPersonDetails>?> = _personDetails.asStateFlow()
+
+    fun fetchPersonDetails(personId: Int) {
+        viewModelScope.launch {
+            _personDetails.value = RequestState.Loading
+            try {
+                val response = repository.getPersonDetails(personId, currentLang)
+                _personDetails.value = RequestState.Success(response)
+            } catch (e: Exception) {
+                _personDetails.value = RequestState.Error(e.localizedMessage ?: "فشل تحميل")
+            }
+        }
+    }
+
+    // ---- Clear app caches ----
+    fun clearAppCache(onDone: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>()
+                app.cacheDir.deleteRecursively()
+                app.cacheDir.mkdirs()
+            } catch (_: Exception) {}
+            onDone()
         }
     }
 
