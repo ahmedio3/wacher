@@ -8,11 +8,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ClosedCaption
-
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,11 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,19 +28,12 @@ import com.google.firebase.auth.FirebaseAuth
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreScreen(
-    onNavigateToAdultContent: (String) -> Unit = {},
     onNavigateToSubtitleDownloads: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToChat: (String, Boolean) -> Unit = { _, _ -> },
     onNavigateToAiChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val prefs = context.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
-    var unlocked by remember { mutableStateOf(prefs.getBoolean("unsafe_mode_unlocked", false)) }
-    var showVerifySheet by remember { mutableStateOf(false) }
-    var showPinSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     Scaffold(
@@ -122,31 +109,6 @@ fun ExploreScreen(
                 onClick = onNavigateToWatchlist
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Unsafe mode button
-            Button(
-                onClick = {
-                    if (unlocked) onNavigateToAdultContent("")
-                    else showVerifySheet = true
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("فتح الوضع الغير آمن", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             if (currentUserId.isNotEmpty()) {
@@ -173,99 +135,6 @@ fun ExploreScreen(
         }
     }
 
-    if (showVerifySheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showVerifySheet = false },
-            sheetState = sheetState,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "ابعت صورة بتاعك",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "الطول: فوق 7 سنتي (اختياري)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                )
-                Button(
-                    onClick = {
-                        showVerifySheet = false
-                        showPinSheet = true
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("متابعة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            }
-        }
-    }
-
-    if (showPinSheet) {
-        var pin by remember { mutableStateOf("") }
-        ModalBottomSheet(
-            onDismissRequest = { showPinSheet = false },
-            sheetState = sheetState,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { if (it.length <= 4) pin = it },
-                    label = { Text("أدخل رمز PIN") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(
-                    onClick = {
-                        if (pin == "2580") {
-                            prefs.edit().putBoolean("unsafe_mode_unlocked", true).apply()
-                            unlocked = true
-                            showPinSheet = false
-                            onNavigateToAdultContent("")
-                        } else {
-                            android.widget.Toast.makeText(context, "رمز PIN غير صحيح", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("تأكيد", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            }
-        }
-    }
 }
 
 @Composable

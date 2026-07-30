@@ -62,7 +62,6 @@ import com.example.ui.components.bouncyOverscroll
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MovieViewModel
 import com.example.ui.viewmodel.ViewModelFactory
-import com.example.data.remote.moviebox.viewmodel.MovieBoxViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -253,8 +252,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             floatingActionButton = {
                 val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
                                     || currentRoute?.startsWith("player") == true
-                                    || currentRoute == "adult_content"
-                                    || currentRoute?.startsWith("adult_content") == true
                 if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
                     val config = LocalConfiguration.current
                     val screenWidthDp = config.screenWidthDp.toFloat()
@@ -363,10 +360,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
 
             composable("explore") {
                 ExploreScreen(
-                    onNavigateToAdultContent = { queries ->
-                        val encQueries = java.net.URLEncoder.encode(queries, "UTF-8")
-                        navController.navigate("adult_content?queries=$encQueries")
-                    },
                     onNavigateToSubtitleDownloads = {
                         navController.navigate("subtitle-downloads")
                     },
@@ -389,28 +382,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 com.example.ai.ui.AiChatScreen(
                     viewModel = aiViewModel,
                     onBackClick = { navController.popBackStack() }
-                )
-            }
-
-            composable(
-                route = "adult_content?queries={queries}",
-                arguments = listOf(
-                    navArgument("queries") { type = NavType.StringType; defaultValue = "" }
-                )
-            ) { backStackEntry ->
-                val queries = backStackEntry.arguments?.getString("queries") ?: ""
-                val adultViewModel: MovieBoxViewModel = viewModel(
-                    factory = ViewModelFactory(context)
-                )
-                AdultContentScreen(
-                    viewModel = adultViewModel,
-                    initialQueries = java.net.URLDecoder.decode(queries, "UTF-8"),
-                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
-                        navController.navigate(
-                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
-                        )
-                    },
-                    onBack = { navController.popBackStack() }
                 )
             }
 

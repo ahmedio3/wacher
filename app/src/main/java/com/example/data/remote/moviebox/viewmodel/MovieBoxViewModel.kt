@@ -37,9 +37,6 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
     private val _itemDetails = MutableStateFlow<MovieBoxState<ItemDetailResult>>(MovieBoxState.Idle)
     val itemDetails: StateFlow<MovieBoxState<ItemDetailResult>> = _itemDetails
 
-    private val _adultContent = MutableStateFlow<MovieBoxState<List<SearchResult>>>(MovieBoxState.Idle)
-    val adultContent: StateFlow<MovieBoxState<List<SearchResult>>> = _adultContent
-
     fun search(keyword: String, language: String? = null) {
         viewModelScope.launch {
             _searchResults.value = MovieBoxState.Loading
@@ -126,24 +123,6 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
                 _itemDetails.value = MovieBoxState.Error("انتهت مهلة تحميل التفاصيل. تحقق من شبكتك.")
             } catch (e: Exception) {
                 _itemDetails.value = MovieBoxState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
-            }
-        }
-    }
-
-    fun fetchAdultContent(type: String? = null, queries: String? = null, limit: Int = 10, sort: String? = null) {
-        viewModelScope.launch {
-            _adultContent.value = MovieBoxState.Loading
-            try {
-                val result = withTimeout(30_000L) {
-                    repository.adultContent(type, queries, limit, sort)
-                }
-                result
-                    .onSuccess { _adultContent.value = MovieBoxState.Success(it) }
-                    .onFailure { _adultContent.value = MovieBoxState.Error(it.message ?: "Unknown error") }
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                _adultContent.value = MovieBoxState.Error("انتهت مهلة التحميل. تحقق من شبكتك.")
-            } catch (e: Exception) {
-                _adultContent.value = MovieBoxState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
             }
         }
     }

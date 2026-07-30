@@ -16,7 +16,6 @@ interface MovieBoxApi {
     suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
     suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
-    suspend fun adultContent(type: String? = null, queries: String? = null, limit: Int = 10, sort: String? = null): Result<List<SearchResult>>
 }
 
 class MovieBoxApiImpl : MovieBoxApi {
@@ -424,59 +423,6 @@ class MovieBoxApiImpl : MovieBoxApi {
                         hasResource = item.optBoolean("has_resource", false)
                     )
                 )
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-
-    override suspend fun adultContent(type: String?, queries: String?, limit: Int, sort: String?): Result<List<SearchResult>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val urlBuilder = "$baseUrl/adult".toHttpUrlOrNull()?.newBuilder()?.apply {
-                    addQueryParameter("limit", limit.toString())
-                    if (type != null) addQueryParameter("type", type)
-                    if (queries != null) addQueryParameter("queries", queries)
-                    if (sort != null) addQueryParameter("sort", sort)
-                } ?: return@withContext Result.failure(Exception("Invalid URL"))
-
-                val request = Request.Builder().url(urlBuilder.build()).get().build()
-                val response = httpClient.newCall(request).execute()
-
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
-                }
-
-                val bodyStr = response.body?.string() ?: ""
-                val rootJson = JSONObject(bodyStr)
-                if (rootJson.optString("status") != "success") {
-                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
-                }
-
-                val resultsArray = rootJson.optJSONArray("results")
-                val list = mutableListOf<SearchResult>()
-                if (resultsArray != null) {
-                    for (i in 0 until resultsArray.length()) {
-                        val item = resultsArray.optJSONObject(i) ?: continue
-                        list.add(
-                            SearchResult(
-                                subjectId = item.optString("subject_id"),
-                                title = item.optString("title"),
-                                type = item.optString("type"),
-                                posterUrl = item.optString("poster"),
-                                year = item.optString("year"),
-                                hasResource = item.optBoolean("has_resource", false),
-                                rating = item.optDouble("rating", 0.0),
-                                seasons = item.optInt("seasons", 0),
-                                country = item.optString("country"),
-                                description = item.optString("description"),
-                                durationSeconds = item.optInt("duration_seconds", 0)
-                            ).withParsedLanguages(item.optJSONArray("languages"))
-                             .withParsedGenre(item.optJSONArray("genre"))
-                        )
-                    }
-                }
-                Result.success(list)
             } catch (e: Exception) {
                 Result.failure(e)
             }
