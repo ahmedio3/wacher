@@ -9,8 +9,6 @@ import com.example.data.local.WatchlistEntity
 import com.example.data.remote.RetrofitClient
 import com.example.data.remote.TmdbMovieDetails
 import com.example.data.remote.TmdbTvDetails
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -34,10 +32,8 @@ class AiToolExecutor(private val context: Context) {
                 "search_tmdb" -> searchTmdb(args)
                 "get_watchlist" -> getWatchlist(args)
                 "get_downloads" -> getDownloads(args)
-                "get_activity_log" -> getActivityLog(args)
                 "add_to_watchlist" -> addToWatchlist(args)
                 "get_tmdb_details" -> getTmdbDetails(args)
-                "download_content" -> downloadContent(args)
                 else -> ToolResult.Error("Unknown tool: $name")
             }
         } catch (e: Exception) {
@@ -50,7 +46,7 @@ class AiToolExecutor(private val context: Context) {
         val response = tmdbService.searchMulti(
             apiKey = BuildConfig.TMDB_API_KEY,
             query = query,
-            language = "ar"
+            language = "en"
         )
         val results = response.results?.filter {
             it.mediaType == "movie" || it.mediaType == "tv"
@@ -118,29 +114,6 @@ class AiToolExecutor(private val context: Context) {
         return ToolResult.Success(json.toString(2))
     }
 
-    private suspend fun getActivityLog(args: Map<String, Any>): ToolResult {
-        val limit = (args["limit"] as? Number)?.toInt()?.coerceIn(1, 50) ?: 20
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-            ?: return ToolResult.Success("المستخدم غير مسجل الدخول")
-
-        var logs = listOf<com.example.data.local.ActivityLogEntity>()
-        try {
-            com.example.auth.ActivityLogManager.getLogs(uid).collect { logs = it.take(limit) }
-        } catch (_: Exception) {}
-
-        if (logs.isEmpty()) return ToolResult.Success("لا توجد نشاطات حديثة")
-
-        val json = JSONArray()
-        for (item in logs) {
-            val obj = JSONObject()
-            obj.put("type", item.type)
-            obj.put("title", item.title)
-            obj.put("timestamp", item.timestamp)
-            json.put(obj)
-        }
-        return ToolResult.Success(json.toString(2))
-    }
-
     private suspend fun addToWatchlist(args: Map<String, Any>): ToolResult {
         val tmdbId = args["tmdb_id"]?.toString() ?: return ToolResult.Error("Missing tmdb_id")
         val mediaType = args["media_type"]?.toString() ?: return ToolResult.Error("Missing media_type")
@@ -176,7 +149,7 @@ class AiToolExecutor(private val context: Context) {
             val details = tmdbService.getMovieDetails(
                 movieId = tmdbId,
                 apiKey = BuildConfig.TMDB_API_KEY,
-                language = "ar",
+                language = "en",
                 appendToResponse = "credits"
             )
             formatMovieDetails(details)
@@ -184,7 +157,7 @@ class AiToolExecutor(private val context: Context) {
             val details = tmdbService.getTvDetails(
                 tvId = tmdbId,
                 apiKey = BuildConfig.TMDB_API_KEY,
-                language = "ar",
+                language = "en",
                 appendToResponse = "credits"
             )
             formatTvDetails(details)
@@ -222,30 +195,4 @@ class AiToolExecutor(private val context: Context) {
         return ToolResult.Success(json.toString(2))
     }
 
-    private suspend fun downloadContent(args: Map<String, Any>): ToolResult {
-        val tmdbId = args["tmdb_id"]?.toString() ?: return ToolResult.Error("Missing tmdb_id")
-        val mediaType = args["media_type"]?.toString() ?: return ToolResult.Error("Missing media_type")
-        val title = args["title"]?.toString() ?: return ToolResult.Error("Missing title")
-        val season = (args["season"] as? Number)?.toInt() ?: 0
-        val episode = (args["episode"] as? Number)?.toInt() ?: 0
-        val quality = args["quality"]?.toString() ?: "1080p"
-
-        val desc = if (mediaType == "tv") {
-            "تحميل $title - الموسم $season الحلقة $episode بجودة $quality"
-        } else {
-            "تحميل فيلم $title بجودة $quality"
-        }
-
-        return ToolResult.NeedsApproval(
-            description = desc,
-            executeData = mapOf(
-                "tmdb_id" to tmdbId,
-                "media_type" to mediaType,
-                "title" to title,
-                "season" to season,
-                "episode" to episode,
-                "quality" to quality
-            )
-        )
-    }
 }

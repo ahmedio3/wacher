@@ -18,6 +18,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ai.AiViewModel
 import com.example.ai.PROVIDER_CONFIGS
+import com.example.ai.ToolExecutionStatus
 import com.example.ui.components.bouncyOverscroll
 
 @Composable
@@ -34,7 +35,7 @@ fun AiChatScreen(
         ?.find { it.id == state.currentModelId }
     val supportsVision = currentModel?.supportsVision ?: false
 
-    LaunchedEffect(state.messages.size, state.isStreaming) {
+    LaunchedEffect(state.messages.size, state.isStreaming, state.toolExecutions.size) {
         if (state.messages.isNotEmpty() || state.isStreaming) {
             listState.animateScrollToItem(
                 listState.layoutInfo.totalItemsCount.coerceAtLeast(0)
@@ -76,12 +77,29 @@ fun AiChatScreen(
                                 .bouncyOverscroll(),
                             contentPadding = PaddingValues(top = 56.dp, bottom = 8.dp)
                         ) {
-                            itemsIndexed(state.messages) { _, msg ->
+                            itemsIndexed(state.messages) { index, msg ->
                                 AiMessageBubble(message = msg)
+
+                                val isLastMessage = index == state.messages.size - 1
+                                val hasMoreMessages = index < state.messages.size - 1
+                                val nextMessageIsUser = if (!hasMoreMessages) false
+                                else state.messages.getOrNull(index + 1)?.role?.value == "user"
+
+                                if (isLastMessage && state.toolExecutions.isNotEmpty() && !nextMessageIsUser) {
+                                    state.toolExecutions.forEach { execution ->
+                                        ToolCallCard(execution = execution)
+                                    }
+                                }
                             }
 
-                            items(state.toolExecutions) { execution ->
-                                ToolCallCard(execution = execution)
+                            if (state.isStreaming && state.toolExecutions.isNotEmpty()) {
+                                item {
+                                    Column {
+                                        state.toolExecutions.forEach { execution ->
+                                            ToolCallCard(execution = execution)
+                                        }
+                                    }
+                                }
                             }
 
                             if (state.pendingApproval != null) {
@@ -110,14 +128,14 @@ fun AiChatScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = "كيف يمكنني مساعدتك؟",
-                                    fontSize = 18.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    fontSize = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "يمكنك سؤالي عن الأفلام، المسلسلات، أو إدارة محتواك",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(horizontal = 40.dp)
                                 )
@@ -134,7 +152,6 @@ fun AiChatScreen(
                     )
                 }
 
-                // Header always on top
                 AiHeader(
                     providerType = state.currentProviderType,
                     modelId = state.currentModelId,
@@ -148,7 +165,6 @@ fun AiChatScreen(
                         .zIndex(2f)
                 )
 
-                // Model selector overlay (expands from header area)
                 ModelSelectorPanel(
                     expanded = selectorExpanded,
                     currentProviderType = state.currentProviderType,
@@ -168,7 +184,6 @@ fun AiChatScreen(
             }
         }
 
-        // Conversations drawer
         ConversationsDrawer(
             visible = drawerOpen,
             conversations = state.conversations,

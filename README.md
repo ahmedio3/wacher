@@ -1,847 +1,703 @@
 <div align="center">
 
-# 🎬 واتشر — Watcher (Cinemios)
+# واتشر — Watchera (Cinemios)
 
-**تطبيق Android متكامل لعرض وتحميل الأفلام والمسلسلات مع دعم كامل للترجمية العربية**
-
-[![Build Debug APK](https://github.com/ahmedio3/wacher/actions/workflows/build.yml/badge.svg)](https://github.com/ahmedio3/wacher/actions/workflows/build.yml)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-blue.svg)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-green.svg)](https://developer.android.com/jetpack/compose)
-[![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg)](https://developer.android.com/about/versions/nougat)
-[![License](https://img.shields.io/badge/License-Educational-purple.svg)](LICENSE)
+**تطبيق Android لمشاهدة وتحميل الأفلام والمسلسلات مع دردشة ومساعد ذكاء اصطناعي**
 
 </div>
 
 ---
 
-## 📋 جدول المحتويات
+## 📋 المحتويات
 
-- [🎯 نظرة عامة](#-نظرة-عامة)
-- [✨ المميزات بالتفصيل](#-المميزات-بالتفصيل)
-- [🏗️ بنية التطبيق (Architecture)](#️-بنية-التطبيق-architecture)
-- [📱 جميع الشاشات](#-جميع-الشاشات)
-- [📂 هيكل المشروع الكامل](#-هيكل-المشروع-الكامل)
-- [🛠️ التقنيات المستخدمة (Tech Stack)](#️-التقنيات-المستخدمة-tech-stack)
-- [💬 نظام الترجمة (3 مصادر)](#-نظام-الترجمة-3-مصادر)
-- [📥 نظام التحميل متعدد الخيوط](#-نظام-التحميل-متعدد-الخيوط)
-- [🤖 نظام AI Chat](#-نظام-ai-chat)
-- [🔐 نظام المصادقة](#-نظام-المصادقة)
-- [🎬 تكامل MovieBox](#-تكامل-moviebox)
-- [🔥 تكامل Firebase](#-تكامل-firebase)
-- [🚀 البدء مع المشروع](#-البدء-مع-المشروع)
-- [🔧 الإعدادات والبيئة](#-الإعدادات-والبيئة)
-- [📋 CI/CD و GitHub Actions](#-cicd-و-github-actions)
-- [🧪 الاختبارات](#-الاختبارات)
-- [📝 سجل التحديثات](#-سجل-التحديثات)
+- [نظرة عامة](#نظرة-عامة)
+- [إحصائيات المشروع](#إحصائيات-المشروع)
+- [بنية التطبيق](#بنية-التطبيق)
+- [الشاشات](#الشاشات)
+- [التقنيات والمكتبات](#التقنيات-والمكتبات)
+- [الأنظمة الفرعية](#الأنظمة-الفرعية)
+- [هيكل الملفات](#هيكل-الملفات)
+- [التشغيل](#التشغيل)
 
 ---
 
-## 🎯 نظرة عامة
+## نظرة عامة
 
-**واتشر** هو تطبيق Android مبني بالكامل باستخدام **Jetpack Compose** و **Material Design 3** مع دعم كامل للغة العربية (RTL). يتيح التطبيق تصفح الأفلام والمسلسلات، مشاهدتها عبر البث المباشر (streaming)، تحميلها للمشاهدة بدون إنترنت، مع نظام ترجمة متكامل يدعم 3 مصادر مختلفة. دلوقتي ال AI.
+**واتشر** تطبيق Android باللغة العربية (RTL) يتيح:
 
-**البيانات الوصفية** (posters, descriptions, cast) تأتي من **TMDB**.
-**مصادر البث والتحميل** تأتي من **MovieBox API** عبر Backend وسيط.
-**الترجمة** من 3 مصادر: MovieBox (الأساسي)، Subdl، و OpenSubtitles.
-**المحادثة الجماعية** عبر Firebase Realtime Database.
+- **تصفح واكتشاف** الأفلام والمسلسلات عبر TMDB
+- **مشاهدة البث المباشر** عبر MovieBox API باستخدام ExoPlayer
+- **تحميل متعدد الخيوط** (8 خيوط) للمشاهدة بدون إنترنت
+- **ترجمة من 3 مصادر**: MovieBox + Subdl + OpenSubtitles
+- **دردشة جماعية وخاصة** عبر Firebase Realtime Database
+- **مساعد AI** مع Gemini و OpenAI-compatible providers
+- **مزامنة قائمة المشاهدة** عبر Firebase
 
+---
 
-### 📊 إحصائيات المشروع
+## إحصائيات المشروع
 
 | المقياس | القيمة |
 |---------|--------|
-| إجمالي ملفات Kotlin | ~55 ملف |
-| إجمالي أسطر الكود | ~14,000 سطر |
-| عدد الشاشات | 16 شاشة |
-| عدد الـ Composables | 25+ |
-| APIs خارجية | TMDB + MovieBox + Subdl + OpenSubtitles + Firebase |
+| إجمالي الملفات | **131** |
+| ملفات Kotlin | **92** |
+| الشاشات | **16** شاشة |
+| مكونات UI | **17** مكون قابل لإعادة الاستخدام |
+| عدد ViewModels | 4 (Movie, MovieBox, Ai) |
+| عدد Entities | 8 (Room) |
+| قاعدة البيانات | Room — version 15 |
+| التطبيق ID | `com.aistudio.cinemios.fxtyr` |
+| Kotlin | 2.2.10 |
+| Compose BOM | 2024.09.00 |
+| AGP | 9.1.1 |
+| Min SDK | 24 (Android 6.0) |
+| Target/Compile SDK | 36 (Android 16) |
 
 ---
 
-## ✨ المميزات بالتفصيل
+## بنية التطبيق
 
-### 🎥 1. نظام البث والمشاهدة
-
-#### التشغيل عبر الإنترنت (Online Streaming)
-- **ExoPlayer / Media3** — المشغل الأساسي
-- **HLS (m3u8)** + **MP4 progressive** — صيغ البث المدعومة
-- **جودة متعددة** — 360p, 480p, 720p, 1080p (حسب المصدر)
-- **واجهة مشاهدة كاملة** — PlayerScreen مع تحكمات متقدمة
-- **إيماءات التحكم**:
-  - **نقر مزدوج (Double-tap)** — التقديم / التأخير 10 ثوانٍ (الجهة اليمنى واليسرى)
-  - **ضغط مطول (Long-press)** — تشغيل بسرعة 2x مع صوت
-  - **سحب رأسي (Vertical swipe)** — تعديل مستوى الصوت (الجهة اليسرى) / الإضاءة (الجهة اليمنى)
-  - **إخفاء تلقائي** — التحكمات تختفي بعد 4 ثوانٍ من عدم التفاعل
-  - **شاشة كاملة** — وضع landscape تلقائي
-  - **استئناف التشغيل** — حفظ آخر موضع تشغيل في SharedPreferences لكل mediaId
-
-#### التشغيل بدون إنترنت (Offline Playback)
-- **OfflinePlayerScreen** — مشغل سينمائي كامل بواجهة أفقية
-- **تراكب الترجمة المخصص (Custom Subtitle Overlay)** — Canvas مخصص يعرض الترجمة على الفيديو
-- **قائمة الحلقات الجانبية** — التبديل السريع بين حلقات المسلسل المحمّلة
-- **التحكم بالسرعة** — 0.5x إلى 3x
-- **مؤشر البطارية والوقت** — معروض أعلى الشاشة
-- **تحكم بالصوت والإضاءة** — عن طريق السحب الرأسي
-- **دعم التشغيل الخلفي** — استمرار الصوت عند تصغير التطبيق
-
-### 📥 2. نظام التحميل متعدد الخيوط
-
-- **8 خيوط متوازية (8-thread parallel)** — `MultiThreadDownloader` يستخدم HTTP Range Requests
-- **استئناف التحميل** — التحميل يستأنف بعد إغلاق التطبيق (download progress يُحفظ على القرص)
-- **إيقاف مؤقت / متابعة** — pause/resume لكل تحميل على حدة
-- **إعادة المحاولة التلقائية** — عند فشل جزء من التحميل
-- **حساب السرعة** — عرض سرعة التحميل الفعلية (مثل: 2.5 MB/s)
-- **إدارة المساحة** — التحقق من المساحة المتوفرة قبل بدء التحميل
-- **واجهة تحميل تفاعلية** — `MovieBoxDownloadSheet` مع اختيار الجودة، شريط تقدم، زر إلغاء
-- **حفظ في المعرض** — إمكانية تصدير الفيديو إلى معرض الجهاز
-- **إشعار التحميل** — foreground service مع تحديث مستمر
-
-### 💬 3. نظام الترجمة (3 مصادر)
-
-#### نظام متكامل بثلاث صفحات
-- **MovieBox (المصدر الأساسي)** — ترجمات من MovieBox API عبر الـ backend
-- **Subdl (مصدر إضافي)** — API مباشر: `api.subdl.com` باستخدام مفتاح API
-- **OpenSubtitles (مصدر إضافي)** — API مباشر: `api.opensubtitles.com` مع مصادقة Api-Key
-
-#### محرك الترجمة المخصص
-- **دقة عالية** — `SubtitleParser` يدقق في كل تفاصيل صيغة SRT/VTT
-- **تعديل الموضع (Y Offset)** — تحريك الترجمة لأعلى/أسفل بمقدار 1 أو 10 بكسل
-- **مزامنة الوقت (Time Sync)** — تقديم أو تأخير الترجمة بـ ±100ms
-- **تغيير الحجم** — تكبير/تصغير خط الترجمة
-- **إخفاء/إظهار** — إخفاء الترجمة مؤقتاً مع إمكانية الرجوع
-- **ألوان مخصصة** — خلفية شبه شفافة + نص أبيض بظل
-
-#### آلية التحميل
-- **كشف نوع الملف تلقائياً** — ZIP, GZip, SRT, VTT
-- **دعم GZip** — OpenSubtitles تُرجع ملفات `.gz` يتم فك ضغطها بـ `GZIPInputStream`
-- **استخراج ZIP** — فك ضغط ملفات ZIP واستخراج ملف `.srt/.vtt` المناسب
-- **مطابقة الحلقات** — في ملفات ZIP الموسمية، يستخرج التطبيق الترجمة الخاصة بكل حلقة تلقائياً
-- **مهلات زمنية (Timeouts)** — connectTimeout 15s, readTimeout 20-30s
-
-### 4. 🗨️ الدردشة الجماعية (Global Chat)
-
-- **Firebase Realtime Database** — تخزين ومزامنة الرسائل فورياً
-- **سحب للرد (Swipe-to-Reply)** — إيماءة شبيهة بـ iMessage
-- **مؤشر الكتابة (Typing Indicator)** — رؤية المستخدمين الآخرين أثناء الكتابة
-- **إشعارات الخلفية** — `ChatNotificationService` foreground service
-- **رموز تعبيرية** — دعم كامل للإيموجي
-- **تنسيق الوقت** — عرض تاريخ ووقت كل رسالة
-- **حذف الرسائل** — حذف رسائلك الخاصة
-- **رسائل النظام (Admin broadcasts)** — إشعارات من الأدمن (Firebase RTDB key: `admin_broadcasts`)
-
-### 5. 🤖 AI Chat
-
-- **مزودون متعددون** — أي مزود متوافق مع OpenAI API (مثل: OpenAI, Groq, OpenRouter, DeepSeek، وغيرها)
-- **إدارة المزودين** — إضافة، تعديل، حذف المزودين عبر واجهة المستخدم
-- **نماذج متعددة لكل مزود** — إضافة عدة نماذج مع خيارات `thinkingEffort` و `webSearch`
-- **تدفق الردود (Streaming)** — عرض الردود فور ورودها عبر SSE
-- **البحث في الويب (Web Search)** — دعم أداة `web_search` المدمجة في النماذج المدعومة
-- **حفظ المحادثات** — تخزين الرسائل في SharedPreferences لكل مزود
-- **حذف المحادثة** — مسح كل الرسائل
-
-### 6. 🔐 المصادقة والمستخدمين
-
-- **Google Sign-In** — عبر Credential Manager + Firebase Auth
-- **البريد الإلكتروني/كلمة المرور** — التسجيل وتسجيل الدخول التقليدي
-- **ملفات المستخدمين** — `UserManager` لإدارة: الصورة الرمزية، الاسم المعروض، معرف المستخدم الفريد
-- **حوار إعداد الملف الشخصي (ProfileSetupDialog)** — أول مرة يسجل الدخول
-- **قائمة المشاهدة (Watchlist)** — حفظ الأفلام والمسلسلات محلياً عبر Room
-
-### 7. 🔍 البحث والاكتشاف
-
-- **TMDB API** — تصفح الأفلام والمسلسلات الرائجة مع دعم اللغة العربية
-- **بحث MovieBox** — البحث في فهرس MovieBox الكامل
-- **بحث ذكي** — النتائج مرتبة حسب تطابق اللغة، صلة العنوان، وتوفر المحتوى
-- **أقسام مخصصة (Custom Sections)** — بطاقات ترويجية يديرها الأدمن عبر Firebase RTDB
-- **Skeleton UI** — عرض هيكل عظمي أثناء تحميل البيانات
-- **Pagination** — تحميل المزيد عند التمرير للأسفل
-
-### 8. الشاشات
-#### تفاصيل المحتوى — DetailScreen + MovieBoxDetailScreen
-- ملخص + معدل التقييم + سنة الإنتاج
-- قائمة الممثلين (Cast)
-- معرض الصور (Backdrop + Posters)
-- للمسلسلات: اختيار الموسم وعرض الحلقات
-- زر التحميل للمسلسلات: تحميل حلقات محددة أو كل الموسم
-- **تبويبات (Tabs)**: TMDB (البيانات الوصفية) و MovieBox (روابط التحميل)
-
-#### شاشة التحميلات — DownloadsScreen
-- 3 تبويبات: **قيد التحميل (Downloading)** | **مكتملة (Completed)** | **الكل (All)**
-- بطاقات بتحكمات: إيقاف، متابعة، فتح، حذف
-- `PosterCard` — غلاف المسلسل مع شريط تقدم متدرج (gradient progress bar) مدمج في الصورة
-- `CompactEpisodeRow` — عرض مضغوط للحلقات في وضع المسلسل
-- `PlaylistFolderCard` — عرض مجلدات المسلسلات (بوكس بوستر المسلسل، عدد الحلقات المحمّلة، شريط تقدم إجمالي)
-- زر "تنزيل باقي حلقات المسلسل" — تحميل الحلقات المتبقية دفعة واحدة
-
-#### الشاشات الأخرى
-- **الإعدادات (SettingsScreen)** — الملف الشخصي، المزودين AI، قائمة المشاهدة، لوحة الأدمن
-- **قائمة المشاهدة (WatchlistScreen)** — شبكة من 3 أعمدة مع `WatchlistPosterCard`
-- **شاشة البالغين (AdultContentScreen)** — فلترة المحتوى للبالغين
-- **ExploreScreen** — مركز الاستكشاف (AI Chat و Global Chat)
-- **SplashScreen** — شاشة ترحيب متحركة (2.2 ثانية)
-
----
-
-## 🏗️ بنية التطبيق (Architecture)
-
-### النمط المعماري: MVVM + Repository
+**النمط المعماري: MVVM + Repository**
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           UI Layer (Compose)                             │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐  │
-│  │  Home    │ │ Detail   │ │ Player   │ │Offline   │ │  Chat/AI/     │  │
-│  │  Screen  │ │ Screen   │ │ Screen   │ │Player    │ │  Explore      │  │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────┬────────┘  │
-│       │            │            │            │              │           │
-├───────┼────────────┼────────────┼────────────┼──────────────┼───────────┤
-│  ┌────┴────────────┴────────────┴────────────┴──────────────┴────────┐  │
-│  │                      ViewModel Layer                               │  │
-│  │  ┌────────────────┐ ┌───────────────────┐ ┌──────────────────┐    │  │
-│  │  │ MovieViewModel │ │ MovieBoxViewModel  │ │AiChatViewModel   │    │  │
-│  │  │ (TMDB + Auth)  │ │ (MovieBox API)     │ │ (AI Chat logic)  │    │  │
-│  │  └───────┬────────┘ └─────────┬─────────┘ └────────┬─────────┘    │  │
-│  └──────────┼────────────────────┼─────────────────────┼──────────────┘  │
-├─────────────┼────────────────────┼─────────────────────┼────────────────┤
-│  ┌──────────┴──────────┐  ┌──────┴───────┐  ┌─────────┴──────────┐     │
-│  │   MovieRepository   │  │MovieBoxRepo  │  │ AiChatRepository   │     │
-│  │   (TMDB + Firebase)  │  │(MovieBoxApi) │  │ (OpenAI-compatible)│     │
-│  └──────────┬──────────┘  └──────┬───────┘  └─────────┬──────────┘     │
-├─────────────┼────────────────────┼────────────────────┼────────────────┤
-│  ┌──────────┴──────────┐  ┌──────┴───────────────────┴──────────┐      │
-│  │    Data Sources     │  │       Subtitle System               │      │
-│  │  ┌───────────────┐  │  │  ┌────────────┐ ┌───────────────┐  │      │
-│  │  │ TMDB (Retrofit)│  │  │  │ MovieBox   │ │  Subdl API   │  │      │
-│  │  │ MovieBox (OkHttp│  │  │  │ FastAPI    │ │ (direct HTTP)│  │      │
-│  │  │ + FastAPI)     │  │  │  └────────────┘ └───────────────┘  │      │
-│  │  │ Firebase (Auth)│  │  │  ┌────────────┐ ┌───────────────┐  │      │
-│  │  │ Firebase (RTDB)│  │  │  │OpenSubtitles│ │ SubtitleParser│  │      │
-│  │  └───────────────┘  │  │  │ API (direct)│ │ SRT/VTT       │  │      │
-│  └─────────────────────┘  │  └────────────┘ └───────────────┘  │      │
-│                            └────────────────────────────────────┘      │
-├────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                    Local Storage (Room DB)                        │  │
-│  │  • watchlist (movies/shows saved by user)                        │  │
-│  │  • downloads (metadata about downloaded files)                   │  │
-│  │  • chat_messages (cached — main storage is Firebase RTDB)        │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │              Background Services                                  │  │
-│  │  • ChatNotificationService (foreground) — إشعارات الدردشة        │  │
-│  │  • MultiThreadDownloader — تحميل متوازي 8 خيوط                   │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### إدارة الحالة (State Management)
-- **StateFlow** في ViewModels
-- **RequestState<T>** — sealed class: `Idle`, `Loading`, `Success(data)`, `Error(msg)`
-- **remember { mutableStateOf() }** للـ UI state المحلي في Composables
-- **remember { mutableStateListOf() }** للقوائم
-
-### التنقل (Navigation)
-- **Navigation Compose** مع routes لكل شاشة رئيسية
-- المسارات: `/home`, `/detail/{id}`, `/player/{id}`, `/settings`, `/chat`, `/ai-chat`, إلخ
-- Parameters تمر عبر route arguments
-
----
-
-## 📱 جميع الشاشات
-
-| # | الشاشة | الملف | الوظيفة |
-|---|--------|-------|---------|
-| 1 | **SplashScreen** | `SplashScreen.kt` | شاشة افتتاحية متحركة، تنتقل تلقائياً إلى Home بعد 2.2 ثانية |
-| 2 | **HomeScreen** | `HomeScreen.kt` | الصفحة الرئيسية: كاروسيل أفلام رائجة، أقسام مخصصة، بحث (TMDB + MovieBox) |
-| 3 | **DetailScreen** | `DetailScreen.kt` | تفاصيل المحتوى من TMDB (ملخص، تقييم، ممثلين، صور) + حوار اختيار الموسم للمسلسلات |
-| 4 | **MovieBoxDetailScreen** | `MovieBoxDetailScreen.kt` | تفاصيل MovieBox: روابط البث، اختيار الجودة، تحميل |
-| 5 | **PlayerScreen** | `PlayerScreen.kt` | مشغل البث المباشر مع ExoPlayer + تحكمات متقدمة + اختيار الترجمة |
-| 6 | **OfflinePlayerScreen** | `OfflinePlayerScreen.kt` | مشغل الفيديو المحلّي: واجهة سينمائية مع تراكب ترجمة مخصص، 3 صفحات ترجمة (MovieBox, Subdl, OpenSubtitles) |
-| 7 | **DownloadsScreen** | `DownloadsScreen.kt` | إدارة التحميلات: 3 تبويبات، بطاقات مضغوطة للمسلسلات، تحكمات (إيقاف/متابعة/حذف) |
-| 8 | **SettingsScreen** | `SettingsScreen.kt` | الإعدادات: الملف الشخصي (تعديل الاسم، الصورة)، إدارة مزودي AI، قائمة المشاهدة، لوحة الأدمن |
-| 9 | **ExploreScreen** | `ExploreScreen.kt` | مركز الاستكشاف: بطاقات الدخول إلى AI Chat و Global Chat |
-| 10 | **GlobalChatScreen** | `GlobalChatScreen.kt` | الدردشة الجماعية المباشرة عبر Firebase RTDB مع سحب للرد ومؤشر كتابة |
-| 11 | **AiChatScreen** | `AiChatScreen.kt` | محادثة ذكاء اصطناعي مع تدفق الردود (streaming) عبر أي مزود OpenAI-compatible |
-| 12 | **AiProviderConfigScreen** | `AiProviderConfigScreen.kt` | إضافة/تعديل مزود AI: endpoint, API key, إدارة النماذج |
-| 13 | **WatchlistScreen** | `WatchlistScreen.kt` | قائمة المشاهدة المحفوظة محلياً (3 أعمدة) مع `WatchlistPosterCard` |
-| 14 | **CustomSectionDialog** | `CustomSectionDialog.kt` | حوار إضافة/تعديل الأقسام المخصصة (لوحة الأدمن) |
-| 15 | **ProfileSetupDialog** | `ProfileSetupDialog.kt` | حوار إعداد الملف الشخصي لأول مرة بعد تسجيل الدخول |
-| 16 | **AdultContentScreen** | `AdultContentScreen.kt` | تحذير المحتوى للبالغين مع خيار الاستمرار أو العودة |
-
----
-
-## 📂 هيكل المشروع الكامل
-
-```
-app/src/main/java/com/example/
-│
-├── MainActivity.kt                          # النقطة الرئيسية — Navigation graph + edge-to-edge
-│
-├── auth/                                    # المصادقة والمستخدمين
-│   ├── AuthManager.kt                       # Firebase Auth + Google Sign-In (Credential Manager)
-│   ├── ChatManager.kt                       # عمليات Firebase RTDB للدردشة (إرسال، استقبال، typing)
-│   └── UserManager.kt                       # إدارة ملفات المستخدمين (SharedPreferences)
-│
-├── data/
-│   ├── ai/                                  # نظام AI Chat
-│   │   ├── AiChatRepository.kt              # الاتصال بمزودي OpenAI-compatible (streaming SSE + web_search tool)
-│   │   ├── AiChatViewModel.kt              # ViewModel لإدارة المحادثة: إرسال، حفظ، تحميل
-│   │   ├── AiProvider.kt                   # Data models: AiProvider, AiModel, ChatMessage
-│   │   ├── AiProviderManager.kt            # CRUD للمزودين والرسائل في SharedPreferences
-│   │   └── AiViewModelFactory.kt           # Factory لـ AiChatViewModel
-│   │
-│   ├── local/                               # قاعدة البيانات المحلية (Room)
-│   │   ├── MovieEntities.kt                 # Entity: watchlist, download, chat_message, user_profile
-│   │   ├── MovieDao.kt                      # DAO: استعلامات (Insert, Delete, Query, GetWatchlistWithDetails)
-│   │   └── MovieDatabase.kt                 # Room Database (version 1)
-│   │
-│   ├── remote/                              # مصادر البيانات البعيدة
-│   │   ├── ApiServices.kt                   # Retrofit interface لـ TMDB API
-│   │   ├── RetrofitClient.kt                # Retrofit singleton مع Moshi converter
-│   │   ├── TmdbModels.kt                    # Models لاستجابات TMDB
-│   │   ├── EzVidModels.kt                   # Models لاستجابات EzVid
-│   │   ├── CustomSectionManager.kt          # إدارة الأقسام المخصصة عبر Firebase RTDB
-│   │   ├── moviebox/                        # تكامل MovieBox (مجلد كامل — 6 ملفات)
-│   │   │   ├── api/MovieBoxApiImpl.kt       # تنفيذ API MovieBox: search, getDownloadLinks, getSubtitles
-│   │   │   ├── crypto/MovieBoxDeviceInfo.kt # إنشاء device info (fingerprint, timestamp)
-│   │   │   ├── crypto/MovieBoxSigner.kt     # توقيع HMAC-MD5 للطلبات
-│   │   │   ├── models/MovieBoxModels.kt     # نماذج بيانات MovieBox
-│   │   │   ├── network/MovieBoxHttpClient.kt# عميل HTTP مع failover بين 2 domain + keep-alive
-│   │   │   ├── repository/MovieBoxRepository.kt # تخزين مؤقت (in-memory cache) للنتائج
-│   │   │   └── viewmodel/MovieBoxViewModel.kt# ViewModel لبيانات MovieBox
-│   │   └── repository/
-│   │       └── MovieRepository.kt           # Repository الرئيسي (يجمع TMDB + Firebase)
-│   └── models/
-│       └── ChatMessage.kt                   # نموذج رسالة الدردشة
-│
-├── ui/
-│   ├── components/                          # مكونات UI قابلة لإعادة الاستخدام
-│   │   ├── SkeletonUI.kt                    # شاشة تحميل هيكل عظمي (5 أنماط مختلفة)
-│   │   ├── VideoPlayerView.kt               # غلاف ExoPlayer + تحكمات (نقر مزدوج، سحب مستوى صوت/إضاءة)
-│   │   └── moviebox/
-│   │       └── MovieBoxDownloadSheet.kt     # شيت تحميل MovieBox: اختيار جودة، تقدم، تحكمات — 502 سطر
-│   │
-│   ├── screens/                             # ★ 16 شاشة رئيسية + شاشتا مساعد ★
-│   │   ├── SplashScreen.kt                  # شاشة افتتاحية (25)
-│   │   ├── HomeScreen.kt                    # الصفحة الرئيسية (49)
-│   │   ├── DetailScreen.kt                  # تفاصيل TMDB (41)
-│   │   ├── MovieBoxDetailScreen.kt          # تفاصيل MovieBox (36)
-│   │   ├── PlayerScreen.kt                  # مشغل البث (55)
-│   │   ├── OfflinePlayerScreen.kt           # ★ المشغل المحلّي — 1667 سطر ★ أكبر ملف في المشروع
-│   │   ├── DownloadsScreen.kt               # إدارة التحميلات (43)
-│   │   ├── SettingsScreen.kt                # الإعدادات (43)
-│   │   ├── ExploreScreen.kt                 # مركز الاستكشاف (52)
-│   │   ├── GlobalChatScreen.kt              # الدردشة الجماعية (55)
-│   │   ├── AiChatScreen.kt                  # محادثة AI (39)
-│   │   ├── AiProviderConfigScreen.kt        # إعدادات مزود AI (45)
-│   │   ├── WatchlistScreen.kt               # قائمة المشاهدة (33) + WatchlistPosterCard (127)
-│   │   ├── AdultContentScreen.kt            # تحذير محتوى بالغين (48)
-│   │   ├── CustomSectionDialog.kt           # حوار الأقسام المخصصة (34)
-│   │   └── ProfileSetupDialog.kt            # حوار إعداد الملف الشخصي (38)
-│   │
-│   ├── theme/                               # سمات التطبيق
-│   │   ├── Color.kt                         # لوحة ألوان "Comfort Beige": بني كراميل، ذهبي، بيج
-│   │   ├── Theme.kt                         # MaterialTheme مع dynamic colors + dark mode
-│   │   └── Type.kt                          # أنماط الخطوط (IBM Plex Sans Arabic)
-│   │
-│   └── viewmodel/                           # منطق الأعمال
-│       ├── MovieViewModel.kt                # ViewModel الرئيسي — TMDB، Firebase، تحميل، 566 سطر
-│       ├── SubtitleHelper.kt                # ★ نظام الترجمة بالكامل — 430 سطر ★
-│       └── SubtitleParser.kt                # محلل SRT/VTT (81 سطر)
-│
-└── utils/
-    ├── ChatNotificationService.kt            # Foreground service لإشعارات الدردشة
-    └── MultiThreadDownloader.kt              # ★ محمّل متوازي 8 خيوط — 193 سطر ★
-```
-
-### 📄 ملفات التهيئة
-
-```
-app/
-├── build.gradle.kts                          # Build script مع version catalog
-├── proguard-rules.pro
-└── src/main/
-    ├── AndroidManifest.xml                   # تصريح الأنشطة، الأذونات، الخدمات
-    └── res/
-        ├── values/
-        │   ├── strings.xml                   # اسم التطبيق
-        │   ├── colors.xml                    # ألوان ثابتة
-        │   ├── themes.xml                    # سمات Android
-        │   └── font_certs.xml                # شهادات التحقق من الخط
-        ├── drawable/                         # أيقونات
-        └── mipmap-anydpi-v26/                # أيقونات adaptive
-
-build.gradle.kts                              # root build script
-settings.gradle.kts                           # إعدادات المشروع
-gradle.properties                             # خصائص Gradle
-gradle/libs.versions.toml                     # ★ Version Catalog — جميع الإصدارات ★
-local.properties                              # SDK path
-.env.example                                  # مثال لمتغيرات البيئة
-debug.keystore                                # مفتاح التوقيع للتطوير (مسجل في Firebase)
+┌─────────────────────────────────────────┐
+│           UI Layer (Compose)            │
+│  ┌─────────┐ ┌─────────┐ ┌───────────┐ │
+│  │ Screens │ │Componen-│ │  Theme    │ │
+│  │ (16)    │ │ ts (17) │ │(Beige/    │ │
+│  │         │ │         │ │ Dark)     │ │
+│  └────┬────┘ └────┬────┘ └───────────┘ │
+│       │           │                     │
+├───────┼───────────┼─────────────────────┤
+│  ┌────┴───────────┴────────────────┐    │
+│  │        ViewModel Layer          │    │
+│  │  ┌──────────┐ ┌──────────────┐ │    │
+│  │  │  Movie   │ │  MovieBox    │ │    │
+│  │  │ViewModel │ │  ViewModel   │ │    │
+│  │  └────┬─────┘ └──────┬───────┘ │    │
+│  │  ┌────┴──────────────┐         │    │
+│  │  │    AiViewModel    │         │    │
+│  │  └───────────────────┘         │    │
+│  └────────────┬───────────────────┘    │
+│               │                         │
+├───────────────┼─────────────────────────┤
+│  ┌────────────┴───────────────────┐    │
+│  │        Repository Layer        │    │
+│  │  ┌──────────┐ ┌──────────────┐ │    │
+│  │  │  Movie   │ │  MovieBox    │ │    │
+│  │  │  Repo    │ │   Repo       │ │    │
+│  │  └────┬─────┘ └──────┬───────┘ │    │
+│  └───────┼──────────────┼─────────┘    │
+│          │              │               │
+├──────────┼──────────────┼───────────────┤
+│  ┌───────┴──────────────┴────────────┐  │
+│  │         Data Sources              │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────┐ │  │
+│  │  │  TMDB   │ │MovieBox │ │ AI  │ │  │
+│  │  │ API     │ │  API    │ │Prov.│ │  │
+│  │  └─────────┘ └─────────┘ └─────┘ │  │
+│  │  ┌─────────┐ ┌─────────────────┐ │  │
+│  │  │Subtitles│ │   Firebase      │ │  │
+│  │  │ 3 مصادر │ │Auth + RTDB      │ │  │
+│  │  └─────────┘ └─────────────────┘ │  │
+│  └──────────────────────────────────┘  │
+│  ┌──────────────────────────────────┐  │
+│  │      Room Database (Local)       │  │
+│  │  watchlist │ downloads │ ai_chat │  │
+│  │  subtitle  │ episodes  │ images  │  │
+│  │  season_meta                    │  │
+│  └──────────────────────────────────┘  │
+└─────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ التقنيات المستخدمة (Tech Stack)
+## الشاشات
+
+### 1. HomeScreen — الصفحة الرئيسية
+
+**الملف:** `ui/screens/HomeScreen.kt` (~1108 سطر)
+
+**المحتوى:**
+- Header: "مرحباً بك في ووتشيرا — Watchera"
+- مربع بحث مع تبديل بين **TMDB search** و **MovieBox search**
+- قسم مخصص من الأدمن (Custom Section) — عنوانه "بتاع"
+- **Featured Carousel**: 5 أفلام رائجة مع صور backdrop
+- قسم "قائمتي" (Watchlist) — يظهر إذا وُجدت عناصر
+- 8 صفوف أفقية: أفلام رائجة، مسلسلات رائجة، ترندينج أفلام، ترندينج مسلسلات، الأعلى تقيماً، الأفلام الحالية، المسلسلات المعروضة
+- نتائج البحث تظهر كشبكة 3 أعمدة
+
+**ميزات حقيقية:**
+- ضغط مطوّل على أي بوستر → قائمة سياقية (إضافة لقائمة المشاهدة + مشاركة)
+- تبديل وضع البحث TMDB/MovieBox بأيقونة CloudSync
+- Skeleton loading أثناء التحميل
+- Bouncy overscroll effect
+- ربط بـ Share Sheet
+
+**لا يحتوي على:**
+- ❌ Splash screen
+- ❌ أي إيماءات خاصة
+
+---
+
+### 2. DetailScreen — تفاصيل المحتوى
+
+**الملف:** `ui/screens/DetailScreen.kt` (~1506 سطر)
+
+**المحتوى:**
+- Immersive header: صورة backdrop + ملصق في المنتصف
+- صف البيانات: السنة + التقييم + المدة/عدد المواسم + شهادة التصنيف
+- رقائق الأنواع (Genres)
+- أزرار الإجراءات:
+  - **Play** (رئيسي) — يفتح المشغّل
+  - **Bookmark** — يضيف لقائمة المشاهدة (ضغط مطوّل → StatusPickerSheet)
+  - **Download** — يفتح MovieBoxDownloadSheet
+  - **Subtitle** — يفتح SubtitleSourceSheet
+- ملخص القصة
+- صف الممثلين (10 أقصى، صور دائرية)
+- صفوف أفقية: أعمال مشابهة + توصيات
+- للمسلسلات: اختيار الموسم + قائمة الحلقات (تشغيل/تحميل/ترجمة لكل حلقة)
+
+**ميزات حقيقية:**
+- ضغط مطوّل على Bookmark → StatusPickerSheet بـ 5 حالات (Plan to Watch / Watching / Completed / On Hold / Dropped)
+- ضغط مطوّل على حلقة مسلسل → تحميل ترجمة
+- تخزين تفاصيل الفيلم محلياً في Activity log
+
+---
+
+### 3. MovieBoxDetailScreen — تفاصيل MovieBox
+
+**الملف:** `ui/screens/MovieBoxDetailScreen.kt` (~676 سطر)
+
+**المحتوى:**
+- نفس تخطيط DetailScreen ولكن لبيانات MovieBox API
+- للأفلام: تشغيل مباشر من روابط MovieBox
+- للمسلسلات: اختيار الموسم والحلقات
+
+**ملاحظة:** لا يحتوي على long-press status picker على Bookmark
+
+---
+
+### 4. PlayerScreen — مشغّل البث المباشر
+
+**الملف:** `ui/screens/PlayerScreen.kt` (~650 سطر)
+
+**المحتوى (وضع Portrait):**
+- TopAppBar + مشغّل ExoPlayer بنسبة 16:9
+- زر ملء الشاشة + شريط السرعة + اختيار الترجمة
+
+**المحتوى (وضع Fullscreen):**
+- خلفية سوداء + مشغّل
+- Gesture overlay
+- قائمة سرعة (أعلى اليمين) + زر رجوع
+
+**ميزات حقيقية مؤكد:**
+- ✅ نقر مزدوج (Double-tap) → تقديم/تأخير 10 ثوانٍ
+- ✅ سحب رأسي يمين → التحكم بالصوت
+- ✅ 6 خيارات سرعة: 0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 2.0x
+- ✅ اختيار الترجمة من مصادر متعددة
+- ✅ حفظ موضع التشغيل (SharedPreferences كل 5 ثوانٍ)
+- ✅ وضع ملء الشاشة (landscape)
+
+**لا يحتوي على:**
+- ❌ إيماءة السطوع (فقط في OfflinePlayer)
+- ❌ ضغط مطوّل للسرعة 2x
+
+---
+
+### 5. OfflinePlayerScreen — المشغّل المحلي
+
+**الملف:** `ui/screens/OfflinePlayerScreen.kt` (~1714 سطر) — **أكبر ملف**
+
+**المحتوى:**
+- وضع أفقي إجباري + إبقاء الشاشة مستيقظة + إخفاء شريط النظام
+- تراكب ترجمة مخصص (Canvas + خط IBM Plex Sans Arabic مع ظل)
+- شريط علوي: رجوع + العنوان + S/E indicator + الرئيسية + التحميلات النشطة + ترجمة + حلقات
+- مركز: إعادة 10ث / تشغيل-إيقاف / تقديم 10ث
+- شريط سحب مخصص (Canvas with thumb)
+- زر الحلقة التالية + مؤشر البطارية + الساعة
+- **درج الترجمة** (360dp، 7 صفحات)
+- **درج الحلقات** للمسلسلات
+
+**ميزات حقيقية مؤكد:**
+- ✅ نقر مزدوج (±10 ثوانٍ)
+- ✅ سحب رأسي: يمين = صوت، يسار = سطوع
+- ✅ ضغط مطوّل = سرعة 2x
+- ✅ تراكب ترجمة مع تحكم بالموضع (Y Offset) والحجم ومزامنة الوقت
+- ✅ درج ترجمة بـ 7 صفحات
+- ✅ اختيار ملف ترجمة من الجهاز (SAF)
+- ✅ تحميل ترجمة عربية تلقائي عند فتح حلقة
+- ✅ مؤشر البطارية (كل 30 ثانية) + الساعة
+- ✅ إخفاء تلقائي للتحكمات بعد 4 ثوانٍ
+- ✅ زر الحلقة التالية
+
+---
+
+### 6. DownloadsScreen — إدارة التحميلات
+
+**الملف:** `ui/screens/DownloadsScreen.kt` (~1074 سطر)
+
+**المحتوى:**
+- Header: "التحميلات غير المتصلة"
+- 3 تبويبات: **مسلسلات** | **أفلام** | **محلي**
+- المسلسلات: مجمعة حسب mediaId كبطاقات بملصق + عدد الحلقات
+- الأفلام: صفوف فردية
+- محلي: متصفح ملفات الجهاز (SAF)
+
+**ميزات حقيقية:**
+- ✅ وضع تحديد متعدد مع حذف دفعة
+- ✅ تبديل المواسم مع انيميشن
+- ✅ ضغط مطوّل على كل حلقة → قائمة سياقية
+- ✅ زر تحميل حلقات إضافية (يفتح MovieBoxDownloadSheet)
+- ✅ عرض حجم الملف من خيط منفصل
+
+---
+
+### 7. SettingsScreen — الإعدادات
+
+**الملف:** `ui/screens/SettingsScreen.kt` (~614 سطر)
+
+**المحتوى:**
+- بطاقة الملف الشخصي:
+  - صورة + اسم + اسم مستخدم + بايو
+  - أزرار تعديل / تسجيل خروج
+  - مصادقة Firebase (Email/Password + Google Sign-In)
+- قسم الأدمن (للبريد `ahmedsarri123@gmail.com` فقط):
+  - إرسال إشعار بث لجميع المستخدمين
+  - إدارة الأقسام المخصصة
+- بطاقة العرض:
+  - تبديل الملصقات العربية/الإنجليزية
+  - تبديل الوضع الليلي
+
+**ميزات حقيقية:**
+- ✅ Firebase Auth (إيميل/باسورد + جوجل)
+- ✅ حوار إعداد الملف الشخصي (ProfileSetupDialog) عند أول تسجيل
+- ✅ رفع الصورة إلى ImgBB
+- ✅ بث إشعارات من الأدمن
+- ✅ تخصيص الأقسام في الصفحة الرئيسية
+
+---
+
+### 8. ChatScreen — الدردشة
+
+**الملف:** `ui/screens/ChatScreen.kt` (~502 سطر)
+
+**المحتوى:**
+- Header: زر رجوع + عنوان الغرفة
+- قائمة رسائل (ChatMessageBubble)
+- شريط إدخال (ChatInputBar) مع نص + صورة + رد
+- حوار عرض الصور
+- عرض ملف المستخدم (UserProfileBottomSheet)
+
+**ميزات حقيقية:**
+- ✅ رسائل نصية في الوقت الحقيقي (Firebase RTDB)
+- ✅ رسائل صور (رفع إلى ImgBB)
+- ✅ الرد على رسالة (replyTo)
+- ✅ صفحة 50 رسالة مع Load more
+- ✅ إنشاء محادثة خاصة عند الضغط على مستخدم
+- ✅ تغيير صورة الغرفة العامة
+
+**لا يحتوي على:**
+- ❌ سحب للرد (Swipe-to-reply)
+- ❌ مؤشر الكتابة (Typing indicator)
+- ❌ حذف الرسائل
+
+---
+
+### 9. ChatRoomList — قائمة غرف الدردشة
+
+**الملف:** `ui/screens/ChatRoomList.kt`
+
+**المحتوى:** عرض قائمة الغرف العامة والخاصة التي شارك فيها المستخدم
+
+---
+
+### 10. ExploreScreen — مركز الاستكشاف
+
+**الملف:** `ui/screens/ExploreScreen.kt` (~173 سطر)
+
+**المحتوى:**
+- زر AI Chat (أيجواني)
+- زر تحميل الترجمات
+- زر قائمة المشاهدة
+- قسم غرف الدردشة (للمسجلين فقط)
+
+**ملاحظة:** مرجع AI Chat موجود لكن الشاشة المنفصلة غير موجودة كملف مستقل — الـ UI موجود في `ai/ui/AiChatScreen.kt`
+
+---
+
+### 11. WatchlistScreen — قائمة المشاهدة
+
+**الملف:** `ui/screens/WatchlistScreen.kt` (~153 سطر)
+
+**المحتوى:** شبكة 3 أعمدة من الملصقات + زر مزامنة Firebase
+
+**ميزات حقيقية:**
+- ✅ مزامنة سحابية (WatchlistSyncManager)
+- ✅ زر مزامنة يدوي
+- ✅ التمييز بين عناصر TMDB و MovieBox (بادئة `mb_`)
+
+---
+
+### 12. DownloadsScreen — (مذكور أعلاه)
+
+### 13. BrowserScreen — المتصفح الداخلي
+
+**الملف:** `ui/screens/browserScreen.kt`
+
+**المحتوى:** متصفح WebView داخلي للتنقل بين المواقع وحفظ الصور
+
+---
+
+### 14. HistoryScreen — السجل
+
+**الملف:** `ui/screens/HistoryScreen.kt`
+
+**المحتوى:** عرض سجل نشاط المستخدم (الأفلام المفتوحة، التحميلات، تسجيلات الدخول)
+
+---
+
+### 15. SubtitleDownloadsScreen — تحميلات الترجمة
+
+**الملف:** `ui/screens/SubtitleDownloadsScreen.kt`
+
+**المحتوى:** عرض وإدارة ملفات الترجمة المحملة
+
+---
+
+### 16. FullScreenImageViewer — عارض الصور
+
+**الملف:** `ui/screens/FullScreenImageViewer.kt`
+
+**المحتوى:** عرض الصور بحجم كامل مع Zoom
+
+---
+
+### 17. CustomSectionDialog — الأقسام المخصصة
+
+**الملف:** `ui/screens/CustomSectionDialog.kt` (~227 سطر)
+
+**المحتوى:** حوار إدارة الأقسام الترويجية في الصفحة الرئيسية (إضافة/حذف/بحث TMDB)
+
+---
+
+### 18. ProfileSetupDialog — إعداد الملف الشخصي
+
+**الملف:** `ui/screens/ProfileSetupDialog.kt` (~231 سطر)
+
+**المحتوى:** حوار اختيار الاسم + اسم المستخدم + البايو + الصورة (رفع إلى ImgBB)
+
+---
+
+## التقنيات والمكتبات
 
 ### الأساسيات
-| التقنية | الغرض | الإصدار |
-|----------|--------|---------|
-| **Kotlin** | لغة البرمجة | 2.0.21 |
-| **Jetpack Compose** | واجهة المستخدم التصريحية | BOM 2024.09.00 |
-| **Material Design 3** | نظام التصميم | — |
-| **Gradle (Kotlin DSL)** | نظام البناء | — |
-| **compileSdk / targetSdk** | إصدار SDK المستهدف | 36 |
-| **minSdk** | أقل إصدار Android مدعوم | 24 |
+| التقنية | الإصدار | الغرض |
+|---------|---------|-------|
+| Kotlin | 2.2.10 | لغة البرمجة |
+| Jetpack Compose | BOM 2024.09.00 | واجهة المستخدم |
+| Material Design 3 | — | نظام التصميم |
+| AGP | 9.1.1 | نظام البناء |
+| KSP | 2.2.10-2.0.2 | معالجة Annotations |
 
-### واجهة المستخدم
-| المكتبة | الغرض |
-|----------|--------|
-| `androidx.compose.material3` | مكونات Material 3 (Card, Scaffold, TopAppBar, BottomSheet, Snackbar) |
-| `androidx.compose.material.icons.extended` | أيقونات Material (3000+) |
-| `androidx.compose.ui.text.google.fonts` | خط IBM Plex Sans Arabic |
-| `androidx.navigation.compose` | التنقل بين الشاشات |
-| `androidx.lifecycle.viewmodel.compose` | ViewModel في Compose |
-| `androidx.activity.compose` | Activity Result API + Edge-to-Edge |
+### التشغيل
+| المكتبة | الإصدار | الغرض |
+|---------|---------|-------|
+| Media3 ExoPlayer | 1.4.1 | مشغل الفيديو |
+| Media3 HLS | 1.4.1 | دعم HLS/m3u8 |
+| Media3 UI | 1.4.1 | PlayerView |
 
-### التشغيل والصوت
-| المكتبة | الغرض | الإصدار |
-|----------|--------|---------|
-| `androidx.media3:exoplayer` | مشغل الفيديو | 1.4.1 |
-| `androidx.media3:hls` | دعم HLS (m3u8) | 1.4.1 |
-| `androidx.media3:ui` | واجهة PlayerView | 1.4.1 |
-
-### الشبكات والبيانات
-| المكتبة | الغرض | الإصدار |
-|----------|--------|---------|
-| **Retrofit 2** | HTTP client لـ TMDB | 2.12.0 |
-| **OkHttp 4** | HTTP client لـ MovieBox والترجمة | 4.10.0 |
-| **Moshi** | JSON parsing (مع KSP codegen) | 1.15.2 |
-| **Coil Compose** | تحميل الصور | 2.7.0 |
-| **Room** | قاعدة البيانات المحلية | 2.7.0 |
+### الشبكات
+| المكتبة | الإصدار | الغرض |
+|---------|---------|-------|
+| Retrofit | 2.12.0 | HTTP client لـ TMDB |
+| OkHttp | 4.10.0 | HTTP client + logging |
+| Moshi | 1.15.2 | JSON parsing (KSP) |
+| Coil | 2.7.0 | تحميل الصور |
+| DataStore | 1.1.7 | تفضيلات المستخدم |
 
 ### Firebase
-| المكتبة | الغرض | الإصدار |
-|----------|--------|---------|
-| `firebase-bom` | Firebase Bill of Materials | 34.12.0 |
-| `firebase-auth` | المصادقة (Google + Email) | — |
-| `firebase-database` | Firebase Realtime Database (دردشة + أقسام مخصصة) | — |
-| `androidx.credentials` | Credential Manager API | — |
-| `androidx.credentials.play.services.auth` | Google ID credential | — |
-| `googleid` | Google Sign-In | — |
+| المكتبة | الإصدار | الغرض |
+|---------|---------|-------|
+| Firebase BOM | 34.12.0 | إدارة الإصدارات |
+| Firebase Auth | — | مصادقة (جوجل + إيميل) |
+| Firebase Database | — | دردشة + أقسام + سجل |
 
-### تطوير واختبار
-| المكتبة | الغرض |
-|----------|--------|
-| Robolectric | اختبارات وحدة مع Android resources |
-| Roborazzi | اختبارات صور (Screenshot tests) |
-| JUnit 4 | إطار الاختبارات |
+### المحلية
+| المكتبة | الإصدار | الغرض |
+|---------|---------|-------|
+| Room | 2.7.0 | قاعدة بيانات محلية |
+| Navigation Compose | 2.8.9 | التنقل بين الشاشات |
 
----
-
-## 💬 نظام الترجمة (3 مصادر)
-
-### لمحة عامة
-
-نظام الترجمة في واتشر مبني على 3 مصادر مستقلة، وواجهة مستخدم من 4 صفحات داخل شيت جانبي (Subtitle Drawer).
-
-### `SubtitleHelper.kt` — 430 سطر
-
-```
-SubtitleHelper
-├── SubtitleItem                      # نموذج بيانات الترجمة (name, lang, url, langCode, source, fileId, downloadCount)
-├── CONSTANTS
-│   ├── API_KEY / SUBDL_API_KEY       # مفتاح Subdl API
-│   └── OPENSUBTITLES_API_KEY         # مفتاح OpenSubtitles API
-│   └── USER_AGENT                    # معرف الطلب
-├── fetchSubtitles()                  # ★ MovieBox — المصدر الأساسي ★
-│   ├── findResourceId()              # البحث عن resource_id في download_links
-│   ├── fetchSubtitlesByResource()    # جلب الترجمات من /get_subtitles
-│   └── title-based fallback          # البحث بالعنوان إذا فشل الرقم
-├── fetchSubdlSubtitles()             # ★ Subdl API — المصدر الثاني ★
-│   ├── يدعم unpack_files (الملفات الفردية)
-│   └── يدعم season_number + episode_number
-├── fetchOpenSubtitles()              # ★ OpenSubtitles API — المصدر الثالث ★
-│   ├── يدعم parent_tmdb_id + tmdb_id
-│   └── يدعم season_number + episode_number
-├── getOpenSubtitleDownloadUrl()      # POST /download للحصول على رابط التحميل الفعلي
-└── downloadAndExtractSubtitle()      # ★ محرك التحميل والاستخراج ★
-    ├── كشف ZIP (.zip URL) → ZipInputStream
-    ├── كشف GZip (.gz / gzip encoding) → GZIPInputStream
-    ├── ملفات مباشرة (.srt / .vtt) → حفظ مباشر
-    ├── مطابقة الحلقات في ZIP الموسمية (regex E|EP|Episode)
-    └── مهلات زمنية: connectTimeout=15s, readTimeout=20-30s
-```
-
-### `SubtitleParser.kt` — 81 سطر
-
-```
-SubtitleParser
-├── parseBlock(File)                  # تحليل ملف SRT/VTT إلى List<SubtitleLine>
-└── parseTimestamp(String)            # تحويل 00:01:23,456 إلى مللي ثانية
-```
-
-### واجهة المستخدم — Subtitle Drawer (OfflinePlayerScreen.kt)
-
-```
-Subtitle Drawer (AnimatedVisibility — دخول/خروج من اليسار)
-│
-├── AnimatedContent (4 صفحات مع fade + slide transitions)
-│   │
-│   ├── الصفحة 0: التحكمات الرئيسية (قابلة للتمرير)
-│   │   ├── ضبط موضع الترجمة (±1px, ±10px)
-│   │   ├── مزامنة الوقت (±100ms)
-│   │   ├── إخفاء/إظهار الترجمة
-│   │   ├── حجم الخط
-│   │   ├── زر ← الصفحة 1 (بحث MovieBox)
-│   │   ├── زر ← الصفحة 2 (Subdl)
-│   │   └── زر ← الصفحة 3 (OpenSubtitles)
-│   │   └── اختيار ملف ترجمة من الجهاز
-│   │
-│   ├── الصفحة 1: نتائج MovieBox
-│   │   ├── LaunchedEffect — جلب تلقائي عند الدخول
-│   │   ├── زر إعادة البحث
-│   │   └── LazyColumn مع بطاقات الترجمة
-│   │
-│   ├── الصفحة 2: نتائج Subdl (لون أزرق #4A90D9)
-│   │   ├── LaunchedEffect — جلب تلقائي عند الدخول
-│   │   ├── زر إعادة البحث
-│   │   └── LazyColumn مع SectionHeader + SourceSubtitleCard
-│   │
-│   └── الصفحة 3: نتائج OpenSubtitles (لون أخضر #7CB342)
-│       ├── LaunchedEffect — جلب تلقائي عند الدخول
-│       ├── زر إعادة البحث
-│       └── LazyColumn مع SectionHeader + SourceSubtitleCard
-│
-├── SectionHeader(title, count, color)    # رأس القسم مع عداد ملون
-└── SourceSubtitleCard(item, onDownload)  # بطاقة ترجمة مع: شارة المصدر، الاسم، اللغة، عداد التحميل، زر تحميل
-```
+### أخرى
+| المكتبة | الإصدار | الغرض |
+|---------|---------|-------|
+| Haze | 1.7.2 | تأثيرات الضبابية |
+| WorkManager | 2.9.0 | مهام الخلفية |
+| CameraX | 1.5.0 | الكاميرا |
+| Accompanist | 0.37.3 | الأذونات |
+| Roborazzi | 1.59.0 | اختبار لقطات الشاشة |
 
 ---
 
-## 📥 نظام التحميل متعدد الخيوط
+## الأنظمة الفرعية
 
-### `MultiThreadDownloader.kt` — 193 سطر
+### 1. نظام التحميل متعدد الخيوط
 
-```
-MultiThreadDownloader (Singleton)
-│
-├── startDownload()                      # بدء تحميل جديد
-│   ├── التحقق من عدم وجود تحميل مكرر
-│   ├── HEAD request لمعرفة حجم الملف
-│   ├── التحقق من المساحة المتوفرة
-│   ├── استئناف التحميل (قراءة الملف الموجود)
-│   └── تقسيم الملف إلى 8 أجزاء متساوية
-│
-├── DownloadWorker (inner coroutine)     # عامل تحميل واحد
-│   ├── HTTP Range Request (BytesRange)
-│   ├── كتابة الجزء المحمّل في RandomAccessFile
-│   ├── تحديث progress
-│   └── قبول الإلغاء (cancellation)
-│
-├── pauseDownload()                      # إيقاف مؤقت
-│   ├── إلغاء Job بدون استثناء
-│   └── حفظ progress في ملف مؤقت
-│
-├── resumeDownload()                     # استئناف
-│   └── scanExistingFile() لمعرفة ما تم تحميله
-│
-├── cancelDownload()                     # إلغاء كامل
-│   └── إلغاء Job + حذف الملف المؤقت
-│
-└── scanExistingFile()                   # مسح الملف الموجود لاستئناف التحميل
-    └── قراءة الفجوات (gaps) في الملف لتحديد الأجزاء المفقودة
-```
+**الملف:** `utils/MultiThreadDownloader.kt` (~201 سطر)
 
-### `MovieBoxDownloadSheet.kt` — 502 سطر
-
-شيت تحميل كامل (BottomSheet) يتضمن:
-- **قائمة الجودات** — 360p، 480p، 720p، 1080p مع أيقونات وحجم كل جودة
-- **تحديث الجودات** — زر إعادة تحميل القائمة
-- **شريط تقدم** — مع نسبة مئوية وحجم محمّل/إجمالي وسرعة التحميل
-- **تحكمات** — إيقاف (Pause) | متابعة (Resume) | إلغاء (Cancel)
-- **حالة التحذير** — إذا كانت مساحة التخزين غير كافية
-- **تصدير إلى المعرض** — بعد اكتمال التحميل
+**الآلية:**
+- 8 خيوط متوازية عبر HTTP Range Requests
+- يستخدم `RandomAccessFile` للكتابة الآمنة المتوازية
+- حفظ تقدم كل خيط في ملف `.progress`
+- استئناف: قراءة الملف الموجود وتحديد الأجزاء المفقودة
+- إعادة المحاولة 5 مرات مع backoff تصاعدي (2s → 10s)
+- تتبع السرعة على نافذة 5 ثوانٍ
+- حفظ التقدم كل ~512KB
+- HttpURLConnection (ليس OkHttp رغم وجوده)
+- User-Agent ثابت: `okhttp/4.10.0`
 
 ---
 
-## 🤖 نظام AI Chat
+### 2. نظام الترجمة — 3 مصادر
 
-### `AiChatRepository.kt` — 359 سطر
+**الملف:** `ui/viewmodel/SubtitleHelper.kt` (~605 سطر)
+
+**المصادر:**
+1. **MovieBox** — عبر `moviebox-fastapi.vercel.app/get_subtitles`
+2. **Subdl** — عبر `api.subdl.com/api/v1/subtitles`
+3. **OpenSubtitles** — عبر `api.opensubtitles.com/api/v1/subtitles`
+
+**القدرات:**
+- تحليل SRT/VTT/ASS (SubtitleParser)
+- فك ضغط ZIP و GZip
+- مطابقة الحلقات في ملفات ZIP الموسمية
+- تحميل ترجمة عربية تلقائي عند فتح حلقة
+
+**درج الترجمة (OfflinePlayerScreen):**
+- 7 صفحات: التحكم + MovieBox + Subdl + OpenSubtitles + محلية + دفعات + متصفح ملفات
+- تحكم بـ: Y Offset، حجم الخط، مزامنة الوقت (±100ms)
+
+---
+
+### 3. نظام MovieBox
+
+**الملفات:** `data/remote/moviebox/` (6 ملفات)
+
+| الملف | الوظيفة |
+|-------|---------|
+| `MovieBoxApiImpl` | تنفيذ API (بحث، روابط، ترجمة، تصفح) |
+| `MovieBoxHttpClient` | عميل HTTP مع failover بين 7 خوادم |
+| `MovieBoxSigner` | توقيع HMAC-MD5 للطلبات |
+| `MovieBoxDeviceInfo` | تزييف هوية الجهاز (Redmi/OneRoom) |
+| `MovieBoxRepository` | تخزين مؤقت + SharedPreferences cache |
+| `MovieBoxViewModel` | StateFlows مع timeout 30s |
+
+**الـ Backend:** `moviebox-fastapi.vercel.app` كوسيط
+
+**الخوادم المباشرة:** api6.aoneroom.com, api5.aoneroom.com, api4.aoneroom.com, api4sg.aoneroom.com, api3.aoneroom.com, api6sg.aoneroom.com, api.inmoviebox.com
+
+---
+
+### 4. نظام AI Chat
+
+**الملفات:** `ai/` (16 ملف)
+
+**المزودون:**
+1. **Google Gemini** — عبر Generative Language API
+2. **OpenCode Zen** — OpenAI-compatible
+3. **Bynara** — OpenAI-compatible
+4. **Agnes AI** — OpenAI-compatible
+
+**القدرات:**
+- SSE Streaming للردود
+- Tool use (7 أدوات): بحث TMDB، قائمة المشاهدة، التحميلات، سجل النشاط، إضافة للمشاهدة، تفاصيل TMDB، تحميل محتوى
+- نظام موافقة المستخدم على الأدوات الحساسة (تحميل المحتوى)
+- حفظ المحادثات في Room DB
+- System prompt بالعربية
+
+---
+
+### 5. نظام الدردشة
+
+**الملف:** `chat/ChatManager.kt` (~256 سطر)
+
+- Firebase Realtime Database
+- نوعان من الغرف: **عامة** (public) و**خاصة** (DM)
+- رسائل نصية + صور (ImgBB)
+- تزامن آخر رسالة في `chat_rooms` و `user_rooms`
+- Pagination: 50 رسالة في كل مرة
+- تخزين مؤقت في الذاكرة
+
+---
+
+### 6. نظام المصادقة
+
+**الملف:** `auth/AuthManager.kt` (~68 سطر)
+
+- Google Sign-In عبر Credential Manager + Firebase Auth
+- Email/Password عبر Firebase Auth
+- SHA-256 nonce للأمان
+- Google OAuth Client ID ثابت في الكود
+
+---
+
+### 7. قاعدة البيانات المحلية (Room)
+
+**الاسم:** `cinemios_database` — version 15
+
+**الجداول:**
+| الجدول | الغرض |
+|--------|-------|
+| `watchlist` | قائمة المشاهدة (مع soft-delete) |
+| `downloads` | التحميلات (التقدم، الحالة، الجودة) |
+| `subtitle_downloads` | ملفات الترجمة المحملة |
+| `episode_watch_status` | حالة مشاهدة الحلقات |
+| `season_meta` | بيانات المواسم المؤقتة |
+| `saved_images` | الصور المحفوظة من المتصفح |
+| `ai_conversations` | محادثات AI |
+| `ai_messages` | رسائل AI |
+
+---
+
+## هيكل الملفات
 
 ```
-AiChatRepository
+wacher/
+├── .github/workflows/build.yml          # CI: بناء APK على push إلى main
+├── app/
+│   ├── build.gradle.kts                  # إعدادات البناء + API keys
+│   ├── google-services.json              # إعدادات Firebase
+│   └── src/main/
+│       ├── AndroidManifest.xml           # الأذونات + Deep links
+│       ├── java/com/example/
+│       │   ├── MainActivity.kt           # النقطة الرئيسية + Navigation + BottomBar
+│       │   ├── WatcheraApplication.kt    # Application class
+│       │   │
+│       │   ├── ai/                       # ★ نظام AI
+│       │   │   ├── AiModels.kt           # نماذج البيانات
+│       │   │   ├── AiSessionManager.kt   # إدارة الجلسات
+│       │   │   ├── AiViewModel.kt       # ViewModel (~560 سطر)
+│       │   │   ├── data/                 # Room DAO + Entities
+│       │   │   ├── provider/             # Gemini + OpenAI-compatible
+│       │   │   ├── tools/                # تنفيذ الأدوات
+│       │   │   └── ui/                   # مكونات UI للشات
+│       │   │
+│       │   ├── auth/                     # المصادقة
+│       │   │   ├── AuthManager.kt        # Google Sign-In + Email
+│       │   │   ├── UserManager.kt        # الملف الشخصي
+│       │   │   └── ActivityLogManager.kt # سجل النشاط
+│       │   │
+│       │   ├── chat/                     # الدردشة
+│       │   │   ├── ChatManager.kt        # Firebase RTDB operations
+│       │   │   └── ChatModels.kt         # نماذج البيانات
+│       │   │
+│       │   ├── data/
+│       │   │   ├── local/                # Room DB
+│       │   │   ├── remote/               # APIs (TMDB + MovieBox)
+│       │   │   ├── repository/           # MovieRepository
+│       │   │   └── sync/                 # WatchlistSyncManager
+│       │   │
+│       │   ├── ui/
+│       │   │   ├── components/           # 17 مكون قابل لإعادة الاستخدام
+│       │   │   ├── screens/              # 16 شاشة
+│       │   │   ├── theme/                # ألوان + خط + Theme
+│       │   │   └── viewmodel/            # MovieVM + SubtitleHelper
+│       │   │
+│       │   └── utils/
+│       │       ├── MultiThreadDownloader.kt  # تحميل متوازي
+│       │       └── TextDirection.kt          # RTL detection
+│       │
+│       └── res/                          # موارد Android
 │
-└── chatCompletion(provider, model, messages, onEvent)
-    ├── إرسال طلب POST إلى {endpoint}/chat/completions
-    ├── قراءة SSE (Server-Sent Events) stream
-    │   ├── content delta → onEvent(content)
-    │   ├── finish_reason → onEvent(done)
-    │   └── error → onEvent(error)
-    ├── دعم web_search tool calling:
-    │   ├── استدعاء tool → إجراء بحث ويب
-    │   ├── إرسال نتيجة البحث كـ tool_response
-    │   └── استقبال الرد النهائي
-    └── حد أقصى 5 جولات (turns) لأمان الـ tool calling
-```
-
-### `AiProvider.kt` — نماذج البيانات
-```kotlin
-AiProvider(id, displayName, endpoint, apiKey, models[], isDefault)
-AiModel(name, thinkingEffort, webSearch)
-ChatMessage(role, content, timestamp)
-```
-
-### `AiProviderManager.kt` — 99 سطر
-- **تخزين المزودين** في SharedPreferences (JSON)
-- **CRUD** كامل: getProviders, saveProviders, add, update, delete
-- **إدارة الرسائل** لكل مزود: saveMessages, loadMessages, clearMessages
-- **getDefaultProvider()** — المزود الافتراضي
-
----
-
-## 🔐 نظام المصادقة
-
-### `AuthManager.kt`
-- **Google Sign-In** عبر Credential Manager API
-- **Email/Password** — تسجيل وتسجيل دخول
-- **GoogleSignInClient** مع Request ID Token
-- **Firebase Auth** — ربط مع Firebase Authentication
-- **مفتاح SHA-1** للتطوير مسجل في Firebase Console (debug.keystore)
-
-### `UserManager.kt`
-- تخزين الملف الشخصي: username، displayName، avatarUrl في SharedPreferences
-- أسماء مستخدمين فريدة (عشوائية + اختيار المستخدم)
-- الصورة الرمزية: رابط URL (عادة من Google)
-
-### `ProfileSetupDialog.kt`
-- يظهر عند أول تسجيل دخول
-- إدخال الاسم المعروض
-- اختيار الصورة الرمزية
-- إنشاء معرف مستخدم فريد
-
----
-
-## 🎬 تكامل MovieBox
-
-### آلية العمل
-
-```
-التطبيق ←→ moviebox-fastapi (Vercel backend) ←→ MovieBox API
-```
-
-### `MovieBoxApiImpl.kt`
-| الدالة | الوظيفة |
-|--------|---------|
-| `search(query)` | البحث في فهرس MovieBox |
-| `getDownloadLinks(subjectId)` | جلب روابط البث والتحميل |
-| `getSubtitles(subjectId, resourceId)` | جلب الترجمات |
-
-### `MovieBoxHttpClient.kt`
-- **Failover بين دومينين**: `https://web-api.movie-box.ai` و `https://api.phim.buzz`
-- **Keep-Alive** — إعادة استخدام الاتصالات
-- **توقيع HMAC-MD5** — `MovieBoxSigner` يوقع كل طلب بـ device fingerprint + timestamp
-- **Device Info** — `MovieBoxDeviceInfo` يولد معرف جهاز فريد (device_id عشوائي + app_version)
-
-### `MovieBoxRepository.kt`
-- **In-memory cache** — تخزين نتائج مؤقتة لمدة محددة
-- تجنب الطلبات المتكررة لنفس البيانات
-
-### Backend (خارجي): `ahmedio3/moviebox-fastapi`
-- **مستضاف على Vercel**
-- **API**:
-  - `GET /search?query=...&limit=...` — بحث
-  - `GET /get_download_links?subject_id=...` — روابط التحميل
-  - `GET /get_subtitles?subject_id=...&resource_id=...` — ترجمات
-
----
-
-## 🔥 تكامل Firebase
-
-| الخدمة | الاستخدام |
-|--------|-----------|
-| **Firebase Authentication** | Google Sign-In, Email/Password |
-| **Firebase Realtime Database** | الرسائل الجماعية (Global Chat), مؤشرات الكتابة, إشعارات الأدمن, الأقسام المخصصة |
-| **Firebase Console** | إدارة المستخدمين, لوحة الأدمن للأقسام المخصصة |
-
-### هيكل Realtime Database
-```
-/chat
-├── messages/{msgId}
-│   ├── text, senderName, senderId, avatarUrl, timestamp, replyTo
-├── typing/{userId}
-│   └── isTyping: Boolean, timestamp
-└── admin_broadcasts/{msgId}
-    └── text, timestamp, active
+├── gradle/libs.versions.toml             # Version Catalog
+├── firebase.json                         # إعدادات Firebase
+├── .env.example                          # متغيرات البيئة
+└── build.gradle.kts                      # Root build
 ```
 
 ---
 
-## 🚀 البدء مع المشروع
+## التشغيل
 
-### المتطلبات الأساسية
-1. **Android Studio** (Ladybug أو أحدث)
-2. **JDK 17+**
-3. **Android SDK 36**
-4. حساب **GitHub** (لـ CI/CD)
+### المتطلبات
+1. Android Studio (Ladybug+)
+2. JDK 17+
+3. Android SDK 36
 
-### خطوات التشغيل
+### الخطوات
 
 ```bash
-# 1. استنساخ المشروع
+# 1. استنساخ
 git clone https://github.com/ahmedio3/wacher.git
 cd wacher
 
-# 2. إعداد متغيرات البيئة
+# 2. إنشاء ملف .env من المثال
 cp .env.example .env
-# GEMINI_API_KEY اختياري (غير مستخدم حالياً)
 
-# 3. فتح في Android Studio
-# File → Open → اختيار مجلد wacher
-# انتظار حل الاعتماديات (dependency resolution)
+# 3. إضافة المفاتيح في .env:
+# GEMINI_API_KEY=
+# OPENCODE_ZEN_API_KEY=
+# BYNARA_API_KEY=
+# AGNES_API_KEY=
+# TMDB_API_KEY=
+# SUBDL_API_KEY=
+# OPENSUBTITLES_API_KEY=
+# IMGBB_API_KEY=
 
-# 4. تشغيل
-# اختيار جهاز/محاكي (API 24+)
-# الضغط على ▶️ Run
+# 4. فتح في Android Studio والتشغيل
+```
 
-# أو بناء من CLI:
+### أو بناء من Terminal:
+```bash
 ./gradlew assembleDebug
 ```
 
-### مشاكل شائعة
+---
 
-| المشكلة | الحل |
-|---------|------|
-| `debug.keystore` غير موجود | `keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"` |
-| Firebase Auth لا يعمل مع Google | تأكد من تسجيل SHA-1 الخاص بـ debug.keystore في Firebase Console |
-| Room migration error | احذف التطبيق وأعد تثبيته (أو increment version + provide migration) |
+## Deep Links
+
+التطبيق يدعم:
+- `cinemios://show/{type}/{id}`
+- `https://watchera.com/show/{type}/{id}`
 
 ---
 
-## 🔧 الإعدادات والبيئة
+## الألوان (Theme)
 
-### متغيرات البيئة (`.env`)
-| المتغير | مطلوب | الوصف |
+**الوضع الفاتح (Comfort Beige):**
+- الخلفية: `#F9F5EE` (بيج ناعم)
+- السطح: `#EFECE4` (شوفان)
+- الأساسي: `#8C6D4F` (بني كراميل)
+- التقييم: `#D6A45C` (ذهبي دافئ)
+- النص: `#2C241E` (إسبريسو)
+
+**الوضع الليلي:**
+- الخلفاء: `#0D1117`
+- السطح: `#161B22`
+- الأساسي: `#3B4A6B` (أزرق داكن)
+
+**الخط:** IBM Plex Sans Arabic (Google Fonts)
+
+---
+
+## الإعدادات المطلوبة (API Keys)
+
+| المفتاح | الخدمة | مطلوب |
 |---------|--------|-------|
-| `GEMINI_API_KEY` | لا | مفتاح Gemini API (اختياري، غير مستخدم حالياً) |
-
-### إصدارات مهمة في `gradle/libs.versions.toml`
-
-| الإصدار | القيمة |
-|---------|--------|
-| AGP | 8.10.1 |
-| Kotlin | 2.0.21 |
-| Compose BOM | 2024.09.00 |
-| Firebase BOM | 34.12.0 |
-| ExoPlayer/Media3 | 1.4.1 |
-| Room | 2.7.0 |
-| Retrofit | 2.12.0 |
-| OkHttp | 4.10.0 |
-
-### التوقيع (Release builds)
-| المتغير | الوصف |
-|---------|--------|
-| `KEYSTORE_PATH` | مسار ملف keystore |
-| `STORE_PASSWORD` | كلمة مرور keystore |
-| `KEY_PASSWORD` | كلمة مرور المفتاح |
-
----
-
-## 📋 CI/CD و GitHub Actions
-
-### `build.yml`
-```yaml
-الحدث: push إلى main
-البيئة: ubuntu-latest
-Java: Temurin 17
-Gradle: 8.11.1
-المخرجات: app-debug.apk (محفوظ 7 أيام)
-```
-
-### سير العمل
-1. **Checkout** — استنساخ المستودع
-2. **Setup Java** — تثبيت JDK 17
-3. **Setup Gradle** — تثبيت Gradle 8.11.1 مع caching
-4. **Build Debug APK** — `gradle assembleDebug`
-5. **Upload Artifact** — رفع APK إلى GitHub Actions artifacts
-
-### Flow
-```
-commit + push (main)
-    ↓
-GitHub Actions starts build
-    ↓
-gradle assembleDebug
-    ↓
-BUILD SUCCESS → upload APK
-    ↓
-BUILD FAILED → gh run view --log-failed → fix → commit → push → loop
-```
-
----
-
-## 🧪 الاختبارات
-
-```bash
-# اختبارات الوحدة
-./gradlew test
-
-# اختبارات الأجهزة (Instrumented)
-./gradlew connectedAndroidTest
-
-# اختبارات الصور (Roborazzi screenshot tests)
-./gradlew recordRoborazziDebug
-
-# فحص الصور المسجلة
-./gradlew verifyRoborazziDebug
-```
-
-### أنواع الاختبارات
-| النوع | الإطار | الموقع |
-|-------|--------|--------|
-| اختبارات وحدة | JUnit 4 + Robolectric | `app/src/test/` |
-| اختبارات أجهزة | AndroidX Test + Espresso | `app/src/androidTest/` |
-| اختبارات صور | Roborazzi | `app/src/test/` |
-
----
-
-## 📝 سجل التحديثات
-
-### `11a0dc0` — إصلاح تعليق coroutine عند تبديل الصفحات
-- **المشكلة**: أزرار الصفحة 0 كانت تبدأ fetch في `rememberCoroutineScope()` الخاص بها، ثم تنتقل إلى صفحة أخرى عبر `subtitlePage = N`، مما يلغي الـ scope ويوقف الـ fetch
-- **الحل**: إزالة `scope.launch` من أزرار الصفحة 0 (تكتفي بـ `subtitlePage = N` فقط)، وإضافة `LaunchedEffect(Unit)` في كل صفحة فرعية لجلب البيانات تلقائياً عند الدخول
-- **ملفات متأثرة**: `OfflinePlayerScreen.kt`
-
-### `8d9bd9a` — فصل الصفحة 2 إلى صفحات منفصلة (Subdl + OpenSubtitles)
-- فصل الصفحة 2 المدمجة إلى صفحة 2 (Subdl) وصفحة 3 (OpenSubtitles) منفصلتين
-- إزالة `async import` غير المستخدم
-- إضافة `rememberScrollState` و `verticalScroll` imports
-
-### `5a70134` — إعادة تصميم واجهة الترجمة (3 صفحات)
-- **الصفحة 0**: قابلة للتمرير (verticalScroll) مع أزرار منفصلة لكل مصدر
-- **الصفحة 1**: نتائج MovieBox
-- **الصفحة 2**: نتائج Subdl + OpenSubtitles (مدمجة سابقاً)
-- **SectionHeader** و **SourceSubtitleCard** — مكونات عرض جديدة
-
-### `9004162` — إضافة Subdl + OpenSubtitles
-- `SubtitleHelper.fetchSubdlSubtitles()` — مباشر من Subdl API
-- `SubtitleHelper.fetchOpenSubtitles()` — مباشر من OpenSubtitles API
-- `SubtitleHelper.getOpenSubtitleDownloadUrl()` — POST للحصول على رابط التحميل
-- `downloadAndExtractSubtitle()` — دعم ZIP detection + GZip + timeouts + redirects
-
-### قبل ذلك
-- دعم Firebase + Google Sign-In
-- إعادة تصميم شاشة التحميلات (PosterCard, CompactEpisodeRow, PlaylistFolderCard)
-- إضافة AI Chat مع مزودين متعددين
-- إضافة download flow مع `MovieBoxDownloadSheet` (502 سطر)
-- تحسينات الأداء وإصلاحات أخطاء متعددة
+| `TMDB_API_KEY` | The Movie Database | نعم (بيانات الأفلام) |
+| `SUBDL_API_KEY` | Subdl Subtitles | نعم (ترجمة) |
+| `OPENSUBTITLES_API_KEY` | OpenSubtitles | نعم (ترجمة) |
+| `IMGBB_API_KEY` | رفع الصور | نعم (محادثة + بروفايل) |
+| `GEMINI_API_KEY` | Google Gemini AI | اختياري |
+| `OPENCODE_ZEN_API_KEY` | OpenCode Zen AI | اختياري |
+| `BYNARA_API_KEY` | Bynara AI | اختياري |
+| `AGNES_API_KEY` | Agnes AI | اختياري |
 
 ---
 
 <div align="center">
 
 **بُني بـ ❤️ باستخدام Kotlin و Jetpack Compose**
-
-[Report Bug](https://github.com/ahmedio3/wacher/issues) · [Request Feature](https://github.com/ahmedio3/wacher/issues)
 
 </div>

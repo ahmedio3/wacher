@@ -60,13 +60,6 @@ fun buildToolDeclarationsJson(): String {
     )
     tools.put(
         tool(
-            "get_activity_log",
-            "Get the user's recent activity history.",
-            objProps("limit" to prop("integer", "Number of activities (max 50)")).put("required", JSONArray())
-        )
-    )
-    tools.put(
-        tool(
             "add_to_watchlist",
             "Add a movie or TV show to the user's watchlist.",
             objProps(
@@ -88,20 +81,5 @@ fun buildToolDeclarationsJson(): String {
             ).put("required", JSONArray(listOf("tmdb_id", "media_type")))
         )
     )
-    tools.put(
-        tool(
-            "download_content",
-            "Download a movie or TV episode. Requires user approval.",
-            objProps(
-                "tmdb_id" to prop("integer", "TMDB ID"),
-                "media_type" to prop("string", "movie or tv"),
-                "title" to prop("string", "Title"),
-                "season" to prop("integer", "Season (0 for movies)"),
-                "episode" to prop("integer", "Episode (0 for movies)"),
-                "quality" to prop("string", "720p, 1080p, 4k")
-            ).put("required", JSONArray(listOf("tmdb_id", "media_type", "title")))
-        )
-    )
-
     return tools.toString()
 }
