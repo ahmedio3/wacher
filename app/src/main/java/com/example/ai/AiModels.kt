@@ -50,8 +50,17 @@ data class AiChatMessage(
     val reasoningContent: String? = null,
     val toolCalls: List<AiToolCall>? = null,
     val toolCallId: String? = null,
-    val imageUrls: List<String>? = null
+    val imageUrls: List<String>? = null,
+    val toolExecutions: List<ToolExecutionDisplay> = emptyList()
 )
+
+data class ToolExecutionDisplay(
+    val toolName: String,
+    val status: ToolExecutionStatus,
+    val summary: String = ""
+)
+
+enum class ToolExecutionStatus { RUNNING, SUCCESS, ERROR }
 
 enum class AiMessageRole(val value: String) {
     SYSTEM("system"),

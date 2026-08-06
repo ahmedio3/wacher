@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.ai.data.AiConversationEntity
 import com.example.ai.data.AiMessageEntity
 
-@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, AiConversationEntity::class, AiMessageEntity::class], version = 15, exportSchema = false)
+@Database(entities = [WatchlistEntity::class, DownloadEntity::class, SubtitleDownloadEntity::class, EpisodeWatchStatusEntity::class, SavedImageEntity::class, SeasonMetaEntity::class, AiConversationEntity::class, AiMessageEntity::class], version = 16, exportSchema = false)
 abstract class MovieDatabase : RoomDatabase() {
     abstract val movieDao: MovieDao
     abstract val aiDao: com.example.ai.data.AiDao
@@ -86,13 +86,19 @@ abstract class MovieDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ai_messages ADD COLUMN toolExecutionsJson TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): MovieDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     MovieDatabase::class.java,
                     "cinemios_database"
-                ).addMigrations(MIGRATION_13_14, MIGRATION_14_15)
+                ).addMigrations(MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                     .fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance

@@ -1,11 +1,8 @@
 package com.example.ai.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -13,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,50 +30,42 @@ fun ToolCallCard(
         else -> Icons.Default.Search
     }
 
-    val statusIcon = when (execution.status) {
-        ToolExecutionStatus.RUNNING -> Icons.Default.HourglassTop
-        ToolExecutionStatus.SUCCESS -> Icons.Default.CheckCircle
-        ToolExecutionStatus.ERROR -> Icons.Default.Error
-    }
-
-    val statusColor = when (execution.status) {
-        ToolExecutionStatus.RUNNING -> Color(0xFF2196F3)
-        ToolExecutionStatus.SUCCESS -> Color(0xFF34C759)
-        ToolExecutionStatus.ERROR -> Color(0xFFFF3B30)
-    }
-
-    val label = when (execution.toolName) {
-        "search_tmdb" -> execution.summary.ifEmpty { "البحث في TMDB" }
-        "get_watchlist" -> "عرض قائمة المشاهدة"
-        "get_downloads" -> "عرض التحميلات"
-        "add_to_watchlist" -> execution.summary.ifEmpty { "إضافة لقائمة المشاهدة" }
-        "get_tmdb_details" -> execution.summary.ifEmpty { "جلب التفاصيل" }
-        else -> execution.summary.ifEmpty { execution.toolName }
-    }
+    val isRunning = execution.status == ToolExecutionStatus.RUNNING
 
     Row(
         modifier = modifier.padding(start = 20.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+        if (isRunning) {
+            Icon(
+                imageVector = Icons.Default.HourglassTop,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
         Text(
-            text = label,
+            text = execution.summary.ifEmpty {
+                when (execution.toolName) {
+                    "search_tmdb" -> "البحث في TMDB"
+                    "get_watchlist" -> "عرض قائمة المشاهدة"
+                    "get_downloads" -> "عرض التحميلات"
+                    "add_to_watchlist" -> "إضافة لقائمة المشاهدة"
+                    "get_tmdb_details" -> "جلب التفاصيل"
+                    else -> execution.toolName
+                }
+            },
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             fontFamily = IBMPlexSansArabicFontFamily
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Icon(
-            imageVector = statusIcon,
-            contentDescription = null,
-            modifier = Modifier.size(12.dp),
-            tint = statusColor
         )
     }
 }

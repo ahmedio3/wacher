@@ -36,5 +36,6 @@ data class AiMessageEntity(
     val toolCallsJson: String? = null,
     val toolResultsJson: String? = null,
     val imageUrlsJson: String? = null,
+    val toolExecutionsJson: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

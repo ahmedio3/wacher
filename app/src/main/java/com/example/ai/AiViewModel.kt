@@ -30,17 +30,8 @@ data class AiChatUiState(
     val conversations: List<AiConversationEntity> = emptyList(),
     val currentConversationId: String? = null,
     val currentConversationTitle: String = "محادثة جديدة",
-    val toolExecutions: List<ToolExecutionDisplay> = emptyList(),
     val pendingApproval: ApprovalRequest? = null
 )
-
-data class ToolExecutionDisplay(
-    val toolName: String,
-    val status: ToolExecutionStatus,
-    val summary: String = ""
-)
-
-enum class ToolExecutionStatus { RUNNING, SUCCESS, ERROR }
 
 data class ApprovalRequest(
     val description: String,
@@ -187,8 +178,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(
                         messages = sessionManager.getMessages(),
                         isStreaming = true,
-                        error = null,
-                        toolExecutions = emptyList()
+                        error = null
                     )
                 }
 
@@ -256,15 +246,13 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun executeToolCalls(toolCalls: List<AiToolCall>, conversationId: String) {
         for (call in toolCalls) {
-            _state.update {
-                it.copy(
-                    toolExecutions = it.toolExecutions + ToolExecutionDisplay(
-                        toolName = call.name,
-                        status = ToolExecutionStatus.RUNNING,
-                        summary = "جارٍ التنفيذ..."
-                    )
+            addToolToLastMessage(
+                ToolExecutionDisplay(
+                    toolName = call.name,
+                    status = ToolExecutionStatus.RUNNING,
+                    summary = toolLabel(call.name)
                 )
-            }
+            )
 
             val result = withContext(Dispatchers.IO) {
                 toolExecutor.executeTool(call.name, call.arguments)
@@ -272,38 +260,83 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
             when (result) {
                 is ToolResult.Success -> {
-                    updateToolExecution(call.name, ToolExecutionStatus.SUCCESS, "تم بنجاح")
+                    updateToolInLastMessage(call.name, ToolExecutionStatus.SUCCESS, toolSummary(call.name, result.data))
                     sessionManager.addToolMessages(
                         listOf(AiToolResult(call.id, call.name, result.data))
                     )
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.Error -> {
-                    updateToolExecution(call.name, ToolExecutionStatus.ERROR, result.message)
+                    updateToolInLastMessage(call.name, ToolExecutionStatus.ERROR, result.message)
                     sessionManager.addToolMessages(
                         listOf(AiToolResult(call.id, call.name, "خطأ: ${result.message}"))
                     )
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.NeedsApproval -> {
+                    updateToolInLastMessage(call.name, ToolExecutionStatus.SUCCESS, "في انتظار الموافقة...")
                     _state.update {
                         it.copy(
                             pendingApproval = ApprovalRequest(
                                 description = result.description,
                                 toolName = call.name,
                                 args = result.executeData
-                            ),
-                            toolExecutions = it.toolExecutions.map { exec ->
-                                if (exec.toolName == call.name) exec.copy(
-                                    status = ToolExecutionStatus.SUCCESS,
-                                    summary = "في انتظار الموافقة..."
-                                ) else exec
-                            }
+                            )
                         )
                     }
                 }
             }
         }
+    }
+
+    private fun addToolToLastMessage(tool: ToolExecutionDisplay) {
+        val msgs = _state.value.messages.toMutableList()
+        val lastIdx = msgs.lastIndex
+        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
+            val last = msgs[lastIdx]
+            msgs[lastIdx] = last.copy(toolExecutions = last.toolExecutions + tool)
+        }
+        _state.update { it.copy(messages = msgs) }
+    }
+
+    private fun updateToolInLastMessage(toolName: String, status: ToolExecutionStatus, summary: String) {
+        val msgs = _state.value.messages.toMutableList()
+        val lastIdx = msgs.lastIndex
+        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
+            val last = msgs[lastIdx]
+            msgs[lastIdx] = last.copy(
+                toolExecutions = last.toolExecutions.map {
+                    if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
+                }
+            )
+        }
+        _state.update { it.copy(messages = msgs) }
+    }
+
+    private fun toolLabel(toolName: String): String = when (toolName) {
+        "search_tmdb" -> "جارٍ البحث..."
+        "get_watchlist" -> "عرض القائمة"
+        "get_downloads" -> "عرض التحميلات"
+        "add_to_watchlist" -> "جارٍ الإضافة..."
+        "get_tmdb_details" -> "جلب التفاصيل"
+        else -> "جارٍ التنفيذ..."
+    }
+
+    private fun toolSummary(toolName: String, data: String): String = when (toolName) {
+        "search_tmdb" -> {
+            try {
+                val json = org.json.JSONArray(data)
+                val count = json.length()
+                if (count == 0) "لا توجد نتائج"
+                else {
+                    val first = json.getJSONObject(0)
+                    val title = first.optString("title", "?")
+                    "وجدت $count نتائج: $title..."
+                }
+            } catch (_: Exception) { "تم" }
+        }
+        "add_to_watchlist" -> "تمت الإضافة ✓"
+        else -> "تم"
     }
 
     fun approveAction() {
@@ -327,7 +360,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         )
                     )
-                    updateToolExecution(approval.toolName, ToolExecutionStatus.SUCCESS, "تم التنفيذ")
+                    updateToolInLastMessage(approval.toolName, ToolExecutionStatus.SUCCESS, "تم التنفيذ")
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.Error -> {
@@ -340,7 +373,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         )
                     )
-                    updateToolExecution(approval.toolName, ToolExecutionStatus.ERROR, result.message)
+                    updateToolInLastMessage(approval.toolName, ToolExecutionStatus.ERROR, result.message)
                     reInvokeProvider(conversationId)
                 }
                 is ToolResult.NeedsApproval -> {}
@@ -363,7 +396,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
             )
-            updateToolExecution(approval.toolName, ToolExecutionStatus.ERROR, "تم الرفض")
+            updateToolInLastMessage(approval.toolName, ToolExecutionStatus.ERROR, "تم الرفض")
             reInvokeProvider(conversationId)
         }
     }
@@ -409,16 +442,6 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             msgs.add(AiChatMessage(role = AiMessageRole.ASSISTANT, content = "", reasoningContent = chunk))
         }
         _state.update { it.copy(messages = msgs) }
-    }
-
-    private fun updateToolExecution(toolName: String, status: ToolExecutionStatus, summary: String) {
-        _state.update { state ->
-            state.copy(
-                toolExecutions = state.toolExecutions.map {
-                    if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
-                }
-            )
-        }
     }
 
     private suspend fun finalizeMessage(conversationId: String) {
@@ -480,7 +503,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                     currentConversationTitle = conversationEntity.title,
                     messages = sessionManager.getMessages(),
                     error = null,
-                    toolExecutions = emptyList(),
+
                     pendingApproval = null,
                     isStreaming = false
                 )
@@ -518,7 +541,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                 currentConversationId = conversationId,
                 currentConversationTitle = "محادثة جديدة",
                 error = null,
-                toolExecutions = emptyList(),
+
                 pendingApproval = null,
                 isStreaming = false
             )

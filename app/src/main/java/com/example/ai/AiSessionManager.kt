@@ -146,6 +146,8 @@ class AiSessionManager(private val aiDao: AiDao) {
             reasoningContent = msg.reasoningContent,
             toolCallsJson = toolCallsToJson(msg.toolCalls),
             imageUrlsJson = msg.imageUrls?.let { org.json.JSONArray(it).toString() },
+            toolExecutionsJson = if (msg.toolExecutions.isNotEmpty())
+                toolExecutionsToJson(msg.toolExecutions) else null,
             createdAt = System.currentTimeMillis()
         )
     }
@@ -161,7 +163,35 @@ class AiSessionManager(private val aiDao: AiDao) {
                     val arr = org.json.JSONArray(it)
                     (0 until arr.length()).map { i -> arr.getString(i) }
                 } catch (e: Exception) { null }
-            }
+            },
+            toolExecutions = jsonToToolExecutions(entity.toolExecutionsJson)
         )
+    }
+
+    private fun toolExecutionsToJson(executions: List<ToolExecutionDisplay>): String {
+        val arr = org.json.JSONArray()
+        executions.forEach { exec ->
+            val obj = org.json.JSONObject()
+            obj.put("toolName", exec.toolName)
+            obj.put("status", exec.status.name)
+            obj.put("summary", exec.summary)
+            arr.put(obj)
+        }
+        return arr.toString()
+    }
+
+    private fun jsonToToolExecutions(json: String?): List<ToolExecutionDisplay> {
+        if (json == null) return emptyList()
+        return try {
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                ToolExecutionDisplay(
+                    toolName = obj.getString("toolName"),
+                    status = try { ToolExecutionStatus.valueOf(obj.getString("status")) } catch (_: Exception) { ToolExecutionStatus.SUCCESS },
+                    summary = obj.optString("summary", "")
+                )
+            }
+        } catch (_: Exception) { emptyList() }
     }
 }

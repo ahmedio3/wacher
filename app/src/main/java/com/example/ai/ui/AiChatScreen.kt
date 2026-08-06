@@ -3,7 +3,6 @@ package com.example.ai.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
@@ -18,7 +17,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ai.AiViewModel
 import com.example.ai.PROVIDER_CONFIGS
-import com.example.ai.ToolExecutionStatus
 import com.example.ui.components.bouncyOverscroll
 
 @Composable
@@ -35,7 +33,7 @@ fun AiChatScreen(
         ?.find { it.id == state.currentModelId }
     val supportsVision = currentModel?.supportsVision ?: false
 
-    LaunchedEffect(state.messages.size, state.isStreaming, state.toolExecutions.size) {
+    LaunchedEffect(state.messages.size, state.isStreaming) {
         if (state.messages.isNotEmpty() || state.isStreaming) {
             listState.animateScrollToItem(
                 listState.layoutInfo.totalItemsCount.coerceAtLeast(0)
@@ -77,29 +75,8 @@ fun AiChatScreen(
                                 .bouncyOverscroll(),
                             contentPadding = PaddingValues(top = 56.dp, bottom = 8.dp)
                         ) {
-                            itemsIndexed(state.messages) { index, msg ->
+                            itemsIndexed(state.messages) { _, msg ->
                                 AiMessageBubble(message = msg)
-
-                                val isLastMessage = index == state.messages.size - 1
-                                val hasMoreMessages = index < state.messages.size - 1
-                                val nextMessageIsUser = if (!hasMoreMessages) false
-                                else state.messages.getOrNull(index + 1)?.role?.value == "user"
-
-                                if (isLastMessage && state.toolExecutions.isNotEmpty() && !nextMessageIsUser) {
-                                    state.toolExecutions.forEach { execution ->
-                                        ToolCallCard(execution = execution)
-                                    }
-                                }
-                            }
-
-                            if (state.isStreaming && state.toolExecutions.isNotEmpty()) {
-                                item {
-                                    Column {
-                                        state.toolExecutions.forEach { execution ->
-                                            ToolCallCard(execution = execution)
-                                        }
-                                    }
-                                }
                             }
 
                             if (state.pendingApproval != null) {
