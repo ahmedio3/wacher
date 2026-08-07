@@ -65,7 +65,10 @@ class AiSessionManager(private val aiDao: AiDao) {
         }
     }
 
-    fun getLastMessage(): AiChatMessage? = messages.lastOrNull()
+    fun upsertByRole(role: AiMessageRole, message: AiChatMessage) {
+        val idx = messages.indexOfLast { it.role == role }
+        if (idx >= 0) messages[idx] = message
+    }
 
     fun addToolMessages(results: List<AiToolResult>) {
         for (result in results) {

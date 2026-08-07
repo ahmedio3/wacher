@@ -264,7 +264,8 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
                     toolName = call.name,
                     status = ToolExecutionStatus.RUNNING,
                     summary = toolLabel(call.name)
-                )
+                ),
+                toolCall = call
             )
 
             val result = withContext(Dispatchers.IO) {
@@ -302,40 +303,50 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun addToolToLastMessage(tool: ToolExecutionDisplay) {
+    private fun addToolToLastMessage(tool: ToolExecutionDisplay, toolCall: AiToolCall? = null) {
         _state.update { currentState ->
-            val msgs = currentState.messages
-            val lastIdx = msgs.lastIndex
-            if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-                val updatedMessages = msgs.toMutableList()
-                val lastMessage = updatedMessages[lastIdx]
+            val msgs = currentState.messages.toMutableList()
+            val idx = msgs.indexOfLast { it.role == AiMessageRole.ASSISTANT }
+            if (idx >= 0) {
+                val lastMessage = msgs[idx]
                 val updatedMessage = lastMessage.copy(
-                    toolExecutions = lastMessage.toolExecutions + tool
+                    toolExecutions = lastMessage.toolExecutions + tool,
+                    toolCalls = if (toolCall != null) {
+                        (lastMessage.toolCalls ?: emptyList()) + toolCall
+                    } else {
+                        lastMessage.toolCalls
+                    }
                 )
-                updatedMessages[lastIdx] = updatedMessage
-                sessionManager.updateLastMessage(updatedMessage)
-                currentState.copy(messages = updatedMessages)
+                msgs[idx] = updatedMessage
+                sessionManager.upsertByRole(AiMessageRole.ASSISTANT, updatedMessage)
+                currentState.copy(messages = msgs)
             } else {
-                currentState
+                val assistantMessage = AiChatMessage(
+                    role = AiMessageRole.ASSISTANT,
+                    content = "",
+                    toolExecutions = listOf(tool),
+                    toolCalls = toolCall?.let { listOf(it) }
+                )
+                sessionManager.addMessage(assistantMessage)
+                currentState.copy(messages = msgs + assistantMessage)
             }
         }
     }
 
     private fun updateToolInLastMessage(toolName: String, status: ToolExecutionStatus, summary: String) {
         _state.update { currentState ->
-            val msgs = currentState.messages
-            val lastIdx = msgs.lastIndex
-            if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-                val updatedMessages = msgs.toMutableList()
-                val lastMessage = updatedMessages[lastIdx]
+            val msgs = currentState.messages.toMutableList()
+            val idx = msgs.indexOfLast { it.role == AiMessageRole.ASSISTANT }
+            if (idx >= 0) {
+                val lastMessage = msgs[idx]
                 val updatedMessage = lastMessage.copy(
                     toolExecutions = lastMessage.toolExecutions.map {
                         if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
                     }
                 )
-                updatedMessages[lastIdx] = updatedMessage
-                sessionManager.updateLastMessage(updatedMessage)
-                currentState.copy(messages = updatedMessages)
+                msgs[idx] = updatedMessage
+                sessionManager.upsertByRole(AiMessageRole.ASSISTANT, updatedMessage)
+                currentState.copy(messages = msgs)
             } else {
                 currentState
             }
@@ -461,15 +472,14 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun appendToLastAssistantMessage(chunk: String) {
         _state.update { currentState ->
-            val msgs = currentState.messages
-            val lastIdx = msgs.lastIndex
-            if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-                val updatedMessages = msgs.toMutableList()
-                val lastMessage = updatedMessages[lastIdx]
+            val msgs = currentState.messages.toMutableList()
+            val idx = msgs.indexOfLast { it.role == AiMessageRole.ASSISTANT }
+            if (idx >= 0) {
+                val lastMessage = msgs[idx]
                 val updatedMessage = lastMessage.copy(content = lastMessage.content + chunk)
-                updatedMessages[lastIdx] = updatedMessage
-                sessionManager.updateLastMessage(updatedMessage)
-                currentState.copy(messages = updatedMessages)
+                msgs[idx] = updatedMessage
+                sessionManager.upsertByRole(AiMessageRole.ASSISTANT, updatedMessage)
+                currentState.copy(messages = msgs)
             } else {
                 val newMessage = AiChatMessage(role = AiMessageRole.ASSISTANT, content = chunk)
                 sessionManager.addMessage(newMessage)
@@ -479,15 +489,17 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun appendToLastAssistantReasoning(chunk: String) {
-        val msgs = _state.value.messages.toMutableList()
-        val lastIdx = msgs.lastIndex
-        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-            val last = msgs[lastIdx]
-            msgs[lastIdx] = last.copy(reasoningContent = (last.reasoningContent ?: "") + chunk)
-        } else {
-            msgs.add(AiChatMessage(role = AiMessageRole.ASSISTANT, content = "", reasoningContent = chunk))
+        _state.update { currentState ->
+            val msgs = currentState.messages.toMutableList()
+            val idx = msgs.indexOfLast { it.role == AiMessageRole.ASSISTANT }
+            if (idx >= 0) {
+                val last = msgs[idx]
+                msgs[idx] = last.copy(reasoningContent = (last.reasoningContent ?: "") + chunk)
+            } else {
+                msgs.add(AiChatMessage(role = AiMessageRole.ASSISTANT, content = "", reasoningContent = chunk))
+            }
+            currentState.copy(messages = msgs)
         }
-        _state.update { it.copy(messages = msgs) }
     }
 
     private suspend fun finalizeMessage(conversationId: String) {
