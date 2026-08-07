@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -83,7 +82,7 @@ fun SeasonEpisodeSheet(
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
                 LazyRow(
-                    modifier = Modifier.bouncyOverscroll(isVertical = false).padding(bottom = 12.dp),
+                    modifier = Modifier.padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(availableSeasons) { sNum ->
@@ -143,7 +142,7 @@ fun SeasonEpisodeSheet(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.bouncyOverscroll().heightIn(max = 400.dp),
+                    modifier = Modifier.heightIn(max = 400.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(episodes) { episode ->

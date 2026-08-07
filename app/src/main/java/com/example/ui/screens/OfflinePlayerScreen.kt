@@ -3,7 +3,6 @@ package com.example.ui.screens
 import android.content.Context
 import android.widget.Toast
 import android.content.Intent
-import com.example.ui.components.bouncyOverscroll
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
@@ -946,7 +945,7 @@ fun OfflinePlayerScreen(
                                             Text("التحميلات النشطة", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 16.dp))
                                             val activeDls = downloadsList.filter { it.status == "downloading" || it.status == "queued" || it.status == "paused" }
                                             LazyColumn(
-                                                modifier = Modifier.bouncyOverscroll(),
+                                                modifier = Modifier,
                                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
                                                 items(activeDls) { dl ->
@@ -1333,7 +1332,6 @@ fun OfflinePlayerScreen(
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .verticalScroll(mainScrollState)
-                                                .bouncyOverscroll()
                                         ) {
                                             // Subtitle status note
                                             Text(
@@ -1567,7 +1565,7 @@ fun OfflinePlayerScreen(
                                         val batchGroups by viewModel.subtitleBatchGroups.collectAsState(initial = emptyList())
                                         val scrollState = rememberScrollState()
                                         Column(
-                                            modifier = Modifier.fillMaxSize().verticalScroll(scrollState).bouncyOverscroll().padding(4.dp),
+                                            modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(4.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             if (batchGroups.isEmpty()) {
@@ -1740,7 +1738,7 @@ fun OfflinePlayerScreen(
                                                 }
 
                                                 LazyColumn(
-                                                    modifier = Modifier.bouncyOverscroll().fillMaxSize(),
+                                                    modifier = Modifier.fillMaxSize(),
                                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                                 ) {
                                                     items(entries) { entry ->
@@ -1901,7 +1899,7 @@ fun OfflinePlayerScreen(
                             } else {
                                 // Season selector — navigate between seasons that have downloads
                                 LazyRow(
-                                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     items(availableSeasons) { sNo ->
@@ -1923,7 +1921,7 @@ fun OfflinePlayerScreen(
 
                                 LazyColumn(
                                     state = episodesListState,
-                                    modifier = Modifier.bouncyOverscroll(),
+                                    modifier = Modifier,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     items(seasonEps, key = { it.id }) { ep ->

@@ -19,8 +19,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ai.AiViewModel
 import com.example.ai.PROVIDER_CONFIGS
-import com.example.ui.components.bouncyOverscroll
-
 @Composable
 fun AiChatScreen(
     onBackClick: () -> Unit,
@@ -74,8 +72,7 @@ fun AiChatScreen(
                             state = listState,
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth()
-                                .bouncyOverscroll(),
+                                .fillMaxWidth(),
                             contentPadding = PaddingValues(top = 56.dp, bottom = 8.dp)
                         ) {
                             items(

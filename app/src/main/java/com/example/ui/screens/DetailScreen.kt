@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import com.example.ui.components.bouncyOverscroll
 import com.example.ui.components.rememberPressState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -212,7 +211,6 @@ fun DetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .bouncyOverscroll()
                         .padding(bottom = 44.dp)
                 ) {
                     if (mediaType == "movie") {
@@ -756,7 +754,7 @@ fun MovieDetailContent(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
-                    modifier = Modifier.bouncyOverscroll(isVertical = false).fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
                 ) {
                     items(castList.take(10)) { cast ->
@@ -1080,7 +1078,6 @@ fun TvDetailContent(
                 // Season Selector Horizontal Row
                 LazyRow(
                     modifier = Modifier
-                        .bouncyOverscroll(isVertical = false)
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
@@ -1274,8 +1271,7 @@ fun FlowGenresRow(genres: List<TmdbGenre>) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .bouncyOverscroll(isVertical = false),
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
     ) {
         genres.forEach { genre ->
@@ -1400,7 +1396,6 @@ fun ShowsHorizontalRow(
 ) {
     LazyRow(
         modifier = Modifier
-            .bouncyOverscroll(isVertical = false)
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
     ) {

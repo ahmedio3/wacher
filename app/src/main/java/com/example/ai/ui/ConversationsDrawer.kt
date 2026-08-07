@@ -23,8 +23,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.data.AiConversationEntity
-import com.example.ui.components.bouncyOverscroll
-
 @Composable
 fun ConversationsDrawer(
     visible: Boolean,
@@ -109,7 +107,7 @@ fun ConversationsDrawer(
                         }
                     } else {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize().bouncyOverscroll(),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(vertical = 8.dp)
                         ) {
                             items(conversations, key = { it.id }) { conversation ->

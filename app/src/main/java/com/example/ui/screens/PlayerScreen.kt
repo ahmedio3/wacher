@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -508,7 +507,7 @@ fun PlayerScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     LazyRow(
-                        modifier = Modifier.bouncyOverscroll(isVertical = false),
+                        modifier = Modifier,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         itemsIndexed(
@@ -542,7 +541,6 @@ fun PlayerScreen(
                     )
                     LazyRow(
                         modifier = Modifier
-                            .bouncyOverscroll(isVertical = false)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

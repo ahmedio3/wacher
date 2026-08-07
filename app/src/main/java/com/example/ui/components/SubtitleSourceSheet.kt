@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import com.example.ui.components.bouncyOverscroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -121,7 +120,7 @@ fun SubtitleSourceSheet(
             // ===== PAGE 0: Source Picker =====
             0 -> {
                 Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).bouncyOverscroll(),
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
@@ -210,7 +209,7 @@ fun SubtitleSourceSheet(
 
                     // Results list
                     LazyColumn(
-                        modifier = Modifier.bouncyOverscroll().weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         searchSubsList?.let { subs ->
@@ -308,7 +307,7 @@ fun SubtitleSourceSheet(
                         }
                     } else {
                         LazyColumn(
-                            modifier = Modifier.bouncyOverscroll().weight(1f).fillMaxWidth(),
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             subdlSources?.let { subs ->
@@ -392,7 +391,7 @@ fun SubtitleSourceSheet(
                         }
                     } else {
                         LazyColumn(
-                            modifier = Modifier.bouncyOverscroll().weight(1f).fillMaxWidth(),
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             openSubSources?.let { subs ->

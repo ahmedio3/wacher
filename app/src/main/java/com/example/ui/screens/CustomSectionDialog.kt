@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import com.example.ui.components.bouncyOverscroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -69,7 +68,7 @@ fun CustomSectionDialog(
                         onSaved = { isAddingNew = false }
                     )
                 } else {
-                    LazyColumn(modifier = Modifier.bouncyOverscroll().fillMaxSize().padding(16.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                         items(items) { item ->
                             Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                                 Row(
@@ -147,7 +146,7 @@ fun AddNewCustomItemView(
                 }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn(modifier = Modifier.bouncyOverscroll().weight(1f)) {
+            LazyColumn(modifier = Modifier.weight(1f)) {
                 items(searchRes.orEmpty()) { m ->
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {

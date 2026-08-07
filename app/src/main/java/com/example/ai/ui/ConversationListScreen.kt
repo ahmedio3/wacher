@@ -21,8 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.data.AiConversationEntity
-import com.example.ui.components.bouncyOverscroll
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
@@ -96,7 +94,6 @@ fun ConversationListScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .bouncyOverscroll()
                     .padding(padding),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
