@@ -45,6 +45,7 @@ data class AiProviderConfig(
 )
 
 data class AiChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val role: AiMessageRole,
     val content: String = "",
     val reasoningContent: String? = null,

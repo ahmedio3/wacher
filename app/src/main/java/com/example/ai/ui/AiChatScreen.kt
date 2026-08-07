@@ -1,9 +1,11 @@
 package com.example.ai.ui
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,7 +35,8 @@ fun AiChatScreen(
         ?.find { it.id == state.currentModelId }
     val supportsVision = currentModel?.supportsVision ?: false
 
-    LaunchedEffect(state.messages.size, state.isStreaming) {
+    val totalToolExecutions = state.messages.sumOf { it.toolExecutions.size }
+    LaunchedEffect(state.messages.size, state.isStreaming, totalToolExecutions) {
         if (state.messages.isNotEmpty() || state.isStreaming) {
             listState.animateScrollToItem(
                 listState.layoutInfo.totalItemsCount.coerceAtLeast(0)
@@ -75,7 +78,10 @@ fun AiChatScreen(
                                 .bouncyOverscroll(),
                             contentPadding = PaddingValues(top = 56.dp, bottom = 8.dp)
                         ) {
-                            itemsIndexed(state.messages) { _, msg ->
+                            items(
+                                items = state.messages,
+                                key = { msg -> msg.id }
+                            ) { msg ->
                                 AiMessageBubble(message = msg)
                             }
 
@@ -125,7 +131,8 @@ fun AiChatScreen(
                             viewModel.sendMessage(text, imageBase64)
                         },
                         supportsVision = supportsVision,
-                        isStreaming = state.isStreaming
+                        isStreaming = state.isStreaming,
+                        onStopStreaming = { viewModel.stopStreaming() }
                     )
                 }
 

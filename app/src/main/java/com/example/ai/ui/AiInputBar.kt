@@ -1,10 +1,12 @@
 package com.example.ai.ui
 
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,14 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -32,22 +36,23 @@ fun AiInputBar(
     onSendText: (String, String?) -> Unit,
     supportsVision: Boolean,
     isStreaming: Boolean,
+    onStopStreaming: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var text by remember { mutableStateOf("") }
     var selectedImageBase64 by remember { mutableStateOf<String?>(null) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedImagePreview by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     val context = LocalContext.current
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            selectedImageUri = it
-            val bitmap = android.graphics.BitmapFactory.decodeStream(
+            val bitmap = BitmapFactory.decodeStream(
                 context.contentResolver.openInputStream(it)
             )
             if (bitmap != null) {
+                selectedImagePreview = bitmap
                 val maxDim = 1024
                 val ratio = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height)
                 val resized = if (ratio < 1f) {
@@ -70,9 +75,9 @@ fun AiInputBar(
             .padding(horizontal = 10.dp, vertical = 6.dp)
             .navigationBarsPadding()
             .imePadding()
-            .animateContentSize(animationSpec = tween(200))
+            .animateContentSize(animationSpec = tween(250))
     ) {
-        if (selectedImageUri != null) {
+        if (selectedImagePreview != null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -82,16 +87,18 @@ fun AiInputBar(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
+                    Image(
+                        bitmap = selectedImagePreview!!.asImageBitmap(),
+                        contentDescription = "صورة مرفقة",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
                     )
                 }
                 Text(
@@ -103,7 +110,7 @@ fun AiInputBar(
                 IconButton(
                     onClick = {
                         selectedImageBase64 = null
-                        selectedImageUri = null
+                        selectedImagePreview = null
                     },
                     modifier = Modifier.size(28.dp)
                 ) {
@@ -122,14 +129,16 @@ fun AiInputBar(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 placeholder = { Text("اكتب رسالة...", fontSize = 14.sp) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .animateContentSize(animationSpec = tween(200)),
                 shape = RoundedCornerShape(20.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.Transparent,
@@ -151,10 +160,55 @@ fun AiInputBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (supportsVision) {
+            if (isStreaming) {
+                FilledIconButton(
+                    onClick = { onStopStreaming() },
+                    modifier = Modifier.size(38.dp),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color(0xFFFF3B30)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "إيقاف",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                Button(
+                    onClick = {
+                        if (hasContent) {
+                            onSendText(text.trim(), selectedImageBase64)
+                            text = ""
+                            selectedImageBase64 = null
+                            selectedImagePreview = null
+                        }
+                    },
+                    enabled = hasContent,
+                    modifier = Modifier
+                        .height(38.dp)
+                        .widthIn(min = 70.dp),
+                    shape = RoundedCornerShape(19.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SendBlue,
+                        disabledContainerColor = SendBlue.copy(alpha = 0.3f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "إرسال",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            if (supportsVision && !isStreaming) {
                 IconButton(
                     onClick = { imagePicker.launch("image/*") },
-                    enabled = !isStreaming,
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
@@ -167,36 +221,6 @@ fun AiInputBar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-            } else {
-                Spacer(modifier = Modifier.width(1.dp))
-            }
-
-            Button(
-                onClick = {
-                    if (hasContent) {
-                        onSendText(text.trim(), selectedImageBase64)
-                        text = ""
-                        selectedImageBase64 = null
-                        selectedImageUri = null
-                    }
-                },
-                enabled = hasContent && !isStreaming,
-                modifier = Modifier
-                    .height(38.dp)
-                    .widthIn(min = 70.dp),
-                shape = RoundedCornerShape(19.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SendBlue,
-                    disabledContainerColor = SendBlue.copy(alpha = 0.3f)
-                ),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowUpward,
-                    contentDescription = "إرسال",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
             }
         }
     }

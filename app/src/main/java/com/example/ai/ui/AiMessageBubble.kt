@@ -1,6 +1,7 @@
 package com.example.ai.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +19,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,11 +35,13 @@ fun AiMessageBubble(
 ) {
     val isUser = message.role == AiMessageRole.USER
     val isAssistant = message.role == AiMessageRole.ASSISTANT
+    val hasImage = message.imageUrls?.isNotEmpty() == true
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .animateContentSize(animationSpec = tween(200)),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
         if (isAssistant && !message.reasoningContent.isNullOrBlank()) {
@@ -48,6 +50,17 @@ fun AiMessageBubble(
         }
 
         if (isUser) {
+            if (hasImage) {
+                Text(
+                    text = "صورة مرفقة",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    fontFamily = IBMPlexSansArabicFontFamily,
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .padding(horizontal = 4.dp)
+                )
+            }
             Box(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
@@ -62,13 +75,15 @@ fun AiMessageBubble(
                     .background(Color(0xFF8C6D4F))
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = message.content,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    color = Color.White,
-                    fontFamily = IBMPlexSansArabicFontFamily
-                )
+                if (message.content.isNotEmpty()) {
+                    Text(
+                        text = message.content,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        color = Color.White,
+                        fontFamily = IBMPlexSansArabicFontFamily
+                    )
+                }
             }
         } else {
             if (message.content.isNotEmpty()) {
@@ -80,7 +95,7 @@ fun AiMessageBubble(
         }
 
         if (isAssistant && message.toolExecutions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             message.toolExecutions.forEach { execution ->
                 ToolCallCard(execution = execution)
             }

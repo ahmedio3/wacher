@@ -14,7 +14,9 @@ import com.example.ai.provider.OpenAiCompatibleProvider
 import com.example.ai.provider.buildToolDeclarationsJson
 import com.example.ai.tools.AiToolExecutor
 import com.example.ai.tools.ToolResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +53,7 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<AiChatUiState> = _state.asStateFlow()
 
     private var currentProvider: AiProviderService? = null
+    private var streamingJob: Job? = null
 
     init {
         loadConversations()
@@ -191,33 +194,43 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun processStreaming(conversationId: String) {
-        val provider = currentProvider ?: run {
-            _state.update { it.copy(isStreaming = false, error = "No provider selected") }
-            return
-        }
+    private fun processStreaming(conversationId: String) {
+        streamingJob = viewModelScope.launch {
+            try {
+                val provider = currentProvider ?: run {
+                    _state.update { it.copy(isStreaming = false, error = "No provider selected") }
+                    return@launch
+                }
 
-        val systemPrompt = buildSystemPrompt()
-        val allMessages = mutableListOf(
-            AiChatMessage(role = AiMessageRole.SYSTEM, content = systemPrompt)
-        )
-        allMessages.addAll(sessionManager.getContextMessages())
+                val systemPrompt = buildSystemPrompt()
+                val allMessages = mutableListOf(
+                    AiChatMessage(role = AiMessageRole.SYSTEM, content = systemPrompt)
+                )
+                allMessages.addAll(sessionManager.getContextMessages())
 
-        try {
-            provider.streamChat(
-                messages = allMessages,
-                model = _state.value.currentModelId,
-                toolsJson = buildToolDeclarationsJson(),
-                thinkingLevel = _state.value.thinkingLevel,
-                onEvent = { event ->
-                    viewModelScope.launch {
-                        handleStreamEvent(event, conversationId)
+                try {
+                    provider.streamChat(
+                        messages = allMessages,
+                        model = _state.value.currentModelId,
+                        toolsJson = buildToolDeclarationsJson(),
+                        thinkingLevel = _state.value.thinkingLevel,
+                        onEvent = { event ->
+                            viewModelScope.launch {
+                                handleStreamEvent(event, conversationId)
+                            }
+                        }
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _state.update {
+                        it.copy(isStreaming = false, error = "فشل الاتصال: ${e.message}")
                     }
                 }
-            )
-        } catch (e: Exception) {
-            _state.update {
-                it.copy(isStreaming = false, error = "فشل الاتصال: ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } finally {
+                streamingJob = null
             }
         }
     }
@@ -290,27 +303,33 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun addToolToLastMessage(tool: ToolExecutionDisplay) {
-        val msgs = _state.value.messages.toMutableList()
-        val lastIdx = msgs.lastIndex
-        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-            val last = msgs[lastIdx]
-            msgs[lastIdx] = last.copy(toolExecutions = last.toolExecutions + tool)
+        val currentMessages = _state.value.messages
+        val lastIdx = currentMessages.lastIndex
+        if (lastIdx >= 0 && currentMessages[lastIdx].role == AiMessageRole.ASSISTANT) {
+            val updatedMessages = currentMessages.toMutableList()
+            val lastMessage = updatedMessages[lastIdx]
+            val updatedMessage = lastMessage.copy(
+                toolExecutions = lastMessage.toolExecutions + tool
+            )
+            updatedMessages[lastIdx] = updatedMessage
+            _state.value = _state.value.copy(messages = updatedMessages.toList())
         }
-        _state.update { it.copy(messages = msgs) }
     }
 
     private fun updateToolInLastMessage(toolName: String, status: ToolExecutionStatus, summary: String) {
-        val msgs = _state.value.messages.toMutableList()
-        val lastIdx = msgs.lastIndex
-        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-            val last = msgs[lastIdx]
-            msgs[lastIdx] = last.copy(
-                toolExecutions = last.toolExecutions.map {
+        val currentMessages = _state.value.messages
+        val lastIdx = currentMessages.lastIndex
+        if (lastIdx >= 0 && currentMessages[lastIdx].role == AiMessageRole.ASSISTANT) {
+            val updatedMessages = currentMessages.toMutableList()
+            val lastMessage = updatedMessages[lastIdx]
+            val updatedMessage = lastMessage.copy(
+                toolExecutions = lastMessage.toolExecutions.map {
                     if (it.toolName == toolName) it.copy(status = status, summary = summary) else it
                 }
             )
+            updatedMessages[lastIdx] = updatedMessage
+            _state.value = _state.value.copy(messages = updatedMessages.toList())
         }
-        _state.update { it.copy(messages = msgs) }
     }
 
     private fun toolLabel(toolName: String): String = when (toolName) {
@@ -401,6 +420,16 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun stopStreaming() {
+        streamingJob?.cancel()
+        streamingJob = null
+        viewModelScope.launch {
+            val conversationId = sessionManager.getCurrentConversationId() ?: return@launch
+            _state.update { it.copy(isStreaming = false) }
+            finalizeMessage(conversationId)
+        }
+    }
+
     private suspend fun reInvokeProvider(conversationId: String) {
         val provider = currentProvider ?: return
         val systemPrompt = buildSystemPrompt()
@@ -421,15 +450,18 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun appendToLastAssistantMessage(chunk: String) {
-        val msgs = _state.value.messages.toMutableList()
-        val lastIdx = msgs.lastIndex
-        if (lastIdx >= 0 && msgs[lastIdx].role == AiMessageRole.ASSISTANT) {
-            val last = msgs[lastIdx]
-            msgs[lastIdx] = last.copy(content = last.content + chunk)
+        val currentMessages = _state.value.messages
+        val lastIdx = currentMessages.lastIndex
+        if (lastIdx >= 0 && currentMessages[lastIdx].role == AiMessageRole.ASSISTANT) {
+            val updatedMessages = currentMessages.toMutableList()
+            val lastMessage = updatedMessages[lastIdx]
+            updatedMessages[lastIdx] = lastMessage.copy(content = lastMessage.content + chunk)
+            _state.value = _state.value.copy(messages = updatedMessages.toList())
         } else {
-            msgs.add(AiChatMessage(role = AiMessageRole.ASSISTANT, content = chunk))
+            _state.value = _state.value.copy(
+                messages = currentMessages + AiChatMessage(role = AiMessageRole.ASSISTANT, content = chunk)
+            )
         }
-        _state.update { it.copy(messages = msgs) }
     }
 
     private fun appendToLastAssistantReasoning(chunk: String) {
