@@ -58,6 +58,15 @@ class AiSessionManager(private val aiDao: AiDao) {
         messages.add(message)
     }
 
+    fun updateLastMessage(message: AiChatMessage) {
+        val lastIdx = messages.lastIndex
+        if (lastIdx >= 0) {
+            messages[lastIdx] = message
+        }
+    }
+
+    fun getLastMessage(): AiChatMessage? = messages.lastOrNull()
+
     fun addToolMessages(results: List<AiToolResult>) {
         for (result in results) {
             messages.add(

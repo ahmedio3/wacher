@@ -376,8 +376,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             }
 
             composable("ai_chat") {
+                val hostActivity = LocalContext.current as ComponentActivity
                 val aiViewModel: com.example.ai.AiViewModel = viewModel(
-                    factory = ViewModelFactory(context)
+                    viewModelStoreOwner = hostActivity,
+                    factory = ViewModelFactory(hostActivity.application)
                 )
                 com.example.ai.ui.AiChatScreen(
                     viewModel = aiViewModel,
