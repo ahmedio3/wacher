@@ -1,0 +1,69 @@
+package com.aistudio.cinemios.fxtyr.data.remote
+
+import android.graphics.Bitmap
+import android.util.Base64
+import com.aistudio.cinemios.fxtyr.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.TimeUnit
+
+object ImgBBUploader {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    suspend fun uploadImage(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        val apiKey = BuildConfig.IMGBB_API_KEY
+        if (apiKey.isBlank()) {
+            android.util.Log.w("ImgBBUploader", "IMGBB_API_KEY is not configured — skipping upload")
+            return@withContext null
+        }
+
+        try {
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+            val imageBytes = outputStream.toByteArray()
+            val base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+
+            val formBody = FormBody.Builder()
+                .add("image", base64Image)
+                .build()
+
+            val request = Request.Builder()
+                .url("https://api.imgbb.com/1/upload?key=$apiKey")
+                .post(formBody)
+                .build()
+
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return@withContext null
+
+            if (!response.isSuccessful) {
+                android.util.Log.e("ImgBBUploader", "Upload failed: $response — $body")
+                return@withContext null
+            }
+
+            val json = JSONObject(body)
+            if (json.optBoolean("success", false)) {
+                val url = json.getJSONObject("data").optString("url", null)
+                if (url != null) {
+                    android.util.Log.i("ImgBBUploader", "Upload success, url length: ${url.length}")
+                }
+                url
+            } else {
+                android.util.Log.e("ImgBBUploader", "ImgBB returned success=false: $body")
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ImgBBUploader", "Upload error", e)
+            null
+        }
+    }
+}
