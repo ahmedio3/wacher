@@ -987,8 +987,61 @@ class MovieViewModel(
                 val updated = next.copy(status = "downloading", downloadSpeed = "0 KB/s")
                 repository.addDownload(updated)
                 currentDownloadId = next.id
-                val (rawUrl, headers) = unpackSourceUrl(next.sourceUrl)
+                var (rawUrl, headers) = unpackSourceUrl(next.sourceUrl)
+                val isDash = rawUrl.contains(".mpd") || rawUrl.contains("/dash/")
+                if (isDash && (headers == null || !headers.containsKey("Cookie"))) {
+                    val refreshed = refreshDownloadHeaders(next.id)
+                    if (refreshed != null) {
+                        rawUrl = refreshed.first
+                        headers = refreshed.second
+                    }
+                }
                 triggerNetworkDownload(next.id, next.quality, rawUrl.takeIf { it.isNotEmpty() }, headers)
+            }
+        }
+    }
+
+    private suspend fun refreshDownloadHeaders(downloadId: String): Pair<String, Map<String, String>?>? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val entity = repository.getDownload(downloadId) ?: return@withContext null
+                val rawSource = entity.sourceUrl.substringBefore("|HEADERS|")
+
+                // Extract MovieBox subjectId from sourceUrl (e.g. /dash/6391474290696802080_0_0_.../)
+                // or fallback to entity.mediaId if numeric and long enough
+                val subjectIdFromUrl = Regex("""/dash/(\d+)""").find(rawSource)?.groupValues?.get(1)
+                val subjectId = subjectIdFromUrl
+                    ?: if (entity.mediaId.length >= 10 && entity.mediaId.all { it.isDigit() }) entity.mediaId else null
+
+                if (subjectId == null) return@withContext null
+
+                val res = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
+                    movieBoxRepository.getDownloadLinks(subjectId, null)
+                } ?: return@withContext null
+
+                val links = res.getOrNull() ?: return@withContext null
+                val targetQualityInt = Regex("""(\d+)""").find(entity.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 1080
+
+                val matched = if (entity.mediaType == "tv") {
+                    links.find { it.season == entity.season && it.episode == entity.episode && it.resolution == targetQualityInt }
+                        ?: links.filter { it.season == entity.season && it.episode == entity.episode }.minByOrNull { Math.abs(it.resolution - targetQualityInt) }
+                } else {
+                    links.find { it.resolution == targetQualityInt }
+                        ?: links.minByOrNull { Math.abs(it.resolution - targetQualityInt) }
+                } ?: links.firstOrNull() ?: return@withContext null
+
+                val freshHeaders = matched.headers
+                val freshUrl = if (matched.url.isNotEmpty()) matched.url else rawSource
+
+                if (!freshHeaders.isNullOrEmpty()) {
+                    val headersJson = org.json.JSONObject(freshHeaders as Map<*, *>).toString()
+                    val newSourceUrl = "$freshUrl|HEADERS|$headersJson"
+                    repository.addDownload(entity.copy(sourceUrl = newSourceUrl))
+                }
+
+                Pair(freshUrl, freshHeaders)
+            } catch (_: Exception) {
+                null
             }
         }
     }
@@ -1037,6 +1090,9 @@ class MovieViewModel(
             scope = viewModelScope,
             headers = customHeaders,
             targetQuality = quality,
+            onRefreshHeaders = {
+                refreshDownloadHeaders(downloadId)
+            },
             onProgress = { progress, downloaded, total, speedStr ->
                 viewModelScope.launch(Dispatchers.Main) {
                     val current = repository.getDownload(downloadId)

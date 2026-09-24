@@ -20,6 +20,7 @@ object MultiThreadDownloader {
         scope: CoroutineScope,
         headers: Map<String, String>? = null,
         targetQuality: String = "1080p",
+        onRefreshHeaders: (suspend () -> Pair<String, Map<String, String>?>?)? = null,
         onProgress: (Int, Long, Long, String) -> Unit, // progress, downloadedBytes, totalBytes, speed string
         onComplete: (Boolean) -> Unit
     ) {
@@ -36,6 +37,7 @@ object MultiThreadDownloader {
                         outputFile = outputFile,
                         headers = headers,
                         targetQuality = targetQuality,
+                        onRefreshHeaders = onRefreshHeaders,
                         onProgress = onProgress,
                         onComplete = onComplete
                     )
@@ -69,12 +71,19 @@ object MultiThreadDownloader {
         val isAudio: Boolean
     )
 
+    private data class DashFileItem(
+        val fileName: String,
+        val fileUrl: String,
+        val isBoundary: Boolean
+    )
+
     private suspend fun downloadDashStream(
         downloadId: String,
         url: String,
         outputFile: File,
         headers: Map<String, String>?,
         targetQuality: String,
+        onRefreshHeaders: (suspend () -> Pair<String, Map<String, String>?>?)? = null,
         onProgress: (Int, Long, Long, String) -> Unit,
         onComplete: (Boolean) -> Unit
     ) {
@@ -83,13 +92,34 @@ object MultiThreadDownloader {
             downloadDir.mkdirs()
         }
 
-        // 1. Fetch index.mpd
-        val mpdConn = URL(url).openConnection() as HttpURLConnection
+        var currentUrl = url
+        var currentHeaders = headers
+
+        // 1. Fetch index.mpd with auto-refresh if 401/403
+        var mpdConn = URL(currentUrl).openConnection() as HttpURLConnection
         mpdConn.connectTimeout = 15000
         mpdConn.readTimeout = 15000
         mpdConn.setRequestProperty("User-Agent", "okhttp/4.10.0")
-        headers?.forEach { (k, v) -> mpdConn.setRequestProperty(k, v) }
-        val mpdCode = mpdConn.responseCode
+        currentHeaders?.forEach { (k, v) -> mpdConn.setRequestProperty(k, v) }
+        var mpdCode = mpdConn.responseCode
+
+        if ((mpdCode == HttpURLConnection.HTTP_FORBIDDEN || mpdCode == HttpURLConnection.HTTP_UNAUTHORIZED) && onRefreshHeaders != null) {
+            mpdConn.disconnect()
+            try {
+                val refreshed = onRefreshHeaders()
+                if (refreshed != null) {
+                    currentUrl = refreshed.first
+                    currentHeaders = refreshed.second
+                    mpdConn = URL(currentUrl).openConnection() as HttpURLConnection
+                    mpdConn.connectTimeout = 15000
+                    mpdConn.readTimeout = 15000
+                    mpdConn.setRequestProperty("User-Agent", "okhttp/4.10.0")
+                    currentHeaders?.forEach { (k, v) -> mpdConn.setRequestProperty(k, v) }
+                    mpdCode = mpdConn.responseCode
+                }
+            } catch (_: Exception) {}
+        }
+
         if (mpdCode != HttpURLConnection.HTTP_OK) {
             mpdConn.disconnect()
             withContext(Dispatchers.Main) { onComplete(false) }
@@ -132,28 +162,76 @@ object MultiThreadDownloader {
             return
         }
 
-        // 4. Calculate total chunks
-        var totalChunks = 0
-        val timelineMatch = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(mpdText)
-        if (timelineMatch != null) {
-            val sElements = Regex("""<S\s+([^>]+)/?>""").findAll(timelineMatch.groupValues[1])
-            for (s in sElements) {
-                val rAttr = Regex("""r="(\d+)"""").find(s.groupValues[1])?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                totalChunks += (1 + rAttr)
-            }
+        // 4. Calculate total presentation seconds
+        var totalSeconds = 0.0
+        val durMatch = Regex("""mediaPresentationDuration="([^"]+)"""").find(mpdText)
+        if (durMatch != null) {
+            val durStr = durMatch.groupValues[1]
+            val hours = Regex("""(\d+)H""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            val mins = Regex("""(\d+)M""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            val secs = Regex("""([\d.]+)S""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            totalSeconds = hours * 3600 + mins * 60 + secs
         }
-        if (totalChunks <= 0) {
-            val durMatch = Regex("""mediaPresentationDuration="([^"]+)"""").find(mpdText)
-            if (durMatch != null) {
-                val durStr = durMatch.groupValues[1]
-                val hours = Regex("""(\d+)H""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-                val mins = Regex("""(\d+)M""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-                val secs = Regex("""([\d.]+)S""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-                val totalSeconds = hours * 3600 + mins * 60 + secs
-                totalChunks = Math.ceil(totalSeconds / 6.0).toInt().coerceAtLeast(1)
+
+        fun calculateChunksForRep(repId: String): Int {
+            val adaptationPattern = Regex("""<AdaptationSet\s+([^>]*?)>(.*?)</AdaptationSet>""", RegexOption.DOT_MATCHES_ALL)
+            for (match in adaptationPattern.findAll(mpdText)) {
+                val body = match.groupValues[2]
+                if (body.contains("""id="$repId"""")) {
+                    val timelineMatch = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(body)
+                    if (timelineMatch != null) {
+                        var count = 0
+                        val sElements = Regex("""<S\s+([^>]+)/?>""").findAll(timelineMatch.groupValues[1])
+                        for (s in sElements) {
+                            val rAttr = Regex("""r="(\d+)"""").find(s.groupValues[1])?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                            count += (1 + rAttr)
+                        }
+                        if (count > 0) return count
+                    }
+                    val templateMatch = Regex("""<SegmentTemplate\s+([^>]+)>""").find(body)
+                        ?: Regex("""<SegmentTemplate\s+([^>]+)>""").find(match.groupValues[1])
+                    if (templateMatch != null) {
+                        val tAttrs = templateMatch.groupValues[1]
+                        val timescale = Regex("""timescale="(\d+)"""").find(tAttrs)?.groupValues?.get(1)?.toDoubleOrNull() ?: 1.0
+                        val duration = Regex("""duration="(\d+)"""").find(tAttrs)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+                        if (timescale > 0 && duration > 0 && totalSeconds > 0) {
+                            val chunkDuration = duration / timescale
+                            if (chunkDuration > 0) {
+                                return Math.ceil(totalSeconds / chunkDuration).toInt().coerceAtLeast(1)
+                            }
+                        }
+                    }
+                }
             }
+            val globalTimeline = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(mpdText)
+            if (globalTimeline != null) {
+                var count = 0
+                val sElements = Regex("""<S\s+([^>]+)/?>""").findAll(globalTimeline.groupValues[1])
+                for (s in sElements) {
+                    val rAttr = Regex("""r="(\d+)"""").find(s.groupValues[1])?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                    count += (1 + rAttr)
+                }
+                if (count > 0) return count
+            }
+            val globalTemplate = Regex("""<SegmentTemplate\s+([^>]+)>""").find(mpdText)
+            if (globalTemplate != null) {
+                val tAttrs = globalTemplate.groupValues[1]
+                val timescale = Regex("""timescale="(\d+)"""").find(tAttrs)?.groupValues?.get(1)?.toDoubleOrNull() ?: 1.0
+                val duration = Regex("""duration="(\d+)"""").find(tAttrs)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+                if (timescale > 0 && duration > 0 && totalSeconds > 0) {
+                    val chunkDuration = duration / timescale
+                    if (chunkDuration > 0) {
+                        return Math.ceil(totalSeconds / chunkDuration).toInt().coerceAtLeast(1)
+                    }
+                }
+            }
+            return if (totalSeconds > 0) Math.ceil(totalSeconds / 5.0).toInt().coerceAtLeast(1) else 0
         }
-        if (totalChunks <= 0) {
+
+        val videoChunks = calculateChunksForRep(selectedVideo.id)
+        val audioChunks = selectedAudio?.let { calculateChunksForRep(it.id) } ?: 0
+
+        if (videoChunks <= 0) {
             withContext(Dispatchers.Main) { onComplete(false) }
             return
         }
@@ -175,36 +253,42 @@ object MultiThreadDownloader {
         localMpdFile.writeText(cleanMpd)
 
         // 6. Build file list
-        val baseUrl = if (url.contains("/")) url.substringBeforeLast("/") + "/" else url
+        val baseUrl = if (currentUrl.contains("/")) currentUrl.substringBeforeLast("/") + "/" else currentUrl
         val initVideoName = "init-stream${selectedVideo.id}.m4s"
         val initAudioName = selectedAudio?.let { "init-stream${it.id}.m4s" }
 
-        val allFiles = mutableListOf<Pair<String, String>>()
-        allFiles.add(initVideoName to "$baseUrl$initVideoName")
+        val allFiles = mutableListOf<DashFileItem>()
+        allFiles.add(DashFileItem(initVideoName, "$baseUrl$initVideoName", isBoundary = false))
         if (initAudioName != null) {
-            allFiles.add(initAudioName to "$baseUrl$initAudioName")
+            allFiles.add(DashFileItem(initAudioName, "$baseUrl$initAudioName", isBoundary = false))
         }
 
-        for (chunkIdx in 1..totalChunks) {
+        for (chunkIdx in 1..videoChunks) {
             val numStr = String.format("%05d", chunkIdx)
             val videoChunk = "chunk-stream${selectedVideo.id}-$numStr.m4s"
-            allFiles.add(videoChunk to "$baseUrl$videoChunk")
-            if (selectedAudio != null) {
+            val isBoundary = (chunkIdx == videoChunks)
+            allFiles.add(DashFileItem(videoChunk, "$baseUrl$videoChunk", isBoundary))
+        }
+
+        if (selectedAudio != null && audioChunks > 0) {
+            for (chunkIdx in 1..audioChunks) {
+                val numStr = String.format("%05d", chunkIdx)
                 val audioChunk = "chunk-stream${selectedAudio.id}-$numStr.m4s"
-                allFiles.add(audioChunk to "$baseUrl$audioChunk")
+                val isBoundary = (chunkIdx == audioChunks)
+                allFiles.add(DashFileItem(audioChunk, "$baseUrl$audioChunk", isBoundary))
             }
         }
 
         val totalItemsCount = allFiles.size
         val totalBitrate = selectedVideo.bandwidth + (selectedAudio?.bandwidth ?: 0L)
-        val estimatedTotalBytes = if (totalBitrate > 0) (totalBitrate * totalChunks * 6L / 8L) else (totalItemsCount * 500_000L)
+        val estimatedTotalBytes = if (totalBitrate > 0) (totalBitrate * videoChunks * 5L / 8L) else (totalItemsCount * 500_000L)
 
         val completedCount = AtomicInteger(0)
         val totalDownloadedBytes = AtomicLong(0L)
 
-        val pendingFiles = mutableListOf<Pair<String, String>>()
+        val pendingFiles = mutableListOf<DashFileItem>()
         for (item in allFiles) {
-            val dest = File(downloadDir, item.first)
+            val dest = File(downloadDir, item.fileName)
             if (dest.exists() && dest.length() > 0) {
                 completedCount.incrementAndGet()
                 totalDownloadedBytes.addAndGet(dest.length())
@@ -231,8 +315,9 @@ object MultiThreadDownloader {
                     val buffer = ByteArray(64 * 1024)
                     while (isActive) {
                         val item = queue.poll() ?: break
-                        val fileName = item.first
-                        val fileUrl = item.second
+                        val fileName = item.fileName
+                        val fileUrl = item.fileUrl
+                        val isBoundary = item.isBoundary
                         val targetFile = File(downloadDir, fileName)
                         val tmpFile = File(downloadDir, "$fileName.tmp")
 
@@ -246,7 +331,7 @@ object MultiThreadDownloader {
                                 conn.readTimeout = 15000
                                 conn.setRequestProperty("User-Agent", "okhttp/4.10.0")
                                 conn.setRequestProperty("Connection", "keep-alive")
-                                headers?.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+                                currentHeaders?.forEach { (k, v) -> conn.setRequestProperty(k, v) }
                                 conn.connect()
 
                                 val code = conn.responseCode
@@ -295,6 +380,11 @@ object MultiThreadDownloader {
                                         completedCount.incrementAndGet()
                                         success = true
                                     }
+                                } else if (code == HttpURLConnection.HTTP_NOT_FOUND && isBoundary) {
+                                    // Boundary chunk not present: stream reached natural end
+                                    completedCount.incrementAndGet()
+                                    success = true
+                                    break
                                 } else {
                                     retry++
                                     delay(1000L * retry)

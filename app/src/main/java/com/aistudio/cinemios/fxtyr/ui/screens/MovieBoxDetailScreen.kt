@@ -551,6 +551,8 @@ fun MovieBoxDetailScreen(
                 viewModel = movieBoxViewModel,
                 onDismissRequest = { showMovieBoxSheet = false },
                 onTryOtherMethod = { showMovieBoxSheet = false },
+                initialSubjectId = subjectId,
+                initialLinks = videoLinks.takeIf { it.isNotEmpty() },
                 onDownloadClick = { url, quality, s, ep, still, headers ->
                     viewModel.requestDownload(
                         mediaId = subjectId,

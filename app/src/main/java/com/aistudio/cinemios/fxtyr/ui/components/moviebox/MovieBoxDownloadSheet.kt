@@ -52,11 +52,18 @@ fun MovieBoxDownloadSheet(
     onTryOtherMethod: () -> Unit,
     onDownloadClick: (String, String, Int, Int, String, Map<String, String>?) -> Unit,
     episodeStillPaths: Map<Pair<Int, Int>, String> = emptyMap(),
-    alreadyDownloaded: (Int, Int, String) -> Boolean = { _, _, _ -> false }
+    alreadyDownloaded: (Int, Int, String) -> Boolean = { _, _, _ -> false },
+    initialSubjectId: String? = null,
+    initialLinks: List<VideoFile>? = null
 ) {
     val context = LocalContext.current
+    val hasDirectLinks = !initialLinks.isNullOrEmpty()
     val searchState by viewModel.searchResults.collectAsState()
-    val downloadLinksState by viewModel.downloadLinks.collectAsState()
+    val rawDownloadLinksState by viewModel.downloadLinks.collectAsState()
+    val downloadLinksState = remember(hasDirectLinks, initialLinks, rawDownloadLinksState) {
+        if (hasDirectLinks) MovieBoxState.Success(initialLinks!!)
+        else rawDownloadLinksState
+    }
     val qualityPrefs = context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE)
 
     // Quality + batch-selection state hoisted to the sheet level so the header quality
@@ -70,18 +77,22 @@ fun MovieBoxDownloadSheet(
         qualityPrefs.edit().putInt("q_${movieTitle.replace(" ", "_")}", selectedQuality).apply()
     }
 
-    var subjectId by remember { mutableStateOf<String?>(null) }
+    var subjectId by remember { mutableStateOf<String?>(initialSubjectId) }
     var searchInitiated by remember { mutableStateOf(false) }
 
-    LaunchedEffect(movieTitle) {
-        if (!searchInitiated) {
+    LaunchedEffect(movieTitle, initialSubjectId, hasDirectLinks) {
+        if (!hasDirectLinks && !searchInitiated) {
             searchInitiated = true
-            viewModel.search(movieTitle)
+            if (!initialSubjectId.isNullOrEmpty()) {
+                viewModel.getDownloadLinks(initialSubjectId)
+            } else {
+                viewModel.search(movieTitle)
+            }
         }
     }
 
     LaunchedEffect(searchState) {
-        if (searchState is MovieBoxState.Success) {
+        if (!hasDirectLinks && initialSubjectId.isNullOrEmpty() && searchState is MovieBoxState.Success) {
             val results = (searchState as MovieBoxState.Success).data
             val matchedResult = results.firstOrNull { 
                 it.title.equals(movieTitle, ignoreCase = true) && 
@@ -179,7 +190,7 @@ fun MovieBoxDownloadSheet(
             }
 
             when {
-                searchState is MovieBoxState.Loading || (searchState is MovieBoxState.Success && (downloadLinksState is MovieBoxState.Loading || downloadLinksState is MovieBoxState.Idle)) -> {
+                !hasDirectLinks && (searchState is MovieBoxState.Loading || (searchState is MovieBoxState.Success && (downloadLinksState is MovieBoxState.Loading || downloadLinksState is MovieBoxState.Idle))) -> {
                     CircularProgressIndicator(modifier = Modifier.padding(32.dp))
                     Text(
                         text = "جاري البحث عن الروابط...",
@@ -187,7 +198,7 @@ fun MovieBoxDownloadSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                searchState is MovieBoxState.Idle -> {
+                !hasDirectLinks && initialSubjectId.isNullOrEmpty() && searchState is MovieBoxState.Idle -> {
                     CircularProgressIndicator(modifier = Modifier.padding(32.dp))
                     Text(
                         text = "جاري البحث...",
@@ -195,7 +206,15 @@ fun MovieBoxDownloadSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                searchState is MovieBoxState.Error -> {
+                !hasDirectLinks && !initialSubjectId.isNullOrEmpty() && (downloadLinksState is MovieBoxState.Loading || downloadLinksState is MovieBoxState.Idle) -> {
+                    CircularProgressIndicator(modifier = Modifier.padding(32.dp))
+                    Text(
+                        text = "جاري جلب روابط التحميل...",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                !hasDirectLinks && searchState is MovieBoxState.Error -> {
                     ErrorState(
                         message = (searchState as MovieBoxState.Error).message,
                         onTryOtherMethod = onTryOtherMethod

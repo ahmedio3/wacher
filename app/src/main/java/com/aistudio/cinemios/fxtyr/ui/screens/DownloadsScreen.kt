@@ -1398,7 +1398,7 @@ fun CompactEpisodeRow(
 ) {
     val context = LocalContext.current
     val isCompleted = item.status == "completed"
-    val isPaused = item.status == "paused"
+    val isPaused = item.status == "paused" || item.status == "error"
     val isDownloading = !isCompleted && !isPaused && item.status != "queued"
 
     // Duration + size are loaded OFF the main thread (MediaMetadataRetriever / file stat are blocking I/O)
