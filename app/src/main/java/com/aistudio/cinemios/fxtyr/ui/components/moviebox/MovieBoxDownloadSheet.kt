@@ -50,7 +50,7 @@ fun MovieBoxDownloadSheet(
     viewModel: MovieBoxViewModel,
     onDismissRequest: () -> Unit,
     onTryOtherMethod: () -> Unit,
-    onDownloadClick: (String, String, Int, Int, String) -> Unit,
+    onDownloadClick: (String, String, Int, Int, String, Map<String, String>?) -> Unit,
     episodeStillPaths: Map<Pair<Int, Int>, String> = emptyMap(),
     alreadyDownloaded: (Int, Int, String) -> Boolean = { _, _, _ -> false }
 ) {
@@ -288,7 +288,7 @@ fun MovieBoxDownloadSheet(
                                                     ?: seasonLinks.filter { it.episode == epId }.minByOrNull { Math.abs(it.resolution - selectedQuality) }
                                                 if (file != null) {
                                                     val still = episodeStillPaths[selectedSeason to epId] ?: ""
-                                                    onDownloadClick(file.url, "${file.resolution}p", selectedSeason, epId, still)
+                                                    onDownloadClick(file.url, "${file.resolution}p", selectedSeason, epId, still, file.headers)
                                                 }
                                             }
                                         },
@@ -376,7 +376,7 @@ fun MovieBoxDownloadSheet(
                                                         IconButton(
                                                             onClick = {
                                                                 val still = episodeStillPaths[selectedSeason to episodeId] ?: ""
-                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId, still)
+                                                                onDownloadClick(exactFile.url, "${exactFile.resolution}p", selectedSeason, episodeId, still, exactFile.headers)
                                                             },
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
@@ -407,7 +407,7 @@ fun MovieBoxDownloadSheet(
                                     QualityItem(
                                         videoFile = videoFile,
                                         onClick = {
-                                            onDownloadClick(videoFile.url, "${videoFile.resolution}p", 0, 0, "")
+                                            onDownloadClick(videoFile.url, "${videoFile.resolution}p", 0, 0, "", videoFile.headers)
                                         }
                                     )
                                 }

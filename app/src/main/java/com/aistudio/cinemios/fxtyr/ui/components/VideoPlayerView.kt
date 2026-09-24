@@ -43,8 +43,11 @@ fun VideoPlayerView(
         if (mediaUrl.isNotEmpty()) {
             val exoPlayer = remember(mediaUrl) {
                 ExoPlayer.Builder(context).build().apply {
-                    val mediaItem = MediaItem.fromUri(mediaUrl)
-                    setMediaItem(mediaItem)
+                    val mediaItemBuilder = MediaItem.Builder().setUri(mediaUrl)
+                    if (mediaUrl.endsWith(".mpd") || mediaUrl.contains("/dash/")) {
+                        mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+                    }
+                    setMediaItem(mediaItemBuilder.build())
                     prepare()
                     playWhenReady = true
                 }

@@ -316,6 +316,9 @@ fun OfflinePlayerScreen(
                 } else {
                     MediaItem.Builder().setUri(Uri.fromFile(file!!))
                 }
+                if (activeLocalFilePath.endsWith(".mpd") || activeLocalFilePath.contains("/dash/")) {
+                    mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+                }
 
                 val srtFile = File(context.filesDir, "downloads/$activeId.srt")
                 val vttFile = File(context.filesDir, "downloads/$activeId.vtt")

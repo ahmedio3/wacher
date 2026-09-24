@@ -379,7 +379,7 @@ fun DetailScreen(
                 onDismissRequest = { showMovieBoxSheet = false },
                 onTryOtherMethod = { showMovieBoxSheet = false },
                 episodeStillPaths = episodeStillPaths,
-                onDownloadClick = { url, quality, s, ep, still ->
+                onDownloadClick = { url, quality, s, ep, still, headers ->
                     viewModel.requestDownload(
                         mediaId = pendingDownloadId,
                         title = pendingDownloadTitle,
@@ -389,7 +389,8 @@ fun DetailScreen(
                         season = if (pendingDownloadMediaType == "tv") s else 0,
                         episode = if (pendingDownloadMediaType == "tv") ep else 0,
                         quality = quality,
-                        customUrl = url
+                        customUrl = url,
+                        customHeaders = headers
                     )
                     showMovieBoxSheet = false
                 }

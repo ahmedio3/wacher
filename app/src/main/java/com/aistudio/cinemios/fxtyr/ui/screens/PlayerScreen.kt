@@ -75,6 +75,7 @@ fun PlayerScreen(
     val isLocalActive = activeDownloadedFile.isNotEmpty() && File(activeDownloadedFile).exists()
 
     var resolvedUrl by remember { mutableStateOf("") }
+    var resolvedHeaders by remember { mutableStateOf<Map<String, String>?>(null) }
     var isLoadingUrl by remember { mutableStateOf(true) }
     var activeSubtitles by remember { mutableStateOf<List<SubtitleHelper.SubtitleItem>>(emptyList()) }
 
@@ -123,6 +124,7 @@ fun PlayerScreen(
                 val topQuality = videoList.maxByOrNull { it.resolution } ?: videoList.firstOrNull()
                 if (topQuality != null) {
                     resolvedUrl = topQuality.url
+                    resolvedHeaders = topQuality.headers
                     val movieBoxSubs = mutableListOf<SubtitleHelper.SubtitleItem>()
                     if (topQuality.hasArabicSubtitle && topQuality.arabicSubtitleUrl != null) {
                         movieBoxSubs.add(SubtitleHelper.SubtitleItem("العربية (MovieBox)", topQuality.arabicSubtitleUrl, "ar", "ar"))
@@ -255,13 +257,24 @@ fun PlayerScreen(
     }
 
     // --- Media source ---
-    LaunchedEffect(resolvedUrl, cachedSubtitleLocalUri) {
+    LaunchedEffect(resolvedUrl, cachedSubtitleLocalUri, resolvedHeaders) {
         if (resolvedUrl.isNotEmpty()) {
-            val dataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
                 .setUserAgent("Mozilla/5.0")
                 .setAllowCrossProtocolRedirects(true)
 
-            var mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(resolvedUrl))
+            resolvedHeaders?.let { headers ->
+                httpDataSourceFactory.setDefaultRequestProperties(headers)
+            }
+
+            val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+            val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(resolvedUrl))
+            val isMpd = resolvedUrl.contains(".mpd") || resolvedUrl.contains("/dash/")
+            if (isMpd) {
+                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+            }
+
             if (cachedSubtitleLocalUri != null) {
                 val subConfig = MediaItem.SubtitleConfiguration.Builder(cachedSubtitleLocalUri!!)
                     .setMimeType(MimeTypes.TEXT_VTT)
@@ -273,6 +286,9 @@ fun PlayerScreen(
 
             val mediaSource = if (resolvedUrl.contains(".m3u8")) {
                 androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
+                    .createMediaSource(mediaItemBuilder.build())
+            } else if (isMpd) {
+                androidx.media3.exoplayer.dash.DashMediaSource.Factory(dataSourceFactory)
                     .createMediaSource(mediaItemBuilder.build())
             } else {
                 androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)

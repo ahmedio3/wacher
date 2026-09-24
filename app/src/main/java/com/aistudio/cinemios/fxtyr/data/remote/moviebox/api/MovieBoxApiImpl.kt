@@ -129,6 +129,25 @@ class MovieBoxApiImpl : MovieBoxApi {
                     val sizeStr = item.optString("size", "")
                     val sizeBytes = parseSizeString(sizeStr)
 
+                    val streamType = item.optString("stream_type", "mp4").ifEmpty { "mp4" }
+                    val cookie = if (item.isNull("cookie")) null else item.optString("cookie").takeIf { it.isNotEmpty() }
+                    val headersObj = item.optJSONObject("headers")
+                    val headersMap = mutableMapOf<String, String>()
+                    if (headersObj != null) {
+                        val keys = headersObj.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            val value = headersObj.optString(key)
+                            if (value.isNotEmpty()) {
+                                headersMap[key] = value
+                            }
+                        }
+                    }
+                    if (cookie != null && !headersMap.containsKey("Cookie")) {
+                        headersMap["Cookie"] = cookie
+                    }
+                    val finalHeaders = if (headersMap.isNotEmpty()) headersMap else null
+
                     list.add(
                         VideoFile(
                             url = item.optString("url") ?: "",
@@ -144,7 +163,10 @@ class MovieBoxApiImpl : MovieBoxApi {
                             allSubtitles = subtitlesList,
                             codec = item.optString("codec").takeIf { it.isNotEmpty() },
                             duration = item.optInt("duration", 0),
-                            sourceUrl = if (item.isNull("source_url")) null else item.optString("source_url").takeIf { it.isNotEmpty() }
+                            sourceUrl = if (item.isNull("source_url")) null else item.optString("source_url").takeIf { it.isNotEmpty() },
+                            streamType = streamType,
+                            cookie = cookie,
+                            headers = finalHeaders
                         )
                     )
                 }

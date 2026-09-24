@@ -30,7 +30,10 @@ data class VideoFile(
     val allSubtitles: List<Subtitle>,
     val codec: String? = null,
     val duration: Int = 0,              // seconds
-    val sourceUrl: String? = null
+    val sourceUrl: String? = null,
+    val streamType: String = "mp4",
+    val cookie: String? = null,
+    val headers: Map<String, String>? = null
 ) {
     /**
      * Returns a human-readable size string. Falls back to sizeString if

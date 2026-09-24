@@ -99,6 +99,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.ui.text.google.fonts)
   implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.dash)
   implementation(libs.androidx.media3.hls)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.core.ktx)

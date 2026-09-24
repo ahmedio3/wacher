@@ -770,7 +770,7 @@ fun SeriesDetailPage(
                             it.quality == quality && it.status == "completed"
                     }
                 },
-                onDownloadClick = { url, quality, s, ep, still ->
+                onDownloadClick = { url, quality, s, ep, still, headers ->
                     viewModel.requestDownload(
                         mediaId = seriesId,
                         title = seriesTitle,
@@ -780,7 +780,8 @@ fun SeriesDetailPage(
                         season = s,
                         episode = ep,
                         quality = quality,
-                        customUrl = url
+                        customUrl = url,
+                        customHeaders = headers
                     )
                     showDownloadNewSheet = false
                 }
@@ -973,11 +974,23 @@ fun DownloadItemRow(
     var fileSizeText by remember(item.id) { mutableStateOf("...") }
     LaunchedEffect(item.id) {
         fileSizeText = withContext(Dispatchers.IO) {
-            runCatching { formatBytes(File(item.localFilePath).length()) }.getOrDefault("...")
+            runCatching {
+                val f = File(item.localFilePath)
+                if (f.name == "index.mpd") {
+                    val total = f.parentFile?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+                    formatBytes(total)
+                } else {
+                    formatBytes(f.length())
+                }
+            }.getOrDefault("...")
         }
     }
 
-    val partialFilePath = java.io.File(context.filesDir, "downloads/${item.id}.mp4").absolutePath
+    val partialFile = remember(item.id) {
+        val dashIndex = java.io.File(context.filesDir, "downloads/${item.id}/index.mpd")
+        if (dashIndex.exists()) dashIndex else java.io.File(context.filesDir, "downloads/${item.id}.mp4")
+    }
+    val partialFilePath = partialFile.absolutePath
 
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
     val downloadScope = rememberCoroutineScope()
@@ -1305,12 +1318,16 @@ fun DownloadItemRow(
                     onClick = {
                         showContextMenu = false
                         try {
-                            val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
-                            if (!destDir.exists()) destDir.mkdirs()
-                            val safeTitle = item.title.replace("/", "_").replace("\\", "_")
-                            val destFile = java.io.File(destDir, "$safeTitle.mp4")
-                            java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
-                            android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
+                            if (item.localFilePath.endsWith(".mpd")) {
+                                android.widget.Toast.makeText(context, "هذا المحتوى بتنسيق DASH مخصص للمشاهدة بدون إنترنت داخل التطبيق", android.widget.Toast.LENGTH_LONG).show()
+                            } else {
+                                val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                                if (!destDir.exists()) destDir.mkdirs()
+                                val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                                val destFile = java.io.File(destDir, "$safeTitle.mp4")
+                                java.io.File(item.localFilePath).copyTo(destFile, overwrite = true)
+                                android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض (${destFile.absolutePath})", android.widget.Toast.LENGTH_LONG).show()
+                            }
                         } catch (e: Exception) {
                             android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                         }
@@ -1392,7 +1409,13 @@ fun CompactEpisodeRow(
         if (isCompleted && (durationSecs < 0 || fileSizeText == "...")) {
             val (secs, sizeStr) = withContext(Dispatchers.IO) {
                 val file = File(item.localFilePath)
-                val len = if (file.exists()) file.length() else 0L
+                val len = if (file.exists()) {
+                    if (file.name == "index.mpd") {
+                        file.parentFile?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+                    } else {
+                        file.length()
+                    }
+                } else 0L
                 val dur = try {
                     val retriever = android.media.MediaMetadataRetriever()
                     retriever.setDataSource(file.absolutePath)
@@ -1729,12 +1752,16 @@ fun CompactEpisodeRow(
                     onClick = {
                         onDismissContextMenu()
                         try {
-                            val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
-                            if (!destDir.exists()) destDir.mkdirs()
-                            val safeTitle = item.title.replace("/", "_").replace("\\", "_")
-                            val destFile = File(destDir, "$safeTitle.mp4")
-                            File(item.localFilePath).copyTo(destFile, overwrite = true)
-                            android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض", android.widget.Toast.LENGTH_LONG).show()
+                            if (item.localFilePath.endsWith(".mpd")) {
+                                android.widget.Toast.makeText(context, "هذا المحتوى بتنسيق DASH مخصص للمشاهدة بدون إنترنت داخل التطبيق", android.widget.Toast.LENGTH_LONG).show()
+                            } else {
+                                val destDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                                if (!destDir.exists()) destDir.mkdirs()
+                                val safeTitle = item.title.replace("/", "_").replace("\\", "_")
+                                val destFile = File(destDir, "$safeTitle.mp4")
+                                File(item.localFilePath).copyTo(destFile, overwrite = true)
+                                android.widget.Toast.makeText(context, "تم حفظ الفيديو للمعرض", android.widget.Toast.LENGTH_LONG).show()
+                            }
                         } catch (e: Exception) {
                             android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                         }

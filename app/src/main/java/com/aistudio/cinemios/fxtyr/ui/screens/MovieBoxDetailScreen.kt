@@ -551,7 +551,7 @@ fun MovieBoxDetailScreen(
                 viewModel = movieBoxViewModel,
                 onDismissRequest = { showMovieBoxSheet = false },
                 onTryOtherMethod = { showMovieBoxSheet = false },
-                onDownloadClick = { url, quality, s, ep, still ->
+                onDownloadClick = { url, quality, s, ep, still, headers ->
                     viewModel.requestDownload(
                         mediaId = subjectId,
                         title = displayTitle,
@@ -561,7 +561,8 @@ fun MovieBoxDetailScreen(
                         season = if (isTv) s else 0,
                         episode = if (isTv) ep else 0,
                         quality = quality,
-                        customUrl = url
+                        customUrl = url,
+                        customHeaders = headers
                     )
                     showMovieBoxSheet = false
                 }

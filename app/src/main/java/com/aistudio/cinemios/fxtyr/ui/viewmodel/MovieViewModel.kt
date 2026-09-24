@@ -842,6 +842,13 @@ class MovieViewModel(
             val nameSuffix = if (mediaType == "tv") " - الموسم $season الحلقة $episode" else ""
             val fullTitle = "$title$nameSuffix"
 
+            val storedUrl = if (!customHeaders.isNullOrEmpty()) {
+                val headersJson = org.json.JSONObject(customHeaders as Map<*, *>).toString()
+                "${customUrl ?: ""}|HEADERS|$headersJson"
+            } else {
+                customUrl ?: ""
+            }
+
             val entity = DownloadEntity(
                 id = downloadId,
                 mediaId = mediaId,
@@ -857,7 +864,7 @@ class MovieViewModel(
                 downloadedBytes = 0L,
                 totalBytes = 0L,
                 downloadSpeed = "في الانتظار",
-                sourceUrl = customUrl ?: ""
+                sourceUrl = storedUrl
             )
             repository.addDownload(entity)
             processQueue()
@@ -895,6 +902,10 @@ class MovieViewModel(
             val file = File(getApplication<Application>().filesDir, "downloads/$downloadId.mp4")
             if (file.exists()) {
                 file.delete()
+            }
+            val dashDir = File(getApplication<Application>().filesDir, "downloads/$downloadId")
+            if (dashDir.exists()) {
+                dashDir.deleteRecursively()
             }
             val progressFile = File(getApplication<Application>().filesDir, "downloads/$downloadId.mp4.progress")
             if (progressFile.exists()) {
@@ -976,9 +987,29 @@ class MovieViewModel(
                 val updated = next.copy(status = "downloading", downloadSpeed = "0 KB/s")
                 repository.addDownload(updated)
                 currentDownloadId = next.id
-                triggerNetworkDownload(next.id, next.quality, next.sourceUrl.takeIf { it.isNotEmpty() })
+                val (rawUrl, headers) = unpackSourceUrl(next.sourceUrl)
+                triggerNetworkDownload(next.id, next.quality, rawUrl.takeIf { it.isNotEmpty() }, headers)
             }
         }
+    }
+
+    private fun unpackSourceUrl(sourceUrl: String): Pair<String, Map<String, String>?> {
+        if (sourceUrl.contains("|HEADERS|")) {
+            val parts = sourceUrl.split("|HEADERS|", limit = 2)
+            val url = parts[0]
+            val headersMap = mutableMapOf<String, String>()
+            try {
+                val json = org.json.JSONObject(parts[1])
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = json.optString(k)
+                    if (v.isNotEmpty()) headersMap[k] = v
+                }
+            } catch (_: Exception) {}
+            return Pair(url, if (headersMap.isNotEmpty()) headersMap else null)
+        }
+        return Pair(sourceUrl, null)
     }
 
     private fun triggerNetworkDownload(
@@ -988,8 +1019,13 @@ class MovieViewModel(
         customHeaders: Map<String, String>? = null
     ) {
         val finalUrl = customUrl ?: return
+        val isDash = finalUrl.contains(".mpd") || finalUrl.contains("/dash/")
         
-        val file = File(getApplication<Application>().filesDir, "downloads/$downloadId.mp4")
+        val file = if (isDash) {
+            File(getApplication<Application>().filesDir, "downloads/$downloadId/index.mpd")
+        } else {
+            File(getApplication<Application>().filesDir, "downloads/$downloadId.mp4")
+        }
         if (!file.parentFile!!.exists()) {
             file.parentFile!!.mkdirs()
         }
@@ -999,6 +1035,8 @@ class MovieViewModel(
             url = finalUrl,
             outputFile = file,
             scope = viewModelScope,
+            headers = customHeaders,
+            targetQuality = quality,
             onProgress = { progress, downloaded, total, speedStr ->
                 viewModelScope.launch(Dispatchers.Main) {
                     val current = repository.getDownload(downloadId)
