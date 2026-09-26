@@ -3,7 +3,6 @@ package com.aistudio.cinemios.fxtyr.data.repository
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.EpisodeWatchStatusEntity
 import com.aistudio.cinemios.fxtyr.data.local.MovieDao
-import com.aistudio.cinemios.fxtyr.data.local.SavedImageEntity
 import com.aistudio.cinemios.fxtyr.data.local.SeasonMetaEntity
 import com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
@@ -91,21 +90,6 @@ class MovieRepository(private val movieDao: MovieDao) {
 
     suspend fun upsertEpisodeWatchStatusBatch(items: List<EpisodeWatchStatusEntity>) {
         movieDao.upsertEpisodeWatchStatusBatch(items)
-    }
-
-    // ---- SAVED IMAGES (Browser) ----
-    val savedImages: Flow<List<SavedImageEntity>> = movieDao.getSavedImages()
-
-    suspend fun addSavedImage(item: SavedImageEntity) {
-        movieDao.insertSavedImage(item)
-    }
-
-    suspend fun removeSavedImage(id: String) {
-        movieDao.deleteSavedImage(id)
-    }
-
-    suspend fun getSavedImageById(id: String): SavedImageEntity? {
-        return movieDao.getSavedImageById(id)
     }
 
     // ---- REMOTE TMDB APIS ----

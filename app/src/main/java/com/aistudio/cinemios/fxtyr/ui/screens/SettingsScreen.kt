@@ -1,23 +1,14 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
-import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,30 +16,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.aistudio.cinemios.fxtyr.auth.AuthManager
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
-
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import com.aistudio.cinemios.fxtyr.auth.AuthManager
-import com.aistudio.cinemios.fxtyr.auth.UserManager
-import com.aistudio.cinemios.fxtyr.auth.UserProfile
-import com.aistudio.cinemios.fxtyr.auth.ActivityLogManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: MovieViewModel,
-    onNavigateToHistory: () -> Unit,
+    onNavigateToWatchlist: () -> Unit = {},
+    onNavigateToSubtitleDownloads: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
@@ -56,92 +40,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
-    var isProfileLoading by remember { mutableStateOf(true) }
     var emailInput by remember { mutableStateOf("") }
     var passInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var showProfileDialog by remember { mutableStateOf(false) }
-    var showBroadcastDialog by remember { mutableStateOf(false) }
-    var showCustomSectionDialog by remember { mutableStateOf(false) }
-    val isAdmin = user?.email == "ahmedsarri123@gmail.com"
-
-    // Fetch user profile on user change
-    LaunchedEffect(user) {
-        isProfileLoading = true
-        if (user != null) {
-            val prof = UserManager.getProfile(user!!.uid)
-            userProfile = prof
-            isProfileLoading = false
-            if (prof == null || prof.name.isEmpty() || prof.username.isEmpty()) {
-                showProfileDialog = true
-            }
-        } else {
-            userProfile = null
-            isProfileLoading = false
-        }
-    }
-
-    if (showProfileDialog && user != null) {
-        ProfileSetupDialog(
-            initialProfile = userProfile,
-            userId = user!!.uid,
-            onDismiss = { showProfileDialog = false },
-            onSuccess = { 
-                showProfileDialog = false 
-                coroutineScope.launch {
-                    userProfile = UserManager.getProfile(user!!.uid)
-                }
-            }
-        )
-    }
-
-    if (showCustomSectionDialog) {
-        CustomSectionDialog(
-            viewModel = viewModel,
-            onDismiss = { showCustomSectionDialog = false }
-        )
-    }
-
-    if (showBroadcastDialog) {
-        var bdTitle by remember { mutableStateOf("") }
-        var bdText by remember { mutableStateOf("") }
-        var isSending by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { if (!isSending) showBroadcastDialog = false },
-            title = { Text("إرسال إشعار للجميع", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = bdTitle, onValueChange = { bdTitle = it }, label = { Text("العنوان") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = bdText, onValueChange = { bdText = it }, label = { Text("النص") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (bdTitle.isNotBlank() && bdText.isNotBlank()) {
-                            isSending = true
-                            val ref = com.google.firebase.database.FirebaseDatabase.getInstance().getReference("broadcasts").push()
-                            val data = mapOf(
-                                "title" to bdTitle.trim(),
-                                "text" to bdText.trim(),
-                                "timestamp" to System.currentTimeMillis()
-                            )
-                            ref.setValue(data).addOnCompleteListener {
-                                showBroadcastDialog = false
-                            }
-                        }
-                    },
-                    enabled = !isSending && bdTitle.isNotBlank() && bdText.isNotBlank()
-                ) {
-                    Text(if (isSending) "جاري الإرسال..." else "إرسال")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBroadcastDialog = false }, enabled = !isSending) { Text("إلغاء") }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -167,9 +68,6 @@ fun SettingsScreen(
             // Profile Card (Firebase Auth)
             ProfileSection(
                 user = user,
-                userProfile = userProfile,
-                isProfileLoading = isProfileLoading,
-                onEditClick = { showProfileDialog = true },
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
                     user = null
@@ -185,26 +83,18 @@ fun SettingsScreen(
                         .addOnCompleteListener { task ->
                             isLoading = false
                             if (task.isSuccessful) {
-                                val u = FirebaseAuth.getInstance().currentUser
-                                val uid = u?.uid
-                                if (uid != null) {
-                                    coroutineScope.launch {
-                                        ActivityLogManager.addLog(uid, "LOGIN", u.email ?: emailInput)
-                                    }
-                                }
-                                user = u
+                                user = FirebaseAuth.getInstance().currentUser
                             } else {
                                 FirebaseAuth.getInstance().createUserWithEmailAndPassword(emailInput, passInput)
                                     .addOnCompleteListener { task2 ->
                                         if (task2.isSuccessful) {
-                                            val u = FirebaseAuth.getInstance().currentUser
-                                            val uid = u?.uid
-                                            if (uid != null) {
-                                                coroutineScope.launch {
-                                                    ActivityLogManager.addLog(uid, "ACCOUNT_CREATED", u.email ?: emailInput)
-                                                }
-                                            }
-                                            user = u
+                                            user = FirebaseAuth.getInstance().currentUser
+                                        } else {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                task2.exception?.localizedMessage ?: "فشل تسجيل الدخول",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                             }
@@ -215,12 +105,7 @@ fun SettingsScreen(
                     coroutineScope.launch {
                         val resultMsg = AuthManager.signInWithGoogle(context)
                         if (resultMsg == "success") {
-                            val u = FirebaseAuth.getInstance().currentUser
-                            val uid = u?.uid
-                            if (uid != null) {
-                                ActivityLogManager.addLog(uid, "LOGIN", u.displayName ?: u.email ?: "Google")
-                            }
-                            user = u
+                            user = FirebaseAuth.getInstance().currentUser
                         } else {
                             android.widget.Toast.makeText(context, "خطأ: $resultMsg", android.widget.Toast.LENGTH_LONG).show()
                         }
@@ -229,61 +114,97 @@ fun SettingsScreen(
                 }
             )
 
-            // Activity History button
-            Button(
-                onClick = onNavigateToHistory,
+            // Watchlist / Favorites Shortcut
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    .clickable { onNavigateToWatchlist() }
             ) {
-                Icon(imageVector = Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("سجل النشاطات", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bookmark,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "قائمة المشاهدة والمفضلات",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "عرض وتصفح أعمالك المحفوظة",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                    )
+                }
             }
 
-            if (isAdmin) {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.fillMaxWidth().clickable { showCustomSectionDialog = true }
+            // Subtitle Downloads Shortcut
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToSubtitleDownloads() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("إدارة قسم \"بتاع\" بالرئيسية", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.ClosedCaption,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "الترجمات المحملة",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "عرض وإدارة ملفات الترجمة المحفوظة",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
                         }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.fillMaxWidth().clickable { showBroadcastDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Box(
-                                modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFE91E63).copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Campaign, contentDescription = null, tint = Color(0xFFE91E63))
-                            }
-                            Text("إرسال إشعار للجميع", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFFE91E63))
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                    )
                 }
             }
 
@@ -328,7 +249,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    // iOS Premium Segmented Control / Capsule Picker
+                    // Segmented Control / Capsule Picker
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -417,7 +338,6 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(100.dp))
-
         }
     }
 }
@@ -425,9 +345,6 @@ fun SettingsScreen(
 @Composable
 fun ProfileSection(
     user: FirebaseUser?,
-    userProfile: UserProfile?,
-    isProfileLoading: Boolean = false,
-    onEditClick: () -> Unit,
     onLogoutClick: () -> Unit,
     emailInput: String,
     onEmailChange: (String) -> Unit,
@@ -438,8 +355,6 @@ fun ProfileSection(
     onGoogleSignInClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val coroutineScope = rememberCoroutineScope()
-
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -451,37 +366,7 @@ fun ProfileSection(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (user != null) {
-                if (isProfileLoading) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .height(18.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .width(80.dp)
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            )
-                        }
-                    }
-                } else {
-                // Signed In State — horizontal header (avatar + name/username)
+                // Signed In State — header (avatar + name/email)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -489,80 +374,61 @@ fun ProfileSection(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(56.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (userProfile?.avatarUrl?.isNotEmpty() == true) {
+                        val photoUrl = user.photoUrl?.toString()
+                        if (!photoUrl.isNullOrEmpty()) {
                             AsyncImage(
-                                model = userProfile!!.avatarUrl,
+                                model = photoUrl,
                                 contentDescription = "Profile avatar",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                        }
-                    }
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = if (userProfile?.name?.isNotEmpty() == true) userProfile.name else "بك",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        if (userProfile?.username?.isNotEmpty() == true) {
-                            Text(
-                                text = "@${userProfile.username}",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
-                }
-
-                // Bio (read-only display)
-                if (userProfile?.bio?.isNotEmpty() == true) {
-                    Text(
-                        text = userProfile.bio,
-                        fontSize = 13.sp,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = onEditClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
-                        shape = RoundedCornerShape(12.dp)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "تعديل", modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("تعديل")
-                    }
-
-                    Button(
-                        onClick = onLogoutClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("تسجيل الخروج")
+                        Text(
+                            text = user.displayName ?: "مرحباً بك",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = user.email ?: "",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
                     }
                 }
+
+                Button(
+                    onClick = onLogoutClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("تسجيل الخروج")
                 }
             } else {
                 // Sign Out State (Login Form)
                 Text(
-                    text = "قم بتسجيل الدخول الان",
+                    text = "تسجيل الدخول",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onBackground

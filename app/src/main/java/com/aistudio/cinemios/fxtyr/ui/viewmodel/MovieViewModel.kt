@@ -9,14 +9,11 @@ import androidx.lifecycle.viewModelScope
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.EpisodeWatchStatusEntity
 import com.aistudio.cinemios.fxtyr.data.local.MovieDatabase
-import com.aistudio.cinemios.fxtyr.data.local.SavedImageEntity
-import com.aistudio.cinemios.fxtyr.data.local.ActivityLogEntity
 import com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
 import com.aistudio.cinemios.fxtyr.data.remote.*
 import com.aistudio.cinemios.fxtyr.data.repository.MovieRepository
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.repository.MovieBoxRepository
-import com.aistudio.cinemios.fxtyr.auth.ActivityLogManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -72,10 +69,6 @@ class MovieViewModel(
         _defaultWatchStatus.value = status
     }
 
-    // Sync state
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
-
     // Dark mode toggle
     private val _isDarkMode = MutableStateFlow(sharedPrefs.getBoolean("dark_mode", false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
@@ -107,10 +100,6 @@ class MovieViewModel(
     val downloads: StateFlow<List<DownloadEntity>>
     val subtitleDownloads: StateFlow<List<SubtitleDownloadEntity>>
     val subtitleBatchGroups: StateFlow<List<SubtitleBatchGroup>>
-    val savedImages: StateFlow<List<SavedImageEntity>>
-
-    // Activity/History log
-    val activityLogs: StateFlow<List<ActivityLogEntity>>
 
     // Episode watch tracking — MUST cache to prevent infinite recomposition loop
     private val episodeStatusMap = mutableMapOf<String, StateFlow<List<EpisodeWatchStatusEntity>>>()
@@ -129,13 +118,6 @@ class MovieViewModel(
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         }
     }
-
-    // Home items states
-    private val _popularMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val popularMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _popularMovies.asStateFlow()
-
-    private val _popularTvShows = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val popularTvShows: StateFlow<RequestState<List<TmdbMediaItem>>> = _popularTvShows.asStateFlow()
 
     // Search query and results State
     private val _searchQuery = MutableStateFlow("")
@@ -177,18 +159,6 @@ class MovieViewModel(
 
     private val _trendingTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
     val trendingTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _trendingTv.asStateFlow()
-
-    private val _topRatedMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val topRatedMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _topRatedMovies.asStateFlow()
-
-    private val _topRatedTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val topRatedTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _topRatedTv.asStateFlow()
-
-    private val _nowPlayingMovies = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val nowPlayingMovies: StateFlow<RequestState<List<TmdbMediaItem>>> = _nowPlayingMovies.asStateFlow()
-
-    private val _onTheAirTv = MutableStateFlow<RequestState<List<TmdbMediaItem>>>(RequestState.Idle)
-    val onTheAirTv: StateFlow<RequestState<List<TmdbMediaItem>>> = _onTheAirTv.asStateFlow()
 
     private val _downloadErrorDetails = MutableStateFlow<String?>(null)
     val downloadErrorDetails: StateFlow<String?> = _downloadErrorDetails.asStateFlow()
@@ -261,18 +231,6 @@ class MovieViewModel(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        savedImages = repository.savedImages
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-        activityLogs = if (uid != null) {
-            ActivityLogManager.getLogs(uid)
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        } else {
-            emptyFlow<List<ActivityLogEntity>>()
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        }
-
         // Fetch Home content on startup
         fetchHomeContent()
 
@@ -340,37 +298,8 @@ class MovieViewModel(
 
     fun fetchHomeContent() {
         viewModelScope.launch {
-            // Load in parallel
-            launch { fetchPopularMovies() }
-            launch { fetchPopularTvShows() }
             launch { fetchTrendingMovies() }
             launch { fetchTrendingTv() }
-            launch { fetchTopRatedMovies() }
-            launch { fetchTopRatedTv() }
-            launch { fetchNowPlayingMovies() }
-            launch { fetchOnTheAirTv() }
-        }
-    }
-
-    private suspend fun fetchPopularMovies() {
-        _popularMovies.value = RequestState.Loading
-        try {
-            val response = repository.getPopularMovies(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
-            _popularMovies.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _popularMovies.value = RequestState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
-        }
-    }
-
-    private suspend fun fetchPopularTvShows() {
-        _popularTvShows.value = RequestState.Loading
-        try {
-            val response = repository.getPopularTvShows(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
-            _popularTvShows.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _popularTvShows.value = RequestState.Error(e.localizedMessage ?: "حدث خطأ غير معروف")
         }
     }
 
@@ -412,50 +341,6 @@ class MovieViewModel(
             _trendingTv.value = RequestState.Success(list)
         } catch (e: Exception) {
             _trendingTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
-        }
-    }
-
-    private suspend fun fetchTopRatedMovies() {
-        _topRatedMovies.value = RequestState.Loading
-        try {
-            val response = repository.getTopRatedMovies(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
-            _topRatedMovies.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _topRatedMovies.value = RequestState.Error(e.localizedMessage ?: "خطأ")
-        }
-    }
-
-    private suspend fun fetchTopRatedTv() {
-        _topRatedTv.value = RequestState.Loading
-        try {
-            val response = repository.getTopRatedTv(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
-            _topRatedTv.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _topRatedTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
-        }
-    }
-
-    private suspend fun fetchNowPlayingMovies() {
-        _nowPlayingMovies.value = RequestState.Loading
-        try {
-            val response = repository.getNowPlayingMovies(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "movie") } ?: emptyList()
-            _nowPlayingMovies.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _nowPlayingMovies.value = RequestState.Error(e.localizedMessage ?: "خطأ")
-        }
-    }
-
-    private suspend fun fetchOnTheAirTv() {
-        _onTheAirTv.value = RequestState.Loading
-        try {
-            val response = repository.getOnTheAirTv(language = currentLang)
-            val list = response.results?.map { it.copy(mediaType = "tv") } ?: emptyList()
-            _onTheAirTv.value = RequestState.Success(list)
-        } catch (e: Exception) {
-            _onTheAirTv.value = RequestState.Error(e.localizedMessage ?: "خطأ")
         }
     }
 
@@ -792,26 +677,6 @@ class MovieViewModel(
         }
     }
 
-    // SYNC
-    fun syncWatchlist(onComplete: (Boolean) -> Unit = {}) {
-        if (_isSyncing.value) return
-        viewModelScope.launch {
-            _isSyncing.value = true
-            try {
-                com.aistudio.cinemios.fxtyr.data.sync.WatchlistSyncManager.sync(
-                    repository = repository,
-                    getApplication()
-                )
-                onComplete(true)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                onComplete(false)
-            } finally {
-                _isSyncing.value = false
-            }
-        }
-    }
-
     // DOWNLOAD OPERATIONS - Single queue (one at a time, FIFO)
     private var currentDownloadId: String? = null
 
@@ -1137,66 +1002,6 @@ class MovieViewModel(
         )
     }
 
-    // ---- SAVED IMAGES (Browser) ----
-    fun saveImageFromBrowser(sourceUrl: String, pageUrl: String, pageTitle: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
-            val hashBytes = digest.digest(sourceUrl.toByteArray(Charsets.UTF_8))
-            val imageId = hashBytes.joinToString("") { "%02x".format(it) }
-            val fileName = "browser_img_${imageId.take(16)}.jpg"
-            val outputDir = File(getApplication<Application>().filesDir, "saved_images")
-            outputDir.mkdirs()
-            val outputFile = File(outputDir, fileName)
-            val now = System.currentTimeMillis()
-
-            val entity = SavedImageEntity(
-                id = imageId,
-                sourceUrl = sourceUrl,
-                pageUrl = pageUrl,
-                pageTitle = pageTitle,
-                localFilePath = outputFile.absolutePath,
-                fileSizeBytes = 0L,
-                downloadedAt = now
-            )
-            // Insert immediately (pending download)
-            repository.addSavedImage(entity)
-
-            com.aistudio.cinemios.fxtyr.utils.MultiThreadDownloader.startDownload(
-                downloadId = "saved_img_$imageId",
-                url = sourceUrl,
-                outputFile = outputFile,
-                scope = viewModelScope,
-                onProgress = { _, _, _, _ -> },
-                onComplete = { success ->
-                    viewModelScope.launch(Dispatchers.IO) {
-                        if (success) {
-                            repository.addSavedImage(entity.copy(fileSizeBytes = outputFile.length()))
-                        } else {
-                            repository.removeSavedImage(imageId)
-                            outputFile.delete()
-                        }
-                    }
-                }
-            )
-        }
-    }
-
-    fun deleteSavedImage(id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val image = repository.getSavedImageById(id) ?: return@launch
-            File(image.localFilePath).delete()
-            repository.removeSavedImage(id)
-        }
-    }
-
-    // Activity logging helper
-    fun logActivity(type: String, title: String) {
-        viewModelScope.launch {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
-            ActivityLogManager.addLog(uid, type, title)
-        }
-    }
-
     // Resume any pending downloads on startup
     fun resumePendingDownloads() {
         viewModelScope.launch {
@@ -1224,10 +1029,6 @@ class ViewModelFactory(private val application: Application) : ViewModelProvider
         if (modelClass.isAssignableFrom(com.aistudio.cinemios.fxtyr.data.remote.moviebox.viewmodel.MovieBoxViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
             return com.aistudio.cinemios.fxtyr.data.remote.moviebox.viewmodel.MovieBoxViewModel(repository) as T
-        }
-        if (modelClass.isAssignableFrom(com.aistudio.cinemios.fxtyr.ai.AiViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return com.aistudio.cinemios.fxtyr.ai.AiViewModel(application) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

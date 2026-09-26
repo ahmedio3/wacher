@@ -157,12 +157,6 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             outlinedIcon = Icons.Outlined.Home
         ),
         NavigationTabItem(
-            route = "explore",
-            label = "استكشاف",
-            filledIcon = Icons.Default.Explore,
-            outlinedIcon = Icons.Outlined.Explore
-        ),
-        NavigationTabItem(
             route = "downloads",
             label = "التحميلات",
             filledIcon = Icons.Default.ArrowCircleDown,
@@ -176,7 +170,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         )
     )
 
-    val shouldShowBottomBar = currentRoute in listOf("home", "explore", "downloads", "settings")
+    val shouldShowBottomBar = currentRoute in listOf("home", "downloads", "settings")
 
     LaunchedEffect(deepLinkState.value, currentRoute) {
         if (deepLinkState.value != null && currentRoute != null) {
@@ -341,46 +335,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     },
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
-                    },
-                    onNavigateToBrowser = {
-                        navController.navigate("browser")
                     }
-                )
-            }
-            
-            composable("browser") {
-                BrowserScreen(
-                    viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() }
-                )
-            }
-
-            composable("explore") {
-                ExploreScreen(
-                    onNavigateToSubtitleDownloads = {
-                        navController.navigate("subtitle-downloads")
-                    },
-                    onNavigateToWatchlist = {
-                        navController.navigate("watchlist")
-                    },
-                    onNavigateToChat = { roomId, isPublic ->
-                        navController.navigate("chat/${Uri.encode(roomId)}/$isPublic")
-                    },
-                    onNavigateToAiChat = {
-                        navController.navigate("ai_chat")
-                    }
-                )
-            }
-
-            composable("ai_chat") {
-                val hostActivity = LocalContext.current as ComponentActivity
-                val aiViewModel: com.aistudio.cinemios.fxtyr.ai.AiViewModel = viewModel(
-                    viewModelStoreOwner = hostActivity,
-                    factory = ViewModelFactory(hostActivity.application)
-                )
-                com.aistudio.cinemios.fxtyr.ai.ui.AiChatScreen(
-                    viewModel = aiViewModel,
-                    onBackClick = { navController.popBackStack() }
                 )
             }
 
@@ -440,33 +395,8 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             composable("settings") {
                 SettingsScreen(
                     viewModel = movieViewModel,
-                    onNavigateToHistory = { navController.navigate("history") }
-                )
-            }
-
-            composable("history") {
-                HistoryScreen(
-                    viewModel = movieViewModel,
-                    onBackClick = { navController.popBackStack() }
-                )
-            }
-
-            composable(
-                route = "chat/{roomId}/{isPublic}",
-                arguments = listOf(
-                    navArgument("roomId") { type = NavType.StringType },
-                    navArgument("isPublic") { type = NavType.BoolType }
-                )
-            ) { backStackEntry ->
-                val roomId = backStackEntry.arguments?.getString("roomId") ?: "public"
-                val isPublic = backStackEntry.arguments?.getBoolean("isPublic") ?: true
-                ChatScreen(
-                    roomId = roomId,
-                    isPublic = isPublic,
-                    onBackClick = { navController.popBackStack() },
-                    onNavigateToDM = { dmRoomId, _ ->
-                        navController.navigate("chat/${Uri.encode(dmRoomId)}/false")
-                    }
+                    onNavigateToWatchlist = { navController.navigate("watchlist") },
+                    onNavigateToSubtitleDownloads = { navController.navigate("subtitle-downloads") }
                 )
             }
 

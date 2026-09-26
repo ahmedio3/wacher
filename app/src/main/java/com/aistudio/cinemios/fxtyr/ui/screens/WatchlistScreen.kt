@@ -1,6 +1,5 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -8,63 +7,39 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
 import com.aistudio.cinemios.fxtyr.ui.components.WatchlistPosterCard
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
-import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
     viewModel: MovieViewModel,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)? = null,
     onNavigateToDetails: (Int, String) -> Unit,
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val items by viewModel.watchlist.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
-    val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("قائمة المشاهدة", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, "رجوع")
-                    }
-                },
-                actions = {
-                    if (isSyncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp).padding(end = 8.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        IconButton(onClick = {
-                            val user = FirebaseAuth.getInstance().currentUser
-                            if (user == null) {
-                                Toast.makeText(context, "يجب تسجيل الدخول أولاً من الإعدادات", Toast.LENGTH_SHORT).show()
-                            } else {
-                                viewModel.syncWatchlist { success ->
-                                    val msg = if (success) "تمت المزامنة بنجاح" else "فشلت المزامنة"
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }) {
-                            Icon(Icons.Default.Sync, "مزامنة")
+                    if (onBackClick != null) {
+                        IconButton(onClick = onBackClick) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع")
                         }
                     }
                 },
@@ -107,13 +82,13 @@ fun WatchlistScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "قائمتك فارغة تماماً!",
+                            text = "قائمتك فارغة حالياً",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "تصفح الأفلام أو المسلسلات واضغط على زر العلامة لإضافتها وقراءتها لاحقاً في أي وقت.",
+                            text = "تصفح الأفلام أو المسلسلات واضغط على زر الحفظ لإضافتها إلى قائمتك الشخصية.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                             textAlign = TextAlign.Center
@@ -128,7 +103,7 @@ fun WatchlistScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(items) { item ->
+                    items(items, key = { it.id }) { item ->
                         WatchlistPosterCard(
                             item = item,
                             onClick = {

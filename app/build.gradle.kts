@@ -22,20 +22,9 @@ android {
     val tmdbApiKey = System.getenv("TMDB_API_KEY") ?: project.findProperty("tmdb.api.key") as? String ?: ""
     val subdlApiKey = System.getenv("SUBDL_API_KEY") ?: project.findProperty("subdl.api.key") as? String ?: ""
     val opensubtitlesApiKey = System.getenv("OPENSUBTITLES_API_KEY") ?: project.findProperty("opensubtitles.api.key") as? String ?: ""
-    val imgbbApiKey = System.getenv("IMGBB_API_KEY") ?: ""
-    val geminiApiKey = System.getenv("GEMINI_API_KEY") ?: ""
-    val opencodeZenApiKey = System.getenv("OPENCODE_ZEN_API_KEY") ?: ""
-    val bynaraApiKey = System.getenv("BYNARA_API_KEY") ?: ""
-    val agnesApiKey = System.getenv("AGNES_API_KEY") ?: ""
-
     buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey}\"")
     buildConfigField("String", "SUBDL_API_KEY", "\"${subdlApiKey}\"")
     buildConfigField("String", "OPENSUBTITLES_API_KEY", "\"${opensubtitlesApiKey}\"")
-    buildConfigField("String", "IMGBB_API_KEY", "\"${imgbbApiKey}\"")
-    buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey}\"")
-    buildConfigField("String", "OPENCODE_ZEN_API_KEY", "\"${opencodeZenApiKey}\"")
-    buildConfigField("String", "BYNARA_API_KEY", "\"${bynaraApiKey}\"")
-    buildConfigField("String", "AGNES_API_KEY", "\"${agnesApiKey}\"")
   }
 
   signingConfigs {
@@ -112,7 +101,6 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
-  implementation(libs.firebase.database)
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
   implementation("androidx.documentfile:documentfile:1.0.1")
