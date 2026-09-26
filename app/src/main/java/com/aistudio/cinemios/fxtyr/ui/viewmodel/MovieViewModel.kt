@@ -269,6 +269,12 @@ class MovieViewModel(
         }
     }
 
+    fun onSearchQueryChange(query: String) = setSearchQueryOnly(query)
+
+    fun logActivity(action: String, title: String) {
+        android.util.Log.d("MovieViewModel", "Activity: $action - $title")
+    }
+
     fun triggerSearch() {
         val query = _searchQuery.value.trim()
         if (query.isEmpty()) return

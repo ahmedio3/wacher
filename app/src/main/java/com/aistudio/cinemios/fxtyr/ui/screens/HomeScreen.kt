@@ -284,28 +284,28 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(mbList, key = { it.subjectId }) { item ->
-                                    val posterUrl = item.cover?.url ?: ""
-                                    val isTv = item.isEpisode == true
+                                    val posterUrl = item.posterUrl
+                                    val isTv = item.type == "series"
                                     val mediaType = if (isTv) "tv" else "movie"
-                                    val rawId = item.subjectId.toString()
+                                    val rawId = item.subjectId
                                     val watchlistId = "mb_$rawId"
                                     val inList = watchlistItems.any { it.id == watchlistId }
 
                                     TmdbPosterCard(
-                                        title = item.title ?: "",
+                                        title = item.title,
                                         posterUrl = posterUrl,
-                                        rating = item.score ?: 0.0,
-                                        year = item.releaseDate ?: "",
+                                        rating = item.rating,
+                                        year = item.year,
                                         isTv = isTv,
                                         isInMyList = inList,
                                         onClick = {
-                                            onNavigateToMovieBoxDetails(rawId, mediaType, item.title ?: "", posterUrl)
+                                            onNavigateToMovieBoxDetails(rawId, mediaType, item.title, posterUrl)
                                         },
                                         onToggleMyList = {
-                                            viewModel.toggleWatchlist(watchlistId, item.title ?: "", posterUrl, mediaType, item.score ?: 0.0)
+                                            viewModel.toggleWatchlist(watchlistId, item.title, posterUrl, mediaType, item.rating)
                                         },
                                         onShare = {
-                                            pendingShare = PendingShare(item.title ?: "", watchlistId, mediaType)
+                                            pendingShare = PendingShare(item.title, watchlistId, mediaType)
                                             showShareSheet = true
                                         }
                                     )
@@ -645,6 +645,7 @@ fun MediaCategoryCarousel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TmdbPosterCard(
     title: String,
