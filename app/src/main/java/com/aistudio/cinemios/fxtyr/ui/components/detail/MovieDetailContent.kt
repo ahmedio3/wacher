@@ -357,6 +357,3 @@ fun MovieDetailContent(
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-@Composable

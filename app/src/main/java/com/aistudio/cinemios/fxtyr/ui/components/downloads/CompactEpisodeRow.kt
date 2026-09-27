@@ -480,6 +480,3 @@ fun CompactEpisodeRow(
     }
 
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable

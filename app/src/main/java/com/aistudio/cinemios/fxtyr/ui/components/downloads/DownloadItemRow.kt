@@ -459,7 +459,3 @@ fun DownloadItemRow(
         }
     }
 }
-
-// Compact row for bottom sheet episode list (no card background, larger thumb, gradient progress bar)
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
-@Composable

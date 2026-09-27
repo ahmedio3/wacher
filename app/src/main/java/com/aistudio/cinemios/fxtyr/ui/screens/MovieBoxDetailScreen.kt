@@ -35,6 +35,7 @@ import com.aistudio.cinemios.fxtyr.data.remote.moviebox.viewmodel.MovieBoxViewMo
 import com.aistudio.cinemios.fxtyr.ui.components.moviebox.MovieBoxDownloadSheet
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.utils.isLatinText
+import com.aistudio.cinemios.fxtyr.ui.components.detail.*
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.ViewModelFactory
 import androidx.compose.animation.core.animateFloatAsState

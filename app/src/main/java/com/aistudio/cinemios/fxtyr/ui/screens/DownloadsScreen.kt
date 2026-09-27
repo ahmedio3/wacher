@@ -280,7 +280,3 @@ fun DownloadsScreen(
         }
     }
 }
-
-// Reusable header: circular back button (trailing/RTL-forward side) + title pill with two-tier text (leading side).
-// Parameterized so the same visual pattern can be reused on other pages later.
-

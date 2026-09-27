@@ -414,6 +414,3 @@ fun TvDetailContent(
         }
     }
 }
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable

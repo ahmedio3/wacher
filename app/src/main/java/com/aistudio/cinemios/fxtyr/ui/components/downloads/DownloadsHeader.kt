@@ -207,6 +207,3 @@ fun EmptyDownloadsView(message: String) {
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-@Composable
