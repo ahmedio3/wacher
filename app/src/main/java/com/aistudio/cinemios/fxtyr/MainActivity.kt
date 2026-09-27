@@ -58,6 +58,8 @@ import com.aistudio.cinemios.fxtyr.ui.navigation.isForwardNavigation
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideIn
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideOut
 import com.aistudio.cinemios.fxtyr.ui.screens.*
+import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingBottomNavBar
+import com.aistudio.cinemios.fxtyr.ui.components.navigation.NavigationTabItem
 
 import com.aistudio.cinemios.fxtyr.ui.theme.MyApplicationTheme
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
@@ -233,7 +235,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     enter = slideInVertically { it },
                     exit = slideOutVertically { it }
                 ) {
-                    ModernBottomNavBar(
+                    FloatingBottomNavBar(
                         navController = navController,
                         tabs = tabItems,
                         currentRoute = currentRoute ?: "home"
@@ -545,71 +547,3 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     }
     }
 }
-
-@Composable
-fun ModernBottomNavBar(
-    navController: NavHostController,
-    tabs: List<NavigationTabItem>,
-    currentRoute: String
-) {
-    NavigationBar(
-        modifier = Modifier.height(84.dp).padding(bottom = 6.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 4.dp
-    ) {
-            tabs.forEach { tab ->
-                val isSelected = currentRoute == tab.route
-                NavigationBarItem(
-                    selected = isSelected,
-                    onClick = {
-                        if (currentRoute != tab.route) {
-                            if (tab.route == "home") {
-                                navController.navigate("home") {
-                                    popUpTo(0) { saveState = true }
-                                    launchSingleTop = true
-                                }
-                            } else {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        }
-                    },
-                    icon = {
-                        Icon(
-                            imageVector = if (isSelected) tab.filledIcon else tab.outlinedIcon,
-                            contentDescription = tab.label,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = tab.label,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 10.sp
-                        )
-                    },
-                    alwaysShowLabel = true,
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    )
-                )
-            }
-        }
-}
-
-data class NavigationTabItem(
-    val route: String,
-    val label: String,
-    val filledIcon: androidx.compose.ui.graphics.vector.ImageVector,
-    val outlinedIcon: androidx.compose.ui.graphics.vector.ImageVector
-)
