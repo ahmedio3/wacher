@@ -36,6 +36,10 @@ import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import java.io.File
+import com.aistudio.cinemios.fxtyr.ui.components.CircularSelectionIndicator
+import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleHelper
 
 // Compact row for bottom sheet episode list (no card background, larger thumb, gradient progress bar)
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)

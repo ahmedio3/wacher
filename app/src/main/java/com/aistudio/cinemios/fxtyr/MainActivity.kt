@@ -58,6 +58,8 @@ import com.aistudio.cinemios.fxtyr.ui.navigation.isForwardNavigation
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideIn
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideOut
 import com.aistudio.cinemios.fxtyr.ui.screens.*
+import com.aistudio.cinemios.fxtyr.ui.components.downloads.DownloadItemRow
+import com.aistudio.cinemios.fxtyr.ui.components.downloads.SeriesDetailPage
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingBottomNavBar
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.NavigationTabItem
 
@@ -208,7 +210,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                         val sortedDls = remember(activeDownloads) { activeDownloads.sortedByDescending { it.addedAt } }
                         LazyColumn(modifier = Modifier.fillMaxWidth()) {
                             items(sortedDls) { item ->
-                                com.aistudio.cinemios.fxtyr.ui.screens.DownloadItemRow(
+                                DownloadItemRow(
                                     item = item,
                                     viewModel = movieViewModel,
                                     onPlayClick = {
