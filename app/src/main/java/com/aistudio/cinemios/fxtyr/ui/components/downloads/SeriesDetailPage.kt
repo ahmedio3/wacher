@@ -3,6 +3,7 @@ package com.aistudio.cinemios.fxtyr.ui.components.downloads
 import android.content.Context
 import android.net.Uri
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
+import com.aistudio.cinemios.fxtyr.data.local.SeasonMetaEntity
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbSeason
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchSheet

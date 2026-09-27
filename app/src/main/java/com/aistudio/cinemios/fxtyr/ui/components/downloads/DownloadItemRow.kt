@@ -1,5 +1,9 @@
 package com.aistudio.cinemios.fxtyr.ui.components.downloads
 
+import java.io.File
+import kotlinx.coroutines.launch
+import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleHelper
+
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*

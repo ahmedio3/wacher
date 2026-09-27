@@ -92,9 +92,6 @@ fun PillHeader(
     }
 }
 
-// FULL PAGE: per-series downloaded-episodes viewer + season switcher (replaces ModalBottomSheet)
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-@Composable
 
 
 @Composable
