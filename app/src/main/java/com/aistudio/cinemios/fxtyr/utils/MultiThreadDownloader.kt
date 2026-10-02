@@ -142,7 +142,8 @@ object MultiThreadDownloader {
             }
         }
 
-        if (mpdText == null) {
+        val validMpdText = mpdText
+        if (validMpdText == null) {
             withContext(Dispatchers.Main) { onComplete(false) }
             return
         }
@@ -150,7 +151,7 @@ object MultiThreadDownloader {
         // 2. Parse representations
         val reps = mutableListOf<DashRep>()
         val repRegex = Regex("""<Representation\s+([^>]+)>""", RegexOption.IGNORE_CASE)
-        for (match in repRegex.findAll(mpdText)) {
+        for (match in repRegex.findAll(validMpdText)) {
             val attrs = match.groupValues[1]
             val id = Regex("""id="([^"]+)"""").find(attrs)?.groupValues?.get(1) ?: continue
             val mime = Regex("""mimeType="([^"]+)"""").find(attrs)?.groupValues?.get(1) ?: ""
@@ -183,7 +184,7 @@ object MultiThreadDownloader {
 
         // 4. Calculate total presentation seconds
         var totalSeconds = 0.0
-        val durMatch = Regex("""mediaPresentationDuration="([^"]+)"""").find(mpdText)
+        val durMatch = Regex("""mediaPresentationDuration="([^"]+)"""").find(validMpdText)
         if (durMatch != null) {
             val durStr = durMatch.groupValues[1]
             val hours = Regex("""(\d+)H""").find(durStr)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
@@ -194,7 +195,7 @@ object MultiThreadDownloader {
 
         fun calculateChunksForRep(repId: String): Int {
             val adaptationPattern = Regex("""<AdaptationSet\s+([^>]*?)>(.*?)</AdaptationSet>""", RegexOption.DOT_MATCHES_ALL)
-            for (match in adaptationPattern.findAll(mpdText)) {
+            for (match in adaptationPattern.findAll(validMpdText)) {
                 val body = match.groupValues[2]
                 if (body.contains("""id="$repId"""")) {
                     val timelineMatch = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(body)
@@ -222,7 +223,7 @@ object MultiThreadDownloader {
                     }
                 }
             }
-            val globalTimeline = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(mpdText)
+            val globalTimeline = Regex("""<SegmentTimeline>(.*?)</SegmentTimeline>""", RegexOption.DOT_MATCHES_ALL).find(validMpdText)
             if (globalTimeline != null) {
                 var count = 0
                 val sElements = Regex("""<S\s+([^>]+)/?>""").findAll(globalTimeline.groupValues[1])
@@ -232,7 +233,7 @@ object MultiThreadDownloader {
                 }
                 if (count > 0) return count
             }
-            val globalTemplate = Regex("""<SegmentTemplate\s+([^>]+)>""").find(mpdText)
+            val globalTemplate = Regex("""<SegmentTemplate\s+([^>]+)>""").find(validMpdText)
             if (globalTemplate != null) {
                 val tAttrs = globalTemplate.groupValues[1]
                 val timescale = Regex("""timescale="(\d+)"""").find(tAttrs)?.groupValues?.get(1)?.toDoubleOrNull() ?: 1.0
@@ -256,7 +257,7 @@ object MultiThreadDownloader {
         }
 
         // 5. Write filtered index.mpd locally so ExoPlayer only queries the downloaded representations
-        var cleanMpd = mpdText
+        var cleanMpd: String = validMpdText
         for (rep in reps) {
             if (rep.id != selectedVideo.id && (selectedAudio == null || rep.id != selectedAudio.id)) {
                 val blockPattern = Regex("""<Representation\s+[^>]*id="${rep.id}"[^>]*>.*?</Representation>""", RegexOption.DOT_MATCHES_ALL)
