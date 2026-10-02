@@ -451,11 +451,19 @@ fun SeriesDetailPage(
                     .associate { (it.season to it.episode) to it.stillPath!! }
             }
 
+            val movieBoxSubjectId = remember(downloadedEpisodes) {
+                downloadedEpisodes.firstNotNullOfOrNull { dl ->
+                    Regex("""/(?:dash|stream)/(\d+)""").find(dl.sourceUrl)?.groupValues?.get(1)
+                        ?: if (dl.mediaId.length >= 10 && dl.mediaId.all { it.isDigit() }) dl.mediaId else null
+                }
+            }
+
             com.aistudio.cinemios.fxtyr.ui.components.moviebox.MovieBoxDownloadSheet(
                 movieTitle = seriesTitle,
                 movieYear = null,
                 mediaType = "tv",
                 viewModel = movieBoxViewModel,
+                initialSubjectId = movieBoxSubjectId,
                 onDismissRequest = { showDownloadNewSheet = false },
                 onTryOtherMethod = { showDownloadNewSheet = false },
                 episodeStillPaths = episodeStillPaths,

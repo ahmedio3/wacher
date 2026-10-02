@@ -95,38 +95,57 @@ object MultiThreadDownloader {
         var currentUrl = url
         var currentHeaders = headers
 
-        // 1. Fetch index.mpd with auto-refresh if 401/403
-        var mpdConn = URL(currentUrl).openConnection() as HttpURLConnection
-        mpdConn.connectTimeout = 15000
-        mpdConn.readTimeout = 15000
-        mpdConn.setRequestProperty("User-Agent", "okhttp/4.10.0")
-        currentHeaders?.forEach { (k, v) -> mpdConn.setRequestProperty(k, v) }
-        var mpdCode = mpdConn.responseCode
+        // 1. Fetch index.mpd with auto-refresh if 401/403 and retries on network/DNS glitches
+        var mpdText: String? = null
+        var mpdCode = -1
 
-        if ((mpdCode == HttpURLConnection.HTTP_FORBIDDEN || mpdCode == HttpURLConnection.HTTP_UNAUTHORIZED) && onRefreshHeaders != null) {
-            mpdConn.disconnect()
+        for (attempt in 1..3) {
+            var conn: HttpURLConnection? = null
             try {
-                val refreshed = onRefreshHeaders()
-                if (refreshed != null) {
-                    currentUrl = refreshed.first
-                    currentHeaders = refreshed.second
-                    mpdConn = URL(currentUrl).openConnection() as HttpURLConnection
-                    mpdConn.connectTimeout = 15000
-                    mpdConn.readTimeout = 15000
-                    mpdConn.setRequestProperty("User-Agent", "okhttp/4.10.0")
-                    currentHeaders?.forEach { (k, v) -> mpdConn.setRequestProperty(k, v) }
-                    mpdCode = mpdConn.responseCode
+                conn = URL(currentUrl).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+                conn.setRequestProperty("User-Agent", "okhttp/4.10.0")
+                currentHeaders?.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+                mpdCode = conn.responseCode
+
+                if ((mpdCode == HttpURLConnection.HTTP_FORBIDDEN || mpdCode == HttpURLConnection.HTTP_UNAUTHORIZED) && onRefreshHeaders != null) {
+                    conn.disconnect()
+                    try {
+                        val refreshed = onRefreshHeaders()
+                        if (refreshed != null) {
+                            currentUrl = refreshed.first
+                            currentHeaders = refreshed.second
+                            val retryConn = URL(currentUrl).openConnection() as HttpURLConnection
+                            retryConn.connectTimeout = 15000
+                            retryConn.readTimeout = 15000
+                            retryConn.setRequestProperty("User-Agent", "okhttp/4.10.0")
+                            currentHeaders?.forEach { (k, v) -> retryConn.setRequestProperty(k, v) }
+                            mpdCode = retryConn.responseCode
+                            conn = retryConn
+                        }
+                    } catch (_: Exception) {}
                 }
-            } catch (_: Exception) {}
+
+                if (mpdCode == HttpURLConnection.HTTP_OK) {
+                    mpdText = conn.inputStream.bufferedReader().use { it.readText() }
+                    conn.disconnect()
+                    break
+                } else {
+                    conn.disconnect()
+                }
+            } catch (_: Exception) {
+                conn?.disconnect()
+                if (attempt < 3) {
+                    kotlinx.coroutines.delay(1000L * attempt)
+                }
+            }
         }
 
-        if (mpdCode != HttpURLConnection.HTTP_OK) {
-            mpdConn.disconnect()
+        if (mpdText == null) {
             withContext(Dispatchers.Main) { onComplete(false) }
             return
         }
-        val mpdText = mpdConn.inputStream.bufferedReader().use { it.readText() }
-        mpdConn.disconnect()
 
         // 2. Parse representations
         val reps = mutableListOf<DashRep>()

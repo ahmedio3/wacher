@@ -55,12 +55,12 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
         }
     }
 
-    fun getDownloadLinks(subjectId: String, resolution: Int? = null) {
+    fun getDownloadLinks(subjectId: String, resolution: Int? = null, forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _downloadLinks.value = MovieBoxState.Loading
             try {
                 val result = withTimeout(30_000L) {
-                    repository.getDownloadLinks(subjectId, resolution)
+                    repository.getDownloadLinks(subjectId, resolution, forceRefresh)
                 }
                 result
                     .onSuccess { _downloadLinks.value = MovieBoxState.Success(it) }

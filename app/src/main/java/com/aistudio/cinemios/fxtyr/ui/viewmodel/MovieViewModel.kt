@@ -860,8 +860,9 @@ class MovieViewModel(
                 currentDownloadId = next.id
                 var (rawUrl, headers) = unpackSourceUrl(next.sourceUrl)
                 val isDash = rawUrl.contains(".mpd") || rawUrl.contains("/dash/")
-                if (isDash && (headers == null || !headers.containsKey("Cookie"))) {
-                    val refreshed = refreshDownloadHeaders(next.id)
+                val isStale = (System.currentTimeMillis() - next.addedAt) > 15 * 60 * 1000L
+                if (isDash && (headers == null || !headers.containsKey("Cookie") || isStale)) {
+                    val refreshed = refreshDownloadHeaders(next.id, forceRefresh = isStale)
                     if (refreshed != null) {
                         rawUrl = refreshed.first
                         headers = refreshed.second
@@ -872,22 +873,22 @@ class MovieViewModel(
         }
     }
 
-    private suspend fun refreshDownloadHeaders(downloadId: String): Pair<String, Map<String, String>?>? {
+    private suspend fun refreshDownloadHeaders(downloadId: String, forceRefresh: Boolean = true): Pair<String, Map<String, String>?>? {
         return withContext(Dispatchers.IO) {
             try {
                 val entity = repository.getDownload(downloadId) ?: return@withContext null
                 val rawSource = entity.sourceUrl.substringBefore("|HEADERS|")
 
-                // Extract MovieBox subjectId from sourceUrl (e.g. /dash/6391474290696802080_0_0_.../)
+                // Extract MovieBox subjectId from sourceUrl (e.g. /dash/6391474290696802080_... or /stream/...)
                 // or fallback to entity.mediaId if numeric and long enough
-                val subjectIdFromUrl = Regex("""/dash/(\d+)""").find(rawSource)?.groupValues?.get(1)
+                val subjectIdFromUrl = Regex("""/(?:dash|stream)/(\d+)""").find(rawSource)?.groupValues?.get(1)
                 val subjectId = subjectIdFromUrl
                     ?: if (entity.mediaId.length >= 10 && entity.mediaId.all { it.isDigit() }) entity.mediaId else null
 
                 if (subjectId == null) return@withContext null
 
                 val res = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
-                    movieBoxRepository.getDownloadLinks(subjectId, null)
+                    movieBoxRepository.getDownloadLinks(subjectId, null, forceRefresh = forceRefresh)
                 } ?: return@withContext null
 
                 val links = res.getOrNull() ?: return@withContext null
