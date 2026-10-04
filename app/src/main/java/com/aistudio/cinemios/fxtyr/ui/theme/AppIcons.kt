@@ -1,6 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -72,7 +73,8 @@ object AppIcons {
     }
 
     /**
-     * iOS Home Filled
+     * iOS Home Filled - Matching user reference image (media_1791077938178.jpg)
+     * Gable roof with soft rounded tip, curved bottom corners, and bottom arched doorway cutout.
      */
     val HomeFilled: ImageVector by lazy {
         ImageVector.Builder(
@@ -83,26 +85,30 @@ object AppIcons {
             viewportHeight = 24f
         ).apply {
             path(fill = SolidColor(Color.White)) {
-                moveTo(12f, 3f)
-                lineTo(20.5f, 10f)
-                curveTo(20.9f, 10.3f, 21f, 10.9f, 20.7f, 11.3f)
-                curveTo(20.3f, 11.7f, 19.7f, 11.8f, 19.3f, 11.5f)
-                lineTo(18.5f, 10.8f)
-                lineTo(18.5f, 19f)
-                curveTo(18.5f, 20.1f, 17.6f, 21f, 16.5f, 21f)
-                lineTo(7.5f, 21f)
-                curveTo(6.4f, 21f, 5.5f, 20.1f, 5.5f, 19f)
-                lineTo(5.5f, 10.8f)
-                lineTo(4.7f, 11.5f)
-                curveTo(4.3f, 11.8f, 3.7f, 11.7f, 3.3f, 11.3f)
-                curveTo(3f, 10.9f, 3.1f, 10.3f, 3.5f, 10f)
+                moveTo(12f, 3.2f)
+                curveTo(12.5f, 3.2f, 13f, 3.5f, 13.4f, 3.8f)
+                lineTo(20.4f, 9.5f)
+                curveTo(20.8f, 9.8f, 21f, 10.3f, 21f, 10.8f)
+                lineTo(21f, 18.5f)
+                curveTo(21f, 19.9f, 19.9f, 21f, 18.5f, 21f)
+                lineTo(14.5f, 21f)
+                lineTo(14.5f, 15f)
+                curveTo(14.5f, 13.6f, 13.4f, 12.5f, 12f, 12.5f)
+                curveTo(10.6f, 12.5f, 9.5f, 13.6f, 9.5f, 15f)
+                lineTo(9.5f, 21f)
+                lineTo(5.5f, 21f)
+                curveTo(4.1f, 21f, 3f, 19.9f, 3f, 18.5f)
+                lineTo(3f, 10.8f)
+                curveTo(3f, 10.3f, 3.2f, 9.8f, 3.6f, 9.5f)
+                lineTo(10.6f, 3.8f)
+                curveTo(11f, 3.5f, 11.5f, 3.2f, 12f, 3.2f)
                 close()
             }
         }.build()
     }
 
     /**
-     * iOS Home Outline
+     * iOS Home Outline - Exactly matching HomeFilled silhouette with arched doorway
      */
     val HomeOutline: ImageVector by lazy {
         ImageVector.Builder(
@@ -119,19 +125,24 @@ object AppIcons {
                 strokeLineJoin = StrokeJoin.Round
             ) {
                 moveTo(12f, 3.5f)
-                lineTo(19.5f, 9.8f)
-                lineTo(19.5f, 19f)
-                curveTo(19.5f, 20f, 18.8f, 20.8f, 17.8f, 20.8f)
-                lineTo(6.2f, 20.8f)
-                curveTo(5.2f, 20.8f, 4.5f, 20f, 4.5f, 19f)
-                lineTo(4.5f, 9.8f)
+                lineTo(20.2f, 10.2f)
+                lineTo(20.2f, 18.5f)
+                curveTo(20.2f, 19.8f, 19.2f, 20.8f, 18f, 20.8f)
+                lineTo(14.8f, 20.8f)
+                lineTo(14.8f, 15f)
+                curveTo(14.8f, 13.5f, 13.5f, 12.2f, 12f, 12.2f)
+                curveTo(10.5f, 12.2f, 9.2f, 13.5f, 9.2f, 15f)
+                lineTo(9.2f, 20.8f)
+                lineTo(6f, 20.8f)
+                curveTo(4.8f, 20.8f, 3.8f, 19.8f, 3.8f, 18.5f)
+                lineTo(3.8f, 10.2f)
                 close()
             }
         }.build()
     }
 
     /**
-     * iOS Settings Sliders / Gear
+     * iOS Settings Gear (Filled)
      */
     val SettingsFilled: ImageVector by lazy {
         ImageVector.Builder(
@@ -142,45 +153,131 @@ object AppIcons {
             viewportHeight = 24f
         ).apply {
             path(
-                stroke = SolidColor(Color.White),
-                strokeLineWidth = 2.0f,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.EvenOdd
             ) {
-                moveTo(4f, 6.5f)
-                lineTo(20f, 6.5f)
-                moveTo(4f, 12f)
-                lineTo(20f, 12f)
-                moveTo(4f, 17.5f)
-                lineTo(20f, 17.5f)
-            }
-            path(fill = SolidColor(Color.White)) {
-                // Knobs
-                moveTo(8.5f, 6.5f)
-                curveTo(8.5f, 7.6f, 7.6f, 8.5f, 6.5f, 8.5f)
-                curveTo(5.4f, 8.5f, 4.5f, 7.6f, 4.5f, 6.5f)
-                curveTo(4.5f, 5.4f, 5.4f, 4.5f, 6.5f, 4.5f)
-                curveTo(7.6f, 4.5f, 8.5f, 5.4f, 8.5f, 6.5f)
+                moveTo(12f, 15.5f)
+                curveTo(10.07f, 15.5f, 8.5f, 13.93f, 8.5f, 12f)
+                curveTo(8.5f, 10.07f, 10.07f, 8.5f, 12f, 8.5f)
+                curveTo(13.93f, 8.5f, 15.5f, 10.07f, 15.5f, 12f)
+                curveTo(15.5f, 13.93f, 13.93f, 15.5f, 12f, 15.5f)
                 close()
 
-                moveTo(17.5f, 12f)
-                curveTo(17.5f, 13.1f, 16.6f, 14f, 15.5f, 14f)
-                curveTo(14.4f, 14f, 13.5f, 13.1f, 13.5f, 12f)
-                curveTo(13.5f, 10.9f, 14.4f, 10f, 15.5f, 10f)
-                curveTo(16.6f, 10f, 17.5f, 10.9f, 17.5f, 12f)
-                close()
-
-                moveTo(11.5f, 17.5f)
-                curveTo(11.5f, 18.6f, 10.6f, 19.5f, 9.5f, 19.5f)
-                curveTo(8.4f, 19.5f, 7.5f, 18.6f, 7.5f, 17.5f)
-                curveTo(7.5f, 16.4f, 8.4f, 15.5f, 9.5f, 15.5f)
-                curveTo(10.6f, 15.5f, 11.5f, 16.4f, 11.5f, 17.5f)
+                moveTo(19.43f, 12.98f)
+                curveTo(19.47f, 12.66f, 19.5f, 12.34f, 19.5f, 12f)
+                curveTo(19.5f, 11.66f, 19.47f, 11.34f, 19.43f, 11.02f)
+                lineTo(21.54f, 9.37f)
+                curveTo(21.73f, 9.22f, 21.78f, 8.95f, 21.66f, 8.73f)
+                lineTo(19.66f, 5.27f)
+                curveTo(19.54f, 5.05f, 19.27f, 4.96f, 19.05f, 5.05f)
+                lineTo(16.56f, 6.05f)
+                curveTo(16.04f, 5.65f, 15.48f, 5.32f, 14.87f, 5.07f)
+                lineTo(14.49f, 2.42f)
+                curveTo(14.46f, 2.18f, 14.25f, 2f, 14f, 2f)
+                lineTo(10f, 2f)
+                curveTo(9.75f, 2f, 9.54f, 2.18f, 9.51f, 2.42f)
+                lineTo(9.13f, 5.07f)
+                curveTo(8.52f, 5.32f, 7.96f, 5.66f, 7.44f, 6.05f)
+                lineTo(4.95f, 5.05f)
+                curveTo(4.72f, 4.96f, 4.46f, 5.05f, 4.34f, 5.27f)
+                lineTo(2.34f, 8.73f)
+                curveTo(2.21f, 8.95f, 2.27f, 9.22f, 2.46f, 9.37f)
+                lineTo(4.57f, 11.02f)
+                curveTo(4.53f, 11.34f, 4.5f, 11.67f, 4.5f, 12f)
+                curveTo(4.5f, 12.33f, 4.53f, 12.66f, 4.57f, 12.98f)
+                lineTo(2.46f, 14.63f)
+                curveTo(2.27f, 14.78f, 2.21f, 15.05f, 2.34f, 15.27f)
+                lineTo(4.34f, 18.73f)
+                curveTo(4.46f, 18.95f, 4.73f, 19.04f, 4.95f, 18.95f)
+                lineTo(7.44f, 17.95f)
+                curveTo(7.96f, 18.35f, 8.52f, 18.68f, 9.13f, 18.93f)
+                lineTo(9.51f, 21.58f)
+                curveTo(9.54f, 21.82f, 9.75f, 22f, 10f, 22f)
+                lineTo(14f, 22f)
+                curveTo(14.25f, 22f, 14.46f, 21.82f, 14.49f, 21.58f)
+                lineTo(14.87f, 18.93f)
+                curveTo(15.48f, 18.68f, 16.04f, 18.34f, 16.56f, 17.95f)
+                lineTo(19.05f, 18.95f)
+                curveTo(19.28f, 19.04f, 19.54f, 18.95f, 19.66f, 18.73f)
+                lineTo(21.66f, 15.27f)
+                curveTo(21.78f, 15.05f, 21.73f, 14.78f, 21.54f, 14.63f)
+                lineTo(19.43f, 12.98f)
                 close()
             }
         }.build()
     }
 
-    val SettingsOutline: ImageVector by lazy { SettingsFilled }
+    /**
+     * iOS Settings Gear (Outlined)
+     */
+    val SettingsOutline: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "AppIcons.SettingsOutline",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(19.43f, 12.98f)
+                curveTo(19.47f, 12.66f, 19.5f, 12.34f, 19.5f, 12f)
+                curveTo(19.5f, 11.66f, 19.47f, 11.34f, 19.43f, 11.02f)
+                lineTo(21.54f, 9.37f)
+                curveTo(21.73f, 9.22f, 21.78f, 8.95f, 21.66f, 8.73f)
+                lineTo(19.66f, 5.27f)
+                curveTo(19.54f, 5.05f, 19.27f, 4.96f, 19.05f, 5.05f)
+                lineTo(16.56f, 6.05f)
+                curveTo(16.04f, 5.65f, 15.48f, 5.32f, 14.87f, 5.07f)
+                lineTo(14.49f, 2.42f)
+                curveTo(14.46f, 2.18f, 14.25f, 2f, 14f, 2f)
+                lineTo(10f, 2f)
+                curveTo(9.75f, 2f, 9.54f, 2.18f, 9.51f, 2.42f)
+                lineTo(9.13f, 5.07f)
+                curveTo(8.52f, 5.32f, 7.96f, 5.66f, 7.44f, 6.05f)
+                lineTo(4.95f, 5.05f)
+                curveTo(4.72f, 4.96f, 4.46f, 5.05f, 4.34f, 5.27f)
+                lineTo(2.34f, 8.73f)
+                curveTo(2.21f, 8.95f, 2.27f, 9.22f, 2.46f, 9.37f)
+                lineTo(4.57f, 11.02f)
+                curveTo(4.53f, 11.34f, 4.5f, 11.67f, 4.5f, 12f)
+                curveTo(4.5f, 12.33f, 4.53f, 12.66f, 4.57f, 12.98f)
+                lineTo(2.46f, 14.63f)
+                curveTo(2.27f, 14.78f, 2.21f, 15.05f, 2.34f, 15.27f)
+                lineTo(4.34f, 18.73f)
+                curveTo(4.46f, 18.95f, 4.73f, 19.04f, 4.95f, 18.95f)
+                lineTo(7.44f, 17.95f)
+                curveTo(7.96f, 18.35f, 8.52f, 18.68f, 9.13f, 18.93f)
+                lineTo(9.51f, 21.58f)
+                curveTo(9.54f, 21.82f, 9.75f, 22f, 10f, 22f)
+                lineTo(14f, 22f)
+                curveTo(14.25f, 22f, 14.46f, 21.82f, 14.49f, 21.58f)
+                lineTo(14.87f, 18.93f)
+                curveTo(15.48f, 18.68f, 16.04f, 18.34f, 16.56f, 17.95f)
+                lineTo(19.05f, 18.95f)
+                curveTo(19.28f, 19.04f, 19.54f, 18.95f, 19.66f, 18.73f)
+                lineTo(21.66f, 15.27f)
+                curveTo(21.78f, 15.05f, 21.73f, 14.78f, 21.54f, 14.63f)
+                lineTo(19.43f, 12.98f)
+                close()
+            }
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f
+            ) {
+                moveTo(12f, 15.5f)
+                curveTo(10.07f, 15.5f, 8.5f, 13.93f, 8.5f, 12f)
+                curveTo(8.5f, 10.07f, 10.07f, 8.5f, 12f, 8.5f)
+                curveTo(13.93f, 8.5f, 15.5f, 10.07f, 15.5f, 12f)
+                curveTo(15.5f, 13.93f, 13.93f, 15.5f, 12f, 15.5f)
+                close()
+            }
+        }.build()
+    }
 
     /**
      * iOS Close 'X'

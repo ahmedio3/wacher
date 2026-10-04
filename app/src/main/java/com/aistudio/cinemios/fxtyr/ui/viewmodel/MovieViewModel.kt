@@ -235,19 +235,14 @@ class MovieViewModel(
         // Fetch Home content on startup
         fetchHomeContent()
 
-        // Debounced auto-search: waits 300ms after user stops typing, min 3 chars
+        // Debounced auto-search: waits 750ms of inactivity, min 2 chars, cancels previous queries
         viewModelScope.launch {
             _searchQuery
-                .debounce(300)
-                .filter { it.length >= 3 }
+                .debounce(750)
+                .filter { it.trim().length >= 2 }
                 .distinctUntilChanged()
                 .collect { query ->
-                    _searchResults.value = RequestState.Loading
-                    if (_isMovieBoxSearchMode.value) {
-                        searchMovieBox(query.trim())
-                    } else {
-                        searchMedia(query.trim())
-                    }
+                    performSearch(query.trim(), saveToHistory = false)
                 }
         }
     }
@@ -379,13 +374,20 @@ class MovieViewModel(
         sharedPrefs.edit().remove("recent_viewed_shows").apply()
     }
 
+    private var activeSearchJob: Job? = null
+
     fun updateSearchMode(isMovieBox: Boolean) {
         _isMovieBoxSearchMode.value = isMovieBox
+        val q = _searchQuery.value.trim()
+        if (q.length >= 2) {
+            performSearch(q, saveToHistory = false)
+        }
     }
 
     fun setSearchQueryOnly(query: String) {
         _searchQuery.value = query
-        if (query.isEmpty()) {
+        if (query.trim().isEmpty()) {
+            activeSearchJob?.cancel()
             _searchResults.value = RequestState.Idle
             _movieBoxSearchResults.value = RequestState.Idle
         }
@@ -400,27 +402,50 @@ class MovieViewModel(
     fun triggerSearch() {
         val query = _searchQuery.value.trim()
         if (query.isEmpty()) return
-        addRecentSearch(query)
-        _searchResults.value = RequestState.Loading
-        if (_isMovieBoxSearchMode.value) {
-            searchMovieBox(query)
-        } else {
-            searchMedia(query)
-        }
+        performSearch(query, saveToHistory = true)
     }
-    
-    private fun searchMovieBox(query: String) {
-        viewModelScope.launch {
+
+    fun performSearch(query: String, saveToHistory: Boolean = false) {
+        val q = query.trim()
+        if (q.length < 2) {
+            activeSearchJob?.cancel()
+            _searchResults.value = RequestState.Idle
+            _movieBoxSearchResults.value = RequestState.Idle
+            return
+        }
+        if (saveToHistory) {
+            addRecentSearch(q)
+        }
+        activeSearchJob?.cancel()
+        activeSearchJob = viewModelScope.launch {
+            _searchResults.value = RequestState.Loading
             _movieBoxSearchResults.value = RequestState.Loading
-            try {
-                val response = movieBoxRepository.search(query)
-                if (response.isSuccess) {
-                    _movieBoxSearchResults.value = RequestState.Success(response.getOrNull() ?: emptyList())
-                } else {
-                    _movieBoxSearchResults.value = RequestState.Error(response.exceptionOrNull()?.message ?: "Unknown error")
+            if (_isMovieBoxSearchMode.value) {
+                try {
+                    val response = movieBoxRepository.search(q)
+                    if (response.isSuccess) {
+                        _movieBoxSearchResults.value = RequestState.Success(response.getOrNull() ?: emptyList())
+                    } else {
+                        _movieBoxSearchResults.value = RequestState.Error(response.exceptionOrNull()?.message ?: "Unknown error")
+                    }
+                } catch (e: Exception) {
+                    if (e !is kotlinx.coroutines.CancellationException) {
+                        _movieBoxSearchResults.value = RequestState.Error(e.localizedMessage ?: "Unknown error")
+                    }
                 }
-            } catch (e: Exception) {
-                _movieBoxSearchResults.value = RequestState.Error(e.localizedMessage ?: "Unknown error")
+            } else {
+                try {
+                    val response = repository.searchMulti(q, language = currentLang)
+                    val filtered = response.results?.filter {
+                        (it.mediaType == "movie" || it.mediaType == "tv") &&
+                        !(it.title.isNullOrEmpty() && it.name.isNullOrEmpty())
+                    } ?: emptyList()
+                    _searchResults.value = RequestState.Success(filtered)
+                } catch (e: Exception) {
+                    if (e !is kotlinx.coroutines.CancellationException) {
+                        _searchResults.value = RequestState.Error(e.localizedMessage ?: "فشل البحث، حاول مرة أخرى")
+                    }
+                }
             }
         }
     }
@@ -433,23 +458,6 @@ class MovieViewModel(
     }
 
     suspend fun searchDirect(query: String) = repository.searchMulti(query, language = currentLang)
-
-    private fun searchMedia(query: String) {
-        viewModelScope.launch {
-            _searchResults.value = RequestState.Loading
-            try {
-                val response = repository.searchMulti(query, language = currentLang)
-                // Filter content with valid titles/posters and check types
-                val filtered = response.results?.filter {
-                    (it.mediaType == "movie" || it.mediaType == "tv") &&
-                    !(it.title.isNullOrEmpty() && it.name.isNullOrEmpty())
-                } ?: emptyList()
-                _searchResults.value = RequestState.Success(filtered)
-            } catch (e: Exception) {
-                _searchResults.value = RequestState.Error(e.localizedMessage ?: "فشل البحث، حاول مرة أخرى")
-            }
-        }
-    }
 
     private suspend fun fetchTrendingMovies() {
         _trendingMovies.value = RequestState.Loading

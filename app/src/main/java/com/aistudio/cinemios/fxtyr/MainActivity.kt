@@ -159,7 +159,12 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     val searchQuery by movieViewModel.searchQuery.collectAsState()
     val isMovieBoxMode by movieViewModel.isMovieBoxSearchMode.collectAsState()
 
-    BackHandler(enabled = isSearchActive) {
+    val isDetailRoute = currentRoute?.startsWith("detail") == true ||
+                        currentRoute?.startsWith("mb_details") == true ||
+                        currentRoute?.startsWith("player") == true ||
+                        currentRoute?.startsWith("offline_player") == true
+
+    BackHandler(enabled = isSearchActive && !isDetailRoute) {
         movieViewModel.closeSearch()
     }
 
@@ -565,18 +570,16 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
         }
 
         AnimatedVisibility(
-            visible = isSearchActive,
+            visible = isSearchActive && !isDetailRoute,
             enter = fadeIn() + slideInVertically { it / 8 },
             exit = fadeOut() + slideOutVertically { it / 8 }
         ) {
             FloatingSearchOverlay(
                 viewModel = movieViewModel,
                 onNavigateToDetails = { id, type ->
-                    movieViewModel.closeSearch()
                     navController.navigate("detail/$id/$type")
                 },
                 onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
-                    movieViewModel.closeSearch()
                     navController.navigate(
                         "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
                     )

@@ -27,6 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -63,7 +64,7 @@ fun FloatingBottomNavBar(
     onTriggerSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val navBarBg = if (isDark) Color(0xFF141416) else Color(0xFFFFFFFF)
     val navBarBorder = if (isDark) Color(0xFF28282D) else Color(0xFFE2DDD5)
     val shadowColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.12f)
@@ -278,8 +279,6 @@ fun FloatingBottomNavBar(
                         label = "tab_pill_slide"
                     )
 
-                    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-
                     Surface(
                         shape = CircleShape,
                         color = navBarBg,
@@ -301,13 +300,13 @@ fun FloatingBottomNavBar(
                             contentAlignment = Alignment.CenterStart
                         ) {
                             // SMOOTH SLIDING CAPSULE INDICATOR
-                            // In RTL, the first tab (index 0) starts on the right, so offset moves left (-x)
-                            val offsetSign = if (isRtl) -1f else 1f
+                            // In Jetpack Compose, Modifier.offset has rtlAware = true by default.
+                            // A positive x offset automatically moves from Start towards End (in RTL: moves left; in LTR: moves right).
                             Box(
                                 modifier = Modifier
                                     .offset {
                                         IntOffset(
-                                            x = (slotWidth.toPx() * animatedIndex * offsetSign).toInt(),
+                                            x = (slotWidth.toPx() * animatedIndex).toInt(),
                                             y = 0
                                         )
                                     }
