@@ -32,9 +32,9 @@ import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridCard
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridSkeleton
-import com.aistudio.cinemios.fxtyr.ui.components.home.ShowShareSheet
+import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
 import com.aistudio.cinemios.fxtyr.ui.components.home.TmdbPosterCard
-import com.aistudio.cinemios.fxtyr.ui.components.home.shareShow
+import com.aistudio.cinemios.fxtyr.ui.components.shareShow
 import com.aistudio.cinemios.fxtyr.ui.screens.PendingShare
 import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
@@ -431,15 +431,15 @@ fun FloatingSearchOverlay(
         }
     }
 
-    pendingShare?.let {
+    pendingShare?.let { shareItem: PendingShare ->
         ShowShareSheet(
             visible = showShareSheet,
-            title = it.title,
-            id = it.id,
-            mediaType = it.mediaType,
+            title = shareItem.title,
+            id = shareItem.id,
+            mediaType = shareItem.mediaType,
             onDismiss = { showShareSheet = false },
             onNativeShare = {
-                shareShow(context, it.title, it.id, it.mediaType)
+                shareShow(context, shareItem.title, shareItem.id, shareItem.mediaType)
                 showShareSheet = false
             }
         )

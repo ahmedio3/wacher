@@ -16,6 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
 import com.aistudio.cinemios.fxtyr.ui.components.SkeletonItem
+import com.aistudio.cinemios.fxtyr.ui.components.WatchlistPosterCard
+import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
+import com.aistudio.cinemios.fxtyr.ui.components.shareShow
 import com.aistudio.cinemios.fxtyr.ui.components.home.*
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
@@ -206,15 +209,15 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(100.dp))
     }
 
-    pendingShare?.let {
+    pendingShare?.let { shareItem: PendingShare ->
         ShowShareSheet(
             visible = showShareSheet,
-            title = it.title,
-            id = it.id,
-            mediaType = it.mediaType,
+            title = shareItem.title,
+            id = shareItem.id,
+            mediaType = shareItem.mediaType,
             onDismiss = { showShareSheet = false },
             onNativeShare = {
-                shareShow(context, it.title, it.id, it.mediaType)
+                shareShow(context, shareItem.title, shareItem.id, shareItem.mediaType)
                 showShareSheet = false
             }
         )
