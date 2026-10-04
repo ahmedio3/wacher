@@ -90,7 +90,7 @@ class MovieViewModel(
         _movieRecommendations.value = emptyMap()
         _tvSimilar.value = emptyMap()
         _tvRecommendations.value = emptyMap()
-        if (_searchQuery.value.isNotBlank()) searchMedia(_searchQuery.value)
+        if (_searchQuery.value.isNotBlank()) performSearch(_searchQuery.value, saveToHistory = false)
         fetchHomeContent()
     }
 
@@ -458,6 +458,8 @@ class MovieViewModel(
     }
 
     suspend fun searchDirect(query: String) = repository.searchMulti(query, language = currentLang)
+
+    private fun searchMedia(query: String) = performSearch(query)
 
     private suspend fun fetchTrendingMovies() {
         _trendingMovies.value = RequestState.Loading
