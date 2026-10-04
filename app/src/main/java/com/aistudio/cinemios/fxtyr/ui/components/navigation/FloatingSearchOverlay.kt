@@ -1,11 +1,10 @@
 package com.aistudio.cinemios.fxtyr.ui.components.navigation
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -30,9 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
+import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridCard
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridSkeleton
-import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
 import com.aistudio.cinemios.fxtyr.ui.components.home.TmdbPosterCard
 import com.aistudio.cinemios.fxtyr.ui.components.shareShow
 import com.aistudio.cinemios.fxtyr.ui.screens.PendingShare
@@ -40,7 +39,6 @@ import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FloatingSearchOverlay(
     viewModel: MovieViewModel,
@@ -48,6 +46,13 @@ fun FloatingSearchOverlay(
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
+    val bgColor = MaterialTheme.colorScheme.background
+    val textColor = MaterialTheme.colorScheme.onBackground
+    val cardBg = MaterialTheme.colorScheme.surface
+    val chipBg = if (isDark) Color(0xFF1A1D24) else Color(0xFFFFFFFF)
+    val chipBorder = if (isDark) Color(0xFF2A2E39) else Color(0xFFDFD9CF)
+
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isMovieBoxSearch by viewModel.isMovieBoxSearchMode.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
@@ -64,15 +69,15 @@ fun FloatingSearchOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0F1013))
+            .background(bgColor)
             .statusBarsPadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 90.dp) // Leave space for floating search bar
+                .padding(bottom = 90.dp) // Leave room for floating bottom dock
         ) {
-            // Mode Header Pill Indicator
+            // Mode Header Indicator & Switch (Single Switch, labeled MB / TMDB)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -91,36 +96,37 @@ fun FloatingSearchOverlay(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = if (isMovieBoxSearch) "بحث في سيرفرات MovieBox" else "بحث في قاعدة TMDB",
+                        text = if (isMovieBoxSearch) "البحث في سيرفرات MB" else "البحث في سيرفرات TMDB",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
+                        color = textColor
                     )
                 }
 
-                // Mode switch chip in header
+                // Mode switch chip in header (MB / TMDB)
                 Surface(
                     shape = CircleShape,
-                    color = if (isMovieBoxSearch) MaterialTheme.colorScheme.primary else Color(0xFF222226),
+                    color = if (isMovieBoxSearch) MaterialTheme.colorScheme.primary else chipBg,
+                    border = BorderStroke(1.dp, if (isMovieBoxSearch) Color.Transparent else chipBorder),
                     modifier = Modifier.clickable {
                         viewModel.updateSearchMode(!isMovieBoxSearch)
                     }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
                             imageVector = AppIcons.MovieBox,
                             contentDescription = null,
-                            tint = if (isMovieBoxSearch) Color.White else Color(0xFFB0B0B8),
+                            tint = if (isMovieBoxSearch) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = if (isMovieBoxSearch) "MovieBox" else "TMDB",
-                            fontSize = 11.sp,
+                            text = if (isMovieBoxSearch) "MB" else "TMDB",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isMovieBoxSearch) Color.White else Color(0xFFB0B0B8)
+                            color = if (isMovieBoxSearch) MaterialTheme.colorScheme.onPrimary else textColor
                         )
                     }
                 }
@@ -135,7 +141,7 @@ fun FloatingSearchOverlay(
                         .verticalScroll(scrollState)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    // 1. RECENT SEARCHES SECTION
+                    // 1. RECENT SEARCHES SECTION (Safe, scrollable chip list)
                     if (recentSearches.isNotEmpty()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -149,14 +155,14 @@ fun FloatingSearchOverlay(
                                 Icon(
                                     imageVector = AppIcons.History,
                                     contentDescription = null,
-                                    tint = Color(0xFF8E8E93),
+                                    tint = textColor.copy(alpha = 0.5f),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
                                     text = "عمليات البحث الأخيرة",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFE5E5EA)
+                                    color = textColor
                                 )
                             }
                             TextButton(
@@ -173,31 +179,37 @@ fun FloatingSearchOverlay(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Flow of recent search query chips
-                        FlowRow(
+                        // Safe Horizontal LazyRow of recent searches
+                        LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            recentSearches.forEach { query ->
+                            items(recentSearches, key = { it }) { query ->
                                 Surface(
                                     shape = CircleShape,
-                                    color = Color(0xFF1C1C20),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2A30)),
+                                    color = chipBg,
+                                    border = BorderStroke(1.dp, chipBorder),
                                     modifier = Modifier.clickable {
                                         viewModel.setSearchQueryOnly(query)
                                         viewModel.triggerSearch()
                                     }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                                        modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
+                                        Icon(
+                                            imageVector = AppIcons.History,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(13.dp)
+                                        )
                                         Text(
                                             text = query,
                                             fontSize = 13.sp,
-                                            color = Color.White
+                                            color = textColor
                                         )
                                         Box(
                                             modifier = Modifier
@@ -209,8 +221,8 @@ fun FloatingSearchOverlay(
                                             Icon(
                                                 imageVector = AppIcons.Close,
                                                 contentDescription = "حذف",
-                                                tint = Color(0xFF8E8E93),
-                                                modifier = Modifier.size(12.dp)
+                                                tint = textColor.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(11.dp)
                                             )
                                         }
                                     }
@@ -218,7 +230,7 @@ fun FloatingSearchOverlay(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(28.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
 
                     // 2. RECENTLY VIEWED SHOWS SECTION
@@ -232,7 +244,7 @@ fun FloatingSearchOverlay(
                                 text = "شاهدت مؤخراً / العروض الأخيرة",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE5E5EA)
+                                color = textColor
                             )
                             TextButton(
                                 onClick = { viewModel.clearRecentViewedShows() },
@@ -256,6 +268,8 @@ fun FloatingSearchOverlay(
                             items(recentViewedShows, key = { it.id }) { item ->
                                 RecentViewedCard(
                                     item = item,
+                                    cardBg = cardBg,
+                                    textColor = textColor,
                                     onClick = {
                                         if (item.isMovieBox) {
                                             onNavigateToMovieBoxDetails(item.id, item.mediaType, item.title, item.posterPath)
@@ -286,12 +300,12 @@ fun FloatingSearchOverlay(
                                 Icon(
                                     imageVector = AppIcons.Search,
                                     contentDescription = null,
-                                    tint = Color(0xFF48484A),
+                                    tint = textColor.copy(alpha = 0.25f),
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Text(
                                     text = "اكتب اسم أي فيلم أو مسلسل للبحث المباشر",
-                                    color = Color(0xFF8E8E93),
+                                    color = textColor.copy(alpha = 0.5f),
                                     fontSize = 14.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -306,7 +320,7 @@ fun FloatingSearchOverlay(
                         is RequestState.Success -> {
                             val list = mbState.data
                             if (list.isEmpty()) {
-                                EmptySearchState(message = "لم نجد نتائج في MovieBox للبحث: $searchQuery")
+                                EmptySearchState(message = "لم نجد نتائج في MB للبحث: $searchQuery", textColor = textColor)
                             } else {
                                 LazyVerticalGrid(
                                     columns = GridCells.Fixed(3),
@@ -359,7 +373,7 @@ fun FloatingSearchOverlay(
                             SearchGridSkeleton()
                         }
                         is RequestState.Error -> {
-                            ErrorSearchState(message = "فشل البحث في MovieBox! تأكد من اتصالك.")
+                            ErrorSearchState(message = "فشل البحث في MB! تأكد من اتصالك بالإنترنت.")
                         }
                         else -> {}
                     }
@@ -368,7 +382,7 @@ fun FloatingSearchOverlay(
                         is RequestState.Success -> {
                             val list = searchState.data
                             if (list.isEmpty()) {
-                                EmptySearchState(message = "لم يتم العثور على أي نتائج في TMDB لـ: $searchQuery")
+                                EmptySearchState(message = "لم يتم العثور على أي نتائج في TMDB لـ: $searchQuery", textColor = textColor)
                             } else {
                                 LazyVerticalGrid(
                                     columns = GridCells.Fixed(3),
@@ -449,6 +463,8 @@ fun FloatingSearchOverlay(
 @Composable
 private fun RecentViewedCard(
     item: RecentViewedItem,
+    cardBg: Color,
+    textColor: Color,
     onClick: () -> Unit
 ) {
     val posterUrl = if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w342${item.posterPath}"
@@ -463,7 +479,7 @@ private fun RecentViewedCard(
                 .fillMaxWidth()
                 .height(155.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1E1E24))
+                .background(cardBg)
         ) {
             if (item.posterPath.isNotEmpty()) {
                 AsyncImage(
@@ -512,21 +528,21 @@ private fun RecentViewedCard(
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = Color.White
+            color = textColor
         )
 
         if (item.year.isNotEmpty()) {
             Text(
                 text = item.year,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF8E8E93)
+                color = textColor.copy(alpha = 0.55f)
             )
         }
     }
 }
 
 @Composable
-private fun EmptySearchState(message: String) {
+private fun EmptySearchState(message: String, textColor: Color) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -539,13 +555,13 @@ private fun EmptySearchState(message: String) {
             Icon(
                 imageVector = AppIcons.Search,
                 contentDescription = null,
-                tint = Color(0xFF48484A),
+                tint = textColor.copy(alpha = 0.3f),
                 modifier = Modifier.size(48.dp)
             )
             Text(
                 text = message,
                 textAlign = TextAlign.Center,
-                color = Color(0xFF8E8E93),
+                color = textColor.copy(alpha = 0.6f),
                 fontSize = 14.sp
             )
         }

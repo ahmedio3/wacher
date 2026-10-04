@@ -253,12 +253,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                         currentRoute = currentRoute ?: "home",
                         isSearchActive = isSearchActive,
                         searchQuery = searchQuery,
-                        isMovieBoxMode = isMovieBoxMode,
                         onOpenSearch = { movieViewModel.openSearch() },
                         onCloseSearch = { movieViewModel.closeSearch() },
                         onSearchQueryChange = { movieViewModel.onSearchQueryChange(it) },
-                        onTriggerSearch = { movieViewModel.triggerSearch() },
-                        onToggleMovieBoxMode = { movieViewModel.updateSearchMode(!isMovieBoxMode) }
+                        onTriggerSearch = { movieViewModel.triggerSearch() }
                     )
                 }
             },
