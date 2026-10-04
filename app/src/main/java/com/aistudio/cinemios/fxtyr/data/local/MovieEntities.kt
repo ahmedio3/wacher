@@ -143,3 +143,14 @@ data class DownloadEntity(
     val addedAt: Long = System.currentTimeMillis(),
     val sourceUrl: String = ""
 )
+
+data class RecentViewedItem(
+    val id: String,
+    val title: String,
+    val posterPath: String,
+    val mediaType: String,
+    val year: String = "",
+    val rating: Double = 0.0,
+    val isMovieBox: Boolean = false,
+    val viewedAt: Long = System.currentTimeMillis()
+)

@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.EpisodeWatchStatusEntity
 import com.aistudio.cinemios.fxtyr.data.local.MovieDatabase
+import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
 import com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
 import com.aistudio.cinemios.fxtyr.data.remote.*
@@ -257,6 +258,127 @@ class MovieViewModel(
     private val _movieBoxSearchResults = MutableStateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>>(RequestState.Idle)
     val movieBoxSearchResults: StateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>> = _movieBoxSearchResults.asStateFlow()
 
+    // Floating search active state
+    private val _isSearchActive = MutableStateFlow(false)
+    val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
+
+    fun openSearch() {
+        _isSearchActive.value = true
+    }
+
+    fun closeSearch() {
+        _isSearchActive.value = false
+        setSearchQueryOnly("")
+    }
+
+    // Recent search queries
+    private val _recentSearches = MutableStateFlow<List<String>>(loadRecentSearches())
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+
+    private fun loadRecentSearches(): List<String> {
+        val json = sharedPrefs.getString("recent_search_queries", "[]") ?: "[]"
+        return try {
+            val arr = org.json.JSONArray(json)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val q = arr.getString(i).trim()
+                if (q.isNotEmpty() && !list.contains(q)) list.add(q)
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun addRecentSearch(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val current = _recentSearches.value.toMutableList()
+        current.remove(q)
+        current.add(0, q)
+        val limited = current.take(12)
+        _recentSearches.value = limited
+        try {
+            val arr = org.json.JSONArray(limited)
+            sharedPrefs.edit().putString("recent_search_queries", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun removeRecentSearch(query: String) {
+        val current = _recentSearches.value.toMutableList()
+        current.remove(query)
+        _recentSearches.value = current
+        try {
+            val arr = org.json.JSONArray(current)
+            sharedPrefs.edit().putString("recent_search_queries", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun clearRecentSearches() {
+        _recentSearches.value = emptyList()
+        sharedPrefs.edit().remove("recent_search_queries").apply()
+    }
+
+    // Recently viewed shows
+    private val _recentViewedShows = MutableStateFlow<List<RecentViewedItem>>(loadRecentViewedShows())
+    val recentViewedShows: StateFlow<List<RecentViewedItem>> = _recentViewedShows.asStateFlow()
+
+    private fun loadRecentViewedShows(): List<RecentViewedItem> {
+        val json = sharedPrefs.getString("recent_viewed_shows", "[]") ?: "[]"
+        return try {
+            val arr = org.json.JSONArray(json)
+            val list = mutableListOf<RecentViewedItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    RecentViewedItem(
+                        id = obj.optString("id", ""),
+                        title = obj.optString("title", ""),
+                        posterPath = obj.optString("posterPath", ""),
+                        mediaType = obj.optString("mediaType", "movie"),
+                        year = obj.optString("year", ""),
+                        rating = obj.optDouble("rating", 0.0),
+                        isMovieBox = obj.optBoolean("isMovieBox", false),
+                        viewedAt = obj.optLong("viewedAt", 0L)
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun recordRecentView(item: RecentViewedItem) {
+        if (item.id.isEmpty() || item.title.isEmpty()) return
+        val current = _recentViewedShows.value.toMutableList()
+        current.removeAll { it.id == item.id }
+        current.add(0, item)
+        val limited = current.take(15)
+        _recentViewedShows.value = limited
+        try {
+            val arr = org.json.JSONArray()
+            for (it in limited) {
+                val obj = org.json.JSONObject()
+                obj.put("id", it.id)
+                obj.put("title", it.title)
+                obj.put("posterPath", it.posterPath)
+                obj.put("mediaType", it.mediaType)
+                obj.put("year", it.year)
+                obj.put("rating", it.rating)
+                obj.put("isMovieBox", it.isMovieBox)
+                obj.put("viewedAt", it.viewedAt)
+                arr.put(obj)
+            }
+            sharedPrefs.edit().putString("recent_viewed_shows", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun clearRecentViewedShows() {
+        _recentViewedShows.value = emptyList()
+        sharedPrefs.edit().remove("recent_viewed_shows").apply()
+    }
+
     fun updateSearchMode(isMovieBox: Boolean) {
         _isMovieBoxSearchMode.value = isMovieBox
     }
@@ -278,6 +400,7 @@ class MovieViewModel(
     fun triggerSearch() {
         val query = _searchQuery.value.trim()
         if (query.isEmpty()) return
+        addRecentSearch(query)
         _searchResults.value = RequestState.Loading
         if (_isMovieBoxSearchMode.value) {
             searchMovieBox(query)

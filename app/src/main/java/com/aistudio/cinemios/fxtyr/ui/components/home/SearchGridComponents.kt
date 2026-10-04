@@ -120,6 +120,25 @@ fun SearchGridCard(
                 )
             }
 
+            val rating = item.voteAverage ?: 0.0
+            if (rating > 0.0) {
+                Box(
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .align(Alignment.TopEnd)
+                ) {
+                    Text(
+                        text = "★ %.1f".format(rating),
+                        color = Color(0xFFFFD700),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             ShowCardContextMenu(
                 expanded = menuExpanded,
                 onDismiss = { menuExpanded = false },
@@ -140,6 +159,17 @@ fun SearchGridCard(
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center
         )
+
+        val year = (item.releaseDate?.take(4) ?: item.firstAirDate?.take(4) ?: "")
+        if (year.isNotEmpty()) {
+            Text(
+                text = year,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

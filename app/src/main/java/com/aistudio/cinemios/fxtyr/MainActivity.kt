@@ -57,12 +57,14 @@ import androidx.navigation.navArgument
 import com.aistudio.cinemios.fxtyr.ui.navigation.isForwardNavigation
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideIn
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideOut
+import androidx.activity.compose.BackHandler
 import com.aistudio.cinemios.fxtyr.ui.screens.*
 import com.aistudio.cinemios.fxtyr.ui.components.downloads.DownloadItemRow
 import com.aistudio.cinemios.fxtyr.ui.components.downloads.SeriesDetailPage
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingBottomNavBar
+import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingSearchOverlay
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.NavigationTabItem
-
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.MyApplicationTheme
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.ViewModelFactory
@@ -153,24 +155,32 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val isSearchActive by movieViewModel.isSearchActive.collectAsState()
+    val searchQuery by movieViewModel.searchQuery.collectAsState()
+    val isMovieBoxMode by movieViewModel.isMovieBoxSearchMode.collectAsState()
+
+    BackHandler(enabled = isSearchActive) {
+        movieViewModel.closeSearch()
+    }
+
     val tabItems = listOf(
         NavigationTabItem(
             route = "home",
             label = "الرئيسية",
-            filledIcon = Icons.Default.Home,
-            outlinedIcon = Icons.Outlined.Home
+            filledIcon = AppIcons.HomeFilled,
+            outlinedIcon = AppIcons.HomeOutline
         ),
         NavigationTabItem(
             route = "downloads",
             label = "التحميلات",
-            filledIcon = Icons.Default.ArrowCircleDown,
-            outlinedIcon = Icons.Outlined.ArrowCircleDown
+            filledIcon = AppIcons.Library,
+            outlinedIcon = AppIcons.Library
         ),
         NavigationTabItem(
             route = "settings",
             label = "الإعدادات",
-            filledIcon = Icons.Default.Settings,
-            outlinedIcon = Icons.Outlined.Settings
+            filledIcon = AppIcons.SettingsFilled,
+            outlinedIcon = AppIcons.SettingsOutline
         )
     )
 
@@ -240,14 +250,22 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     FloatingBottomNavBar(
                         navController = navController,
                         tabs = tabItems,
-                        currentRoute = currentRoute ?: "home"
+                        currentRoute = currentRoute ?: "home",
+                        isSearchActive = isSearchActive,
+                        searchQuery = searchQuery,
+                        isMovieBoxMode = isMovieBoxMode,
+                        onOpenSearch = { movieViewModel.openSearch() },
+                        onCloseSearch = { movieViewModel.closeSearch() },
+                        onSearchQueryChange = { movieViewModel.onSearchQueryChange(it) },
+                        onTriggerSearch = { movieViewModel.triggerSearch() },
+                        onToggleMovieBoxMode = { movieViewModel.updateSearchMode(!isMovieBoxMode) }
                     )
                 }
             },
             floatingActionButton = {
                 val isPlayerRoute = currentRoute?.startsWith("offline_player") == true 
                                     || currentRoute?.startsWith("player") == true
-                if (activeDownloads.isNotEmpty() && !isPlayerRoute) {
+                if (activeDownloads.isNotEmpty() && !isPlayerRoute && !isSearchActive) {
                     val config = LocalConfiguration.current
                     val screenWidthDp = config.screenWidthDp.toFloat()
                     val screenHeightDp = config.screenHeightDp.toFloat()
@@ -300,10 +318,11 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
             }
         ) { innerPadding ->
             val layoutDirection = LocalLayoutDirection.current
-            NavHost(
-                navController = navController,
-                startDestination = "home",
-                modifier = Modifier.fillMaxSize(),
+            Box(modifier = Modifier.fillMaxSize()) {
+                NavHost(
+                    navController = navController,
+                    startDestination = "home",
+                    modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     val forward = isForwardNavigation(
                         initialState.destination.route,
@@ -546,6 +565,27 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = isSearchActive,
+            enter = fadeIn() + slideInVertically { it / 8 },
+            exit = fadeOut() + slideOutVertically { it / 8 }
+        ) {
+            FloatingSearchOverlay(
+                viewModel = movieViewModel,
+                onNavigateToDetails = { id, type ->
+                    movieViewModel.closeSearch()
+                    navController.navigate("detail/$id/$type")
+                },
+                onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                    movieViewModel.closeSearch()
+                    navController.navigate(
+                        "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                    )
+                }
+            )
+        }
+    }
     }
     }
 }
