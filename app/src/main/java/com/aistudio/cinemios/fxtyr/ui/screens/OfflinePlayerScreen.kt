@@ -60,14 +60,24 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.aistudio.cinemios.fxtyr.MainActivity
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
+import com.aistudio.cinemios.fxtyr.data.remote.RequestState
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchCard
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleDownloadViewType
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleSourceSheet
+import com.aistudio.cinemios.fxtyr.ui.components.player.PlayerEpisodeItem
+import com.aistudio.cinemios.fxtyr.ui.components.player.PortraitPlayerBottomContent
+import com.aistudio.cinemios.fxtyr.ui.components.player.PortraitPlayerVideoOverlay
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleHelper
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleLine
@@ -102,24 +112,35 @@ fun OfflinePlayerScreen(
     val context = LocalContext.current
     val activity = context as? MainActivity
 
-    // Manage Fullscreen & Landscape & Keep Screen On
-    DisposableEffect(Unit) {
-        activity?.let {
-            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            val window = it.window
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-        }
+    val isInitiallyStream = localFilePath.isEmpty()
+    var isPortrait by remember { mutableStateOf(isInitiallyStream) }
 
+    // Keep Screen On & Reset Orientation on dispose
+    DisposableEffect(Unit) {
+        val window = activity?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
-            activity?.let {
-                it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                val window = it.window
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+            activity?.let { act ->
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                act.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                val insetsController = WindowInsetsControllerCompat(act.window, act.window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    // Dynamic Orientation & Insets based on isPortrait
+    LaunchedEffect(isPortrait) {
+        activity?.let { act ->
+            val window = act.window
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            if (isPortrait) {
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            } else {
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                insetsController.hide(WindowInsetsCompat.Type.systemBars())
             }
         }
     }
@@ -137,7 +158,11 @@ fun OfflinePlayerScreen(
     }
 
     BackHandler {
-        onBack()
+        if (!isPortrait) {
+            isPortrait = true
+        } else {
+            onBack()
+        }
     }
 
     val prefs = context.getSharedPreferences("player_prefs", android.content.Context.MODE_PRIVATE)
@@ -206,6 +231,70 @@ fun OfflinePlayerScreen(
     }
 
     val isTv = activeId.contains("-s")
+    val currentSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 1
+    val currentEpisode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 1
+    var selectedSeason by remember(activeId) {
+        mutableIntStateOf(currentSeason)
+    }
+
+    val seasonDetailsMap by viewModel.seasonDetails.collectAsState()
+    LaunchedEffect(parentTmdbId, selectedSeason) {
+        val tmdbIdInt = parentTmdbId.toIntOrNull()
+        if (isTv && tmdbIdInt != null && selectedSeason > 0) {
+            viewModel.fetchSeasonDetails(tmdbIdInt, selectedSeason)
+        }
+    }
+
+    val tmdbKey = "$parentTmdbId-$selectedSeason"
+    val tmdbSeasonState = seasonDetailsMap[tmdbKey]
+
+    val episodesList: List<PlayerEpisodeItem> = remember(
+        isTv, parentTmdbId, selectedSeason, tmdbSeasonState, seriesEpisodes
+    ) {
+        if (!isTv) emptyList()
+        else if (tmdbSeasonState is RequestState.Success && !tmdbSeasonState.data.episodes.isNullOrEmpty()) {
+            val eps = tmdbSeasonState.data.episodes ?: emptyList()
+            eps.map { ep ->
+                val epNum = ep.episodeNumber ?: 1
+                val epId = "$parentTmdbId-s$selectedSeason-e$epNum"
+                val dl = seriesEpisodes.find { it.id == epId }
+                val srtFile = File(context.filesDir, "downloads/$epId.srt")
+                val vttFile = File(context.filesDir, "downloads/$epId.vtt")
+                PlayerEpisodeItem(
+                    id = epId,
+                    season = selectedSeason,
+                    episode = epNum,
+                    title = ep.name?.takeIf { it.isNotBlank() } ?: "الحلقة $epNum",
+                    overview = ep.overview ?: "",
+                    stillPath = ep.stillPath,
+                    localFilePath = dl?.localFilePath ?: "",
+                    streamUrl = "",
+                    isDownloaded = dl != null,
+                    hasSubtitle = srtFile.exists() || vttFile.exists()
+                )
+            }
+        } else if (seriesEpisodes.isNotEmpty()) {
+            seriesEpisodes
+                .filter { it.season == selectedSeason || selectedSeason == 0 }
+                .sortedBy { it.episode }
+                .map { dl ->
+                    val srtFile = File(context.filesDir, "downloads/${dl.id}.srt")
+                    val vttFile = File(context.filesDir, "downloads/${dl.id}.vtt")
+                    PlayerEpisodeItem(
+                        id = dl.id,
+                        season = dl.season,
+                        episode = dl.episode,
+                        title = dl.title,
+                        localFilePath = dl.localFilePath,
+                        streamUrl = "",
+                        isDownloaded = true,
+                        hasSubtitle = srtFile.exists() || vttFile.exists()
+                    )
+                }
+        } else {
+            emptyList()
+        }
+    }
 
     // Log WATCHED activity once when the player screen is entered
     LaunchedEffect(Unit) {
@@ -265,26 +354,8 @@ fun OfflinePlayerScreen(
         }
     }
 
-    // --- Battery & Clock state ---
-    var batteryLevel by remember { mutableIntStateOf(0) }
-    var currentTimeText by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        while (true) {
-            // Battery
-            val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            val batteryIntent = context.registerReceiver(null, intentFilter)
-            val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
-            val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-            batteryLevel = (level * 100 / scale)
-
-            // Time
-            currentTimeText = timeFormat.format(Date())
-
-            delay(30_000) // Update every 30s
-        }
-    }
+    var isStreamLoading by remember { mutableStateOf(false) }
+    var streamResolutionText by remember { mutableStateOf("") }
 
     // Setup ExoPlayer
     val exoPlayer = remember {
@@ -306,18 +377,29 @@ fun OfflinePlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Load Media
-    LaunchedEffect(activeLocalFilePath) {
-        if (activeLocalFilePath.isNotEmpty()) {
-            val isContentUri = activeLocalFilePath.startsWith("content://")
-            val file = if (isContentUri) null else File(activeLocalFilePath)
+    // Load Media (Offline file or Online stream)
+    LaunchedEffect(activeId, activeLocalFilePath) {
+        var pathToPlay = activeLocalFilePath
+
+        // Auto-detect completed local download if activeLocalFilePath was empty
+        if (pathToPlay.isEmpty()) {
+            val localDl = downloadsList.find { it.id == activeId && it.status == "completed" }
+            if (localDl != null && File(localDl.localFilePath).exists()) {
+                pathToPlay = localDl.localFilePath
+            }
+        }
+
+        if (pathToPlay.isNotEmpty()) {
+            // Local file playback
+            val isContentUri = pathToPlay.startsWith("content://")
+            val file = if (isContentUri) null else File(pathToPlay)
             if (isContentUri || (file != null && file.exists())) {
                 val mediaItemBuilder = if (isContentUri) {
-                    MediaItem.Builder().setUri(Uri.parse(activeLocalFilePath))
+                    MediaItem.Builder().setUri(Uri.parse(pathToPlay))
                 } else {
                     MediaItem.Builder().setUri(Uri.fromFile(file!!))
                 }
-                if (activeLocalFilePath.endsWith(".mpd") || activeLocalFilePath.contains("/dash/")) {
+                if (pathToPlay.endsWith(".mpd") || pathToPlay.contains("/dash/")) {
                     mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
                 }
 
@@ -341,7 +423,6 @@ fun OfflinePlayerScreen(
 
                 // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
-                    // First try standalone_subtitles/ (from auto-fetcher)
                     val standaloneDir = File(context.filesDir, "standalone_subtitles")
                     val autoFiles = standaloneDir.listFiles()?.filter {
                         it.name.startsWith(activeId) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
@@ -356,37 +437,155 @@ fun OfflinePlayerScreen(
                             val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
                             val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
                             val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                            val file = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                            val subFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                                 context, tmdbIdStr, isTv, seasonSub, episodeSub,
                                 activeTitle, activeId
                             )
-                            if (file != null) {
-                                parsedSubtitles = SubtitleParser.parseBlock(file)
+                            if (subFile != null) {
+                                parsedSubtitles = SubtitleParser.parseBlock(subFile)
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(context, "✓ تم تحميل الترجمة العربية", Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "لم يتم العثور على ترجمة عربية", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
                     }
                 }
-
-                // Update position periodically with higher frequency for smooth subtitles
-                while (true) {
-                    currentPosition = exoPlayer.currentPosition
-                    val dur = exoPlayer.duration
-                    if (dur > 0) totalDuration = dur
-                    isPlaying = exoPlayer.isPlaying
-                    // Save position periodically (every 5 seconds)
-                    if (currentPosition > 0 && currentPosition % 5000 < 50) {
-                        prefs.edit().putLong("pos_$activeId", currentPosition).apply()
-                    }
-                    delay(50)
-                }
             }
+        } else {
+            // Online Stream playback
+            isStreamLoading = true
+            try {
+                val startSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                val startEpisode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                val isTmdb = parentTmdbId.length < 10 && parentTmdbId.toLongOrNull() != null
+
+                val subjectId: String = if (isTmdb) {
+                    val searchTypeFallback = if (isTv) "series" else "movie"
+                    val cleanQuery = activeTitle.split("-").first().trim().replace("\\s*\\([^)]*\\)\\s*".toRegex(), "")
+                    val searchRes = viewModel.movieBoxRepository.search(query = cleanQuery)
+                    val results = searchRes.getOrNull() ?: emptyList()
+                    val match = results.firstOrNull { it.type == searchTypeFallback } ?: results.firstOrNull()
+                    if (match == null) throw Exception("لم يتم العثور على العرض على سيرفرات البث")
+                    match.subjectId
+                } else {
+                    parentTmdbId
+                }
+
+                val linksRes = viewModel.movieBoxRepository.getDownloadLinks(subjectId)
+                var videoList = linksRes.getOrNull() ?: emptyList()
+                if (isTv) {
+                    videoList = videoList.filter { it.season == startSeason && it.episode == startEpisode }
+                }
+
+                val topQuality = videoList.maxByOrNull { it.resolution } ?: videoList.firstOrNull()
+                if (topQuality != null) {
+                    streamResolutionText = "${topQuality.resolution}p"
+                    val resolvedUrl = topQuality.url
+                    val resolvedHeaders = topQuality.headers
+
+                    val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                        .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .setAllowCrossProtocolRedirects(true)
+                    resolvedHeaders?.let { headers ->
+                        httpDataSourceFactory.setDefaultRequestProperties(headers)
+                    }
+                    val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+                    val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(resolvedUrl))
+                    val isMpd = resolvedUrl.contains(".mpd") || resolvedUrl.contains("/dash/")
+                    if (isMpd) {
+                        mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+                    }
+
+                    val mediaSource = if (resolvedUrl.contains(".m3u8")) {
+                        androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
+                            .createMediaSource(mediaItemBuilder.build())
+                    } else if (isMpd) {
+                        androidx.media3.exoplayer.dash.DashMediaSource.Factory(dataSourceFactory)
+                            .createMediaSource(mediaItemBuilder.build())
+                    } else {
+                        androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
+                            .createMediaSource(mediaItemBuilder.build())
+                    }
+
+                    exoPlayer.setMediaSource(mediaSource)
+                    val lastPos = prefs.getLong("pos_$activeId", 0L)
+                    if (lastPos > 0) {
+                        exoPlayer.seekTo(lastPos)
+                    }
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+
+                    // Auto-fetch Arabic subtitle for online stream
+                    val srtFile = File(context.filesDir, "downloads/$activeId.srt")
+                    val vttFile = File(context.filesDir, "downloads/$activeId.vtt")
+                    if (srtFile.exists()) {
+                        parsedSubtitles = SubtitleParser.parseBlock(srtFile)
+                    } else if (vttFile.exists()) {
+                        parsedSubtitles = SubtitleParser.parseBlock(vttFile)
+                    } else {
+                        parsedSubtitles = emptyList()
+                    }
+
+                    if (parsedSubtitles.isEmpty()) {
+                        launch(Dispatchers.IO) {
+                            var downloadedSubFile: File? = null
+                            if (topQuality.hasArabicSubtitle && topQuality.arabicSubtitleUrl != null) {
+                                downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, topQuality.arabicSubtitleUrl, activeId)
+                            } else if (topQuality.allSubtitles.isNotEmpty()) {
+                                val ar = topQuality.allSubtitles.find { it.languageCode.equals("ar", true) || it.languageName.contains("Arabic", true) }
+                                if (ar != null) {
+                                    downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, ar.url, activeId)
+                                }
+                            } else if (topQuality.resourceId.isNotEmpty()) {
+                                val subRes = viewModel.movieBoxRepository.getSubtitles(subjectId, topQuality.resourceId).getOrNull()
+                                if (subRes != null && subRes.hasArabic && subRes.arabicSubtitle != null) {
+                                    downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, subRes.arabicSubtitle.url, activeId)
+                                }
+                            }
+
+                            if (downloadedSubFile == null) {
+                                val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                                downloadedSubFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                                    context, tmdbIdStr, isTv, startSeason, startEpisode, activeTitle, activeId
+                                )
+                            }
+
+                            if (downloadedSubFile != null && downloadedSubFile.exists()) {
+                                parsedSubtitles = SubtitleParser.parseBlock(downloadedSubFile)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "✓ تم تحميل الترجمة العربية تلقائياً", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "لم يتم العثور على روابط تشغيل", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "خطأ في تشغيل البث: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                isStreamLoading = false
+            }
+        }
+    }
+
+    // High frequency position & state tracker
+    LaunchedEffect(activeId) {
+        while (true) {
+            currentPosition = exoPlayer.currentPosition
+            val dur = exoPlayer.duration
+            if (dur > 0) totalDuration = dur
+            isPlaying = exoPlayer.isPlaying
+            if (currentPosition > 0 && currentPosition % 5000 < 50) {
+                prefs.edit().putLong("pos_$activeId", currentPosition).apply()
+            }
+            delay(50)
         }
     }
 
@@ -405,26 +604,127 @@ fun OfflinePlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(if (isPortrait) MaterialTheme.colorScheme.background else Color.Black)
     ) {
-        // Video Surface
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    isClickable = false
-                    isFocusable = false
-                    subtitleView?.visibility = android.view.View.GONE
-                    setOnTouchListener { _, _ -> false }
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
+        Column(
             modifier = Modifier.fillMaxSize()
-        )
+        ) {
+            // Video surface container Box (16:9 in portrait, fillMaxSize in landscape)
+            Box(
+                modifier = if (isPortrait) {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black)
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                }
+            ) {
+                // Video Surface
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = exoPlayer
+                            useController = false
+                            isClickable = false
+                            isFocusable = false
+                            subtitleView?.visibility = android.view.View.GONE
+                            setOnTouchListener { _, _ -> false }
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Custom Subtitle Overlay (directly overlaid on the video surface)
+                if (!isSubtitleHidden && activeSubtitleText.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = if (isPortrait) 12.dp else 24.dp)
+                            .offset(y = subtitleYOffset.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Text(
+                            text = activeSubtitleText,
+                            color = Color.White,
+                            style = androidx.compose.ui.text.TextStyle(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily(
+                                    androidx.compose.ui.text.googlefonts.Font(
+                                        googleFont = androidx.compose.ui.text.googlefonts.GoogleFont("IBM Plex Sans Arabic"),
+                                        fontProvider = androidx.compose.ui.text.googlefonts.GoogleFont.Provider(
+                                            providerAuthority = "com.google.android.gms.fonts",
+                                            providerPackage = "com.google.android.gms",
+                                            certificates = com.aistudio.cinemios.fxtyr.R.array.com_google_android_gms_fonts_certs
+                                        ),
+                                        weight = androidx.compose.ui.text.font.FontWeight.Medium
+                                    )
+                                ),
+                                fontSize = if (isPortrait) (subtitleSize * 0.82f).sp else subtitleSize.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = if (isPortrait) (subtitleSize * 1.25f).sp else (subtitleSize * 1.5).sp,
+                                textAlign = TextAlign.Center,
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black,
+                                    offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                                    blurRadius = 6f
+                                )
+                            ),
+                            modifier = Modifier
+                                .padding(bottom = if (isPortrait) 16.dp else 60.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+
+                if (isPortrait) {
+                    // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { showControls = !showControls },
+                                    onDoubleTap = { offset ->
+                                        if (offset.x > size.width / 2f) {
+                                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
+                                        } else {
+                                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                        }
+                                    }
+                                )
+                            }
+                    )
+
+                    // Portrait In-Video Overlay (Back, Play/Pause/Spinner, Seekbar, Duration, Fullscreen expand)
+                    PortraitPlayerVideoOverlay(
+                        showControls = showControls,
+                        isPlaying = isPlaying,
+                        isLoading = isStreamLoading,
+                        currentPosition = currentPosition,
+                        totalDuration = totalDuration,
+                        onPlayPause = {
+                            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                            isPlaying = exoPlayer.isPlaying
+                        },
+                        onSeek = { targetMs ->
+                            exoPlayer.seekTo(targetMs)
+                            currentPosition = targetMs
+                        },
+                        onBack = {
+                            prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                            onBack()
+                        },
+                        onExpandToLandscape = {
+                            isPortrait = false
+                        }
+                    )
+                } else {
 
         // Unified centered Volume/Brightness Overlay Pill
         // - Centered horizontally, positioned near the top of the video (top padding 32dp)
@@ -809,46 +1109,7 @@ fun OfflinePlayerScreen(
             }
         }
 
-        // Custom Subtitle Overlay
-        if (!isSubtitleHidden && activeSubtitleText.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp)
-                    .offset(y = subtitleYOffset.dp),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                Text(
-                    text = activeSubtitleText,
-                    color = Color.White,
-                    style = androidx.compose.ui.text.TextStyle(
-                        fontFamily = androidx.compose.ui.text.font.FontFamily(
-                            androidx.compose.ui.text.googlefonts.Font(
-                                googleFont = androidx.compose.ui.text.googlefonts.GoogleFont("IBM Plex Sans Arabic"),
-                                fontProvider = androidx.compose.ui.text.googlefonts.GoogleFont.Provider(
-                                    providerAuthority = "com.google.android.gms.fonts",
-                                    providerPackage = "com.google.android.gms",
-                                    certificates = com.aistudio.cinemios.fxtyr.R.array.com_google_android_gms_fonts_certs
-                                ),
-                                weight = androidx.compose.ui.text.font.FontWeight.Medium
-                            )
-                        ),
-                        fontSize = subtitleSize.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = (subtitleSize * 1.5).sp,
-                        textAlign = TextAlign.Center,
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black,
-                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                            blurRadius = 6f
-                        )
-                    ),
-                    modifier = Modifier
-                        .padding(bottom = 60.dp)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
-        }
+
 
         // Custom UI Controls Overlay
         AnimatedVisibility(
@@ -1202,52 +1463,92 @@ fun OfflinePlayerScreen(
                                 }
                             }
 
-                            // Right side: battery + clock
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            // Right side: Switch to portrait mode icon button
+                            IconButton(
+                                onClick = {
+                                    isPortrait = true
+                                },
+                                modifier = Modifier.size(36.dp)
                             ) {
-                                // Battery
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = when {
-                                            batteryLevel > 80 -> Icons.Default.BatteryFull
-                                            batteryLevel > 50 -> Icons.Default.BatteryStd
-                                            batteryLevel > 20 -> Icons.Default.Battery3Bar
-                                            else -> Icons.Default.BatteryAlert
-                                        },
-                                        contentDescription = "البطارية",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "$batteryLevel%",
-                                        color = Color.White,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                // Clock
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Schedule,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = currentTimeText,
-                                        color = Color.White,
-                                        fontSize = 13.sp
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.CropPortrait,
+                                    contentDescription = "الوضع الرأسي",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
                             }
                         }
                     }
                 }
+            }
+        }
+    } // closes else branch of if (isPortrait)
+} // closes video container Box
 
-                // ===== SUBTITLE DRAWER =====
+        // Below-video content for Portrait Mode
+        if (isPortrait) {
+            PortraitPlayerBottomContent(
+                activeId = activeId,
+                activeTitle = activeTitle,
+                isTv = isTv,
+                currentSeason = currentSeason,
+                currentEpisode = currentEpisode,
+                isStream = activeLocalFilePath.isEmpty(),
+                streamResolution = streamResolutionText,
+                episodes = episodesList,
+                selectedSeason = selectedSeason,
+                onSelectSeason = { s -> selectedSeason = s },
+                onSelectEpisode = { epItem ->
+                    prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                    activeId = epItem.id
+                    val baseSeriesTitle = activeTitle.substringBefore(" - ")
+                    activeTitle = if (epItem.title.contains("الحلقة")) {
+                        "$baseSeriesTitle - ${epItem.title}"
+                    } else {
+                        "$baseSeriesTitle - الموسم ${epItem.season} الحلقة ${epItem.episode}"
+                    }
+                    activeLocalFilePath = epItem.localFilePath
+                },
+                parsedSubtitles = parsedSubtitles,
+                subtitleStatusText = subtitleStatusText,
+                subtitleTimeOffsetMs = subtitleTimeOffsetMs,
+                onSubtitleTimeOffsetChange = { offset -> subtitleTimeOffsetMs = offset },
+                subtitleSize = subtitleSize,
+                onSubtitleSizeChange = { sz -> subtitleSize = sz },
+                isSubtitleHidden = isSubtitleHidden,
+                onToggleSubtitleHidden = { isSubtitleHidden = !isSubtitleHidden },
+                onOpenSubtitleSourceSheet = {
+                    showSubtitleDrawer = true
+                },
+                onMinimizePiP = {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        val aspectRatio = android.util.Rational(16, 9)
+                        val params = android.app.PictureInPictureParams.Builder()
+                            .setAspectRatio(aspectRatio)
+                            .build()
+                        activity?.enterPictureInPictureMode(params)
+                    }
+                },
+                playbackSpeed = playbackSpeed,
+                onCycleSpeed = {
+                    playbackSpeed = when (playbackSpeed) {
+                        1f -> 1.25f
+                        1.25f -> 1.5f
+                        1.5f -> 2f
+                        2f -> 0.75f
+                        else -> 1f
+                    }
+                    exoPlayer.setPlaybackSpeed(playbackSpeed)
+                },
+                onDownloadClick = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+        }
+    } // closes Column
+
+    // ===== SUBTITLE DRAWER =====
                 AnimatedVisibility(
                     visible = showSubtitleDrawer,
                     enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
@@ -1831,7 +2132,7 @@ fun OfflinePlayerScreen(
 
                 // ===== EPISODES DRAWER =====
                 AnimatedVisibility(
-                    visible = showEpisodesDrawer,
+                    visible = showEpisodesDrawer && !isPortrait,
                     enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
                     exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
                     modifier = Modifier.align(Alignment.TopEnd)
@@ -1985,7 +2286,6 @@ fun OfflinePlayerScreen(
                                 }
                             }
                         }
-                    }
                     }
                 }
             }

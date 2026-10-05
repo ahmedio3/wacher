@@ -558,7 +558,7 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 val decodedPath = java.net.URLDecoder.decode(rawPath, "UTF-8")
 
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    PlayerScreen(
+                    OfflinePlayerScreen(
                         mediaId = mediaId,
                         title = decodedTitle,
                         localFilePath = decodedPath,
