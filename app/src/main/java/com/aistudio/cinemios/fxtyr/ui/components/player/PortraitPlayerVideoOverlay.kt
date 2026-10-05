@@ -3,16 +3,22 @@ package com.aistudio.cinemios.fxtyr.ui.components.player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -109,24 +115,24 @@ fun PortraitPlayerVideoOverlay(
                         .fillMaxWidth()
                         .height(24.dp)
                         .pointerInput(totalDuration) {
-                            androidx.compose.foundation.gestures.detectTapGestures { offset ->
+                            detectTapGestures { offset ->
                                 if (totalDuration > 0 && size.width > 0) {
-                                    val percent = (offset.x / size.width).coerceIn(0f, 1f)
+                                    val percent = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
                                     onSeek((percent * totalDuration).toLong())
                                 }
                             }
                         }
                         .pointerInput(totalDuration) {
-                            androidx.compose.foundation.gestures.detectDragGestures(
+                            detectDragGestures(
                                 onDragStart = { offset ->
                                     isDragging = true
                                     if (size.width > 0) {
-                                        dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                        dragFraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
                                     }
                                 },
                                 onDrag = { change, _ ->
                                     if (size.width > 0) {
-                                        dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                        dragFraction = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
                                     }
                                     change.consume()
                                 },
@@ -142,7 +148,7 @@ fun PortraitPlayerVideoOverlay(
                             )
                         }
                 ) {
-                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
                         val trackHeight = 3.dp.toPx()
                         val thumbRadius = 5.dp.toPx()
                         val centerY = size.height / 2
