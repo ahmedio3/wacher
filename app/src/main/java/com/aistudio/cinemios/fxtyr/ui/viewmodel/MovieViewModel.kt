@@ -1021,7 +1021,12 @@ class MovieViewModel(
                 if (subjectId == null) return@withContext null
 
                 val res = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
-                    movieBoxRepository.getDownloadLinks(subjectId, null, forceRefresh = forceRefresh)
+                    movieBoxRepository.getDownloadLinks(
+                        subjectId = subjectId,
+                        season = if (entity.mediaType == "tv") entity.season else null,
+                        episode = if (entity.mediaType == "tv") entity.episode else null,
+                        forceRefresh = forceRefresh
+                    )
                 } ?: return@withContext null
 
                 val links = res.getOrNull() ?: return@withContext null

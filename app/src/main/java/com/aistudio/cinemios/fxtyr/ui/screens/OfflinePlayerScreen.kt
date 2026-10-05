@@ -515,11 +515,12 @@ fun OfflinePlayerScreen(
                     parentTmdbId
                 }
 
-                val linksRes = viewModel.movieBoxRepository.getDownloadLinks(subjectId)
+                val linksRes = viewModel.movieBoxRepository.getDownloadLinks(
+                    subjectId = subjectId,
+                    season = if (isTv) startSeason else null,
+                    episode = if (isTv) startEpisode else null
+                )
                 var videoList = linksRes.getOrNull() ?: emptyList()
-                if (isTv) {
-                    videoList = videoList.filter { it.season == startSeason && it.episode == startEpisode }
-                }
 
                 availableVideoFiles = videoList.sortedBy { it.resolution }
 
@@ -701,40 +702,67 @@ fun OfflinePlayerScreen(
                 }
 
                 if (isPortrait) {
-                    // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s, long-press speeds up 2x
+                    // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s, continuous long-press speeds up 2x
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInput(playbackSpeed) {
-                                detectTapGestures(
-                                    onTap = { showControls = !showControls },
-                                    onDoubleTap = { offset ->
-                                        if (offset.x > size.width / 2f) {
-                                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                                        } else {
-                                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val pointerId = down.id
+                                    val startX = down.position.x
+                                    val startY = down.position.y
+                                    val startNanos = System.nanoTime()
+                                    var isLong = false
+
+                                    val speedJob = scope.launch {
+                                        delay(350)
+                                        isLong = true
+                                        exoPlayer.setPlaybackSpeed(2f)
+                                        isSpeedUp = true
+                                        showControls = false
+                                    }
+
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        val change = event.changes.firstOrNull { it.id == pointerId }
+                                        if (change == null || !change.pressed) {
+                                            break
                                         }
-                                    },
-                                    onPress = {
-                                        var isLong = false
-                                        val speedJob = scope.launch {
-                                            delay(400)
-                                            isLong = true
-                                            exoPlayer.setPlaybackSpeed(2f)
-                                            isSpeedUp = true
-                                            showControls = false
+                                        if (isLong) {
+                                            change.consume()
                                         }
-                                        try {
-                                            tryAwaitRelease()
-                                        } finally {
-                                            speedJob.cancel()
-                                            if (isLong) {
-                                                exoPlayer.setPlaybackSpeed(playbackSpeed)
-                                                isSpeedUp = false
+                                    }
+
+                                    speedJob.cancel()
+
+                                    if (isLong) {
+                                        exoPlayer.setPlaybackSpeed(playbackSpeed)
+                                        isSpeedUp = false
+                                        showControls = false
+                                    } else {
+                                        val elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L
+                                        val dist = kotlin.math.hypot(
+                                            down.position.x - startX,
+                                            down.position.y - startY
+                                        )
+                                        if (elapsedMs < 350L && dist < viewConfiguration.touchSlop) {
+                                            val secondDown = withTimeoutOrNull(250L) {
+                                                awaitFirstDown(requireUnconsumed = false)
+                                            }
+                                            if (secondDown != null) {
+                                                secondDown.consume()
+                                                if (secondDown.position.x > size.width / 2f) {
+                                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
+                                                } else {
+                                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                                }
+                                            } else {
+                                                showControls = !showControls
                                             }
                                         }
                                     }
-                                )
+                                }
                             }
                     )
 

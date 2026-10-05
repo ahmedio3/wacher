@@ -10,7 +10,14 @@ import org.json.JSONObject
 
 interface MovieBoxApi {
     suspend fun search(query: String, originalLanguage: String? = null, limit: Int = 8): Result<List<SearchResult>>
-    suspend fun getDownloadLinks(subjectId: String, resolution: Int? = null): Result<List<VideoFile>>
+    suspend fun getDownloadLinks(
+        subjectId: String,
+        resolution: Int? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        page: Int? = null,
+        limit: Int? = null
+    ): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
     suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
     suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
@@ -81,13 +88,32 @@ class MovieBoxApiImpl : MovieBoxApi {
         }
     }
 
-    override suspend fun getDownloadLinks(subjectId: String, resolution: Int?): Result<List<VideoFile>> {
+    override suspend fun getDownloadLinks(
+        subjectId: String,
+        resolution: Int?,
+        season: Int?,
+        episode: Int?,
+        page: Int?,
+        limit: Int?
+    ): Result<List<VideoFile>> {
         return withContext(Dispatchers.IO) {
             try {
                 val urlBuilder = "$baseUrl/get_download_links".toHttpUrlOrNull()?.newBuilder()?.apply {
                     addQueryParameter("subject_id", subjectId)
                     if (resolution != null) {
                         addQueryParameter("resolution", resolution.toString())
+                    }
+                    if (season != null) {
+                        addQueryParameter("season", season.toString())
+                    }
+                    if (episode != null) {
+                        addQueryParameter("episode", episode.toString())
+                    }
+                    if (page != null) {
+                        addQueryParameter("page", page.toString())
+                    }
+                    if (limit != null) {
+                        addQueryParameter("limit", limit.toString())
                     }
                 } ?: return@withContext Result.failure(Exception("Invalid URL"))
 

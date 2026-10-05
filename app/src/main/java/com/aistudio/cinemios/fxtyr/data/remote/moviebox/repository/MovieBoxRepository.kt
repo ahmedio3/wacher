@@ -10,7 +10,15 @@ import org.json.JSONObject
 
 interface MovieBoxRepository {
     suspend fun search(query: String, originalLanguage: String? = null, limit: Int = 8): Result<List<SearchResult>>
-    suspend fun getDownloadLinks(subjectId: String, resolution: Int? = null, forceRefresh: Boolean = false): Result<List<VideoFile>>
+    suspend fun getDownloadLinks(
+        subjectId: String,
+        resolution: Int? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        page: Int? = null,
+        limit: Int? = null,
+        forceRefresh: Boolean = false
+    ): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
     suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
     suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
@@ -52,9 +60,13 @@ class MovieBoxRepositoryImpl(
     override suspend fun getDownloadLinks(
         subjectId: String,
         resolution: Int?,
+        season: Int?,
+        episode: Int?,
+        page: Int?,
+        limit: Int?,
         forceRefresh: Boolean
     ): Result<List<VideoFile>> {
-        val cacheKey = "links_${subjectId}_${resolution}"
+        val cacheKey = "links_${subjectId}_${resolution}_s${season}_e${episode}_p${page}_l${limit}"
         if (!forceRefresh) {
             val cached = linkCache[cacheKey]
             if (cached != null && (System.currentTimeMillis() - cached.timestamp < LINK_CACHE_TTL_MS)) {
@@ -62,7 +74,7 @@ class MovieBoxRepositoryImpl(
             }
         }
 
-        val result = api.getDownloadLinks(subjectId, resolution)
+        val result = api.getDownloadLinks(subjectId, resolution, season, episode, page, limit)
         result.onSuccess { files ->
             linkCache[cacheKey] = CachedDownloadLinks(System.currentTimeMillis(), files)
         }
