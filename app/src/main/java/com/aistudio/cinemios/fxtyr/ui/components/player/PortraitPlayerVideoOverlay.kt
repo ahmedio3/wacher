@@ -96,23 +96,105 @@ fun PortraitPlayerVideoOverlay(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .align(Alignment.BottomCenter)
             ) {
-                // Seekbar slider
-                val progressFraction = if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+                // Seekbar slider (slim, matching landscape mode)
+                var isDragging by remember { mutableStateOf(false) }
+                var dragFraction by remember { mutableFloatStateOf(0f) }
 
-                Slider(
-                    value = progressFraction,
-                    onValueChange = { frac ->
-                        onSeek((frac * totalDuration).toLong())
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                    ),
+                val progress = if (isDragging) dragFraction else if (totalDuration > 0) (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f) else 0f
+                val trackColor = MaterialTheme.colorScheme.primary
+                val inactiveColor = Color.White.copy(alpha = 0.35f)
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(20.dp)
-                )
+                        .height(24.dp)
+                        .pointerInput(totalDuration) {
+                            androidx.compose.foundation.gestures.detectTapGestures { offset ->
+                                if (totalDuration > 0 && size.width > 0) {
+                                    val percent = (offset.x / size.width).coerceIn(0f, 1f)
+                                    onSeek((percent * totalDuration).toLong())
+                                }
+                            }
+                        }
+                        .pointerInput(totalDuration) {
+                            androidx.compose.foundation.gestures.detectDragGestures(
+                                onDragStart = { offset ->
+                                    isDragging = true
+                                    if (size.width > 0) {
+                                        dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                                    }
+                                },
+                                onDrag = { change, _ ->
+                                    if (size.width > 0) {
+                                        dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                    }
+                                    change.consume()
+                                },
+                                onDragEnd = {
+                                    isDragging = false
+                                    if (totalDuration > 0) {
+                                        onSeek((dragFraction * totalDuration).toLong())
+                                    }
+                                },
+                                onDragCancel = {
+                                    isDragging = false
+                                }
+                            )
+                        }
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                        val trackHeight = 3.dp.toPx()
+                        val thumbRadius = 5.dp.toPx()
+                        val centerY = size.height / 2
+
+                        // Inactive track
+                        drawRoundRect(
+                            color = inactiveColor,
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+                            size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2)
+                        )
+                        // Active track
+                        val activeWidth = size.width * progress
+                        if (activeWidth > 0f) {
+                            drawRoundRect(
+                                color = trackColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+                                size = androidx.compose.ui.geometry.Size(activeWidth, trackHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight / 2)
+                            )
+                        }
+                        // Thumb dot
+                        val thumbX = activeWidth.coerceIn(thumbRadius, size.width - thumbRadius)
+                        drawCircle(
+                            color = trackColor,
+                            radius = thumbRadius,
+                            center = androidx.compose.ui.geometry.Offset(thumbX, centerY)
+                        )
+                    }
+
+                    // Time preview on drag
+                    if (isDragging && totalDuration > 0) {
+                        val previewPos = (dragFraction * totalDuration).toLong()
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(y = (-10).dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = formatTime(previewPos),
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

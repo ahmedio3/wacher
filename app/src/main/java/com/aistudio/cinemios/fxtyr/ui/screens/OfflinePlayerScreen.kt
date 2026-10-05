@@ -70,6 +70,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.aistudio.cinemios.fxtyr.MainActivity
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
+import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.VideoFile
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchCard
@@ -111,6 +112,7 @@ fun OfflinePlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? MainActivity
+    val scope = rememberCoroutineScope()
 
     val isInitiallyStream = localFilePath.isEmpty()
     var isPortrait by remember { mutableStateOf(isInitiallyStream) }
@@ -205,7 +207,7 @@ fun OfflinePlayerScreen(
 
     // Subtitle Custom Variables
     var subtitleYOffset by remember { mutableFloatStateOf(prefs.getFloat("sub_y", 0f)) }
-    var subtitleSize by remember { mutableFloatStateOf(prefs.getFloat("sub_size", 20f)) }
+    var subtitleSize by remember { mutableFloatStateOf(prefs.getFloat("sub_size", 16f)) }
     var subtitleTimeOffsetMs by remember { mutableLongStateOf(0L) }
     var parsedSubtitles by remember { mutableStateOf<List<SubtitleLine>>(emptyList()) }
     var activeSubtitleText by remember { mutableStateOf("") }
@@ -356,6 +358,8 @@ fun OfflinePlayerScreen(
 
     var isStreamLoading by remember { mutableStateOf(false) }
     var streamResolutionText by remember { mutableStateOf("") }
+    var availableVideoFiles by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
+    var selectedVideoFile by remember { mutableStateOf<VideoFile?>(null) }
 
     // Setup ExoPlayer
     val exoPlayer = remember {
@@ -364,6 +368,45 @@ fun OfflinePlayerScreen(
         ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             playWhenReady = true
         }
+    }
+
+    fun playStreamFile(videoFile: VideoFile, seekPos: Long = -1L) {
+        selectedVideoFile = videoFile
+        streamResolutionText = "${videoFile.resolution}p"
+        val resolvedUrl = videoFile.url
+        val resolvedHeaders = videoFile.headers
+
+        val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .setAllowCrossProtocolRedirects(true)
+        resolvedHeaders?.let { headers ->
+            httpDataSourceFactory.setDefaultRequestProperties(headers)
+        }
+        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+        val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(resolvedUrl))
+        val isMpd = resolvedUrl.contains(".mpd") || resolvedUrl.contains("/dash/")
+        if (isMpd) {
+            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+        }
+
+        val mediaSource = if (resolvedUrl.contains(".m3u8")) {
+            androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(mediaItemBuilder.build())
+        } else if (isMpd) {
+            androidx.media3.exoplayer.dash.DashMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(mediaItemBuilder.build())
+        } else {
+            androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
+                .createMediaSource(mediaItemBuilder.build())
+        }
+
+        exoPlayer.setMediaSource(mediaSource)
+        if (seekPos >= 0) {
+            exoPlayer.seekTo(seekPos)
+        }
+        exoPlayer.prepare()
+        exoPlayer.play()
     }
 
     // --- Pause on app background via lifecycle ---
@@ -477,44 +520,16 @@ fun OfflinePlayerScreen(
                     videoList = videoList.filter { it.season == startSeason && it.episode == startEpisode }
                 }
 
-                val topQuality = videoList.maxByOrNull { it.resolution } ?: videoList.firstOrNull()
-                if (topQuality != null) {
-                    streamResolutionText = "${topQuality.resolution}p"
-                    val resolvedUrl = topQuality.url
-                    val resolvedHeaders = topQuality.headers
+                availableVideoFiles = videoList.sortedBy { it.resolution }
 
-                    val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-                        .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                        .setAllowCrossProtocolRedirects(true)
-                    resolvedHeaders?.let { headers ->
-                        httpDataSourceFactory.setDefaultRequestProperties(headers)
-                    }
-                    val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+                // Default to 480p as requested (fallback to lowest available or first)
+                val chosenQuality = videoList.find { it.resolution == 480 }
+                    ?: videoList.minByOrNull { it.resolution }
+                    ?: videoList.firstOrNull()
 
-                    val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(resolvedUrl))
-                    val isMpd = resolvedUrl.contains(".mpd") || resolvedUrl.contains("/dash/")
-                    if (isMpd) {
-                        mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
-                    }
-
-                    val mediaSource = if (resolvedUrl.contains(".m3u8")) {
-                        androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
-                            .createMediaSource(mediaItemBuilder.build())
-                    } else if (isMpd) {
-                        androidx.media3.exoplayer.dash.DashMediaSource.Factory(dataSourceFactory)
-                            .createMediaSource(mediaItemBuilder.build())
-                    } else {
-                        androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
-                            .createMediaSource(mediaItemBuilder.build())
-                    }
-
-                    exoPlayer.setMediaSource(mediaSource)
+                if (chosenQuality != null) {
                     val lastPos = prefs.getLong("pos_$activeId", 0L)
-                    if (lastPos > 0) {
-                        exoPlayer.seekTo(lastPos)
-                    }
-                    exoPlayer.prepare()
-                    exoPlayer.play()
+                    playStreamFile(chosenQuality, seekPos = if (lastPos > 0) lastPos else -1L)
 
                     // Auto-fetch Arabic subtitle for online stream
                     val srtFile = File(context.filesDir, "downloads/$activeId.srt")
@@ -530,15 +545,15 @@ fun OfflinePlayerScreen(
                     if (parsedSubtitles.isEmpty()) {
                         launch(Dispatchers.IO) {
                             var downloadedSubFile: File? = null
-                            if (topQuality.hasArabicSubtitle && topQuality.arabicSubtitleUrl != null) {
-                                downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, topQuality.arabicSubtitleUrl, activeId)
-                            } else if (topQuality.allSubtitles.isNotEmpty()) {
-                                val ar = topQuality.allSubtitles.find { it.languageCode.equals("ar", true) || it.languageName.contains("Arabic", true) }
+                            if (chosenQuality.hasArabicSubtitle && chosenQuality.arabicSubtitleUrl != null) {
+                                downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, chosenQuality.arabicSubtitleUrl, activeId)
+                            } else if (chosenQuality.allSubtitles.isNotEmpty()) {
+                                val ar = chosenQuality.allSubtitles.find { it.languageCode.equals("ar", true) || it.languageName.contains("Arabic", true) }
                                 if (ar != null) {
                                     downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, ar.url, activeId)
                                 }
-                            } else if (topQuality.resourceId.isNotEmpty()) {
-                                val subRes = viewModel.movieBoxRepository.getSubtitles(subjectId, topQuality.resourceId).getOrNull()
+                            } else if (chosenQuality.resourceId.isNotEmpty()) {
+                                val subRes = viewModel.movieBoxRepository.getSubtitles(subjectId, chosenQuality.resourceId).getOrNull()
                                 if (subRes != null && subRes.hasArabic && subRes.arabicSubtitle != null) {
                                     downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, subRes.arabicSubtitle.url, activeId)
                                 }
@@ -607,7 +622,9 @@ fun OfflinePlayerScreen(
             .background(if (isPortrait) MaterialTheme.colorScheme.background else Color.Black)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isPortrait) Modifier.statusBarsPadding() else Modifier)
         ) {
             // Video surface container Box (16:9 in portrait, fillMaxSize in landscape)
             Box(
@@ -683,11 +700,11 @@ fun OfflinePlayerScreen(
                 }
 
                 if (isPortrait) {
-                    // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s
+                    // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s, long-press speeds up 2x
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
+                            .pointerInput(playbackSpeed) {
                                 detectTapGestures(
                                     onTap = { showControls = !showControls },
                                     onDoubleTap = { offset ->
@@ -695,6 +712,25 @@ fun OfflinePlayerScreen(
                                             exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
                                         } else {
                                             exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                                        }
+                                    },
+                                    onPress = {
+                                        var isLong = false
+                                        val speedJob = scope.launch {
+                                            delay(400)
+                                            isLong = true
+                                            exoPlayer.setPlaybackSpeed(2f)
+                                            isSpeedUp = true
+                                            showControls = false
+                                        }
+                                        try {
+                                            tryAwaitRelease()
+                                        } finally {
+                                            speedJob.cancel()
+                                            if (isLong) {
+                                                exoPlayer.setPlaybackSpeed(playbackSpeed)
+                                                isSpeedUp = false
+                                            }
                                         }
                                     }
                                 )
@@ -724,6 +760,25 @@ fun OfflinePlayerScreen(
                             isPortrait = false
                         }
                     )
+
+                    // 2x Speed Badge (Portrait)
+                    if (isSpeedUp) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            Text(
+                                text = "2× Speed",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
                 } else {
 
         // Unified centered Volume/Brightness Overlay Pill
@@ -1237,6 +1292,70 @@ fun OfflinePlayerScreen(
                                 Icon(Icons.Default.Subtitles, contentDescription = "ترجمة", tint = Color.White)
                             }
 
+                            // Quality Selector in Landscape (for online streams)
+                            if (availableVideoFiles.isNotEmpty()) {
+                                var landscapeQualityMenuExpanded by remember { mutableStateOf(false) }
+                                Box {
+                                    IconButton(
+                                        onClick = { landscapeQualityMenuExpanded = true },
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.2f))
+                                    ) {
+                                        Text(
+                                            text = "${selectedVideoFile?.resolution ?: streamResolutionText.removeSuffix("p")}p",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = landscapeQualityMenuExpanded,
+                                        onDismissRequest = { landscapeQualityMenuExpanded = false },
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    ) {
+                                        availableVideoFiles.map { it.resolution }.distinct().sorted().forEach { q ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Text(
+                                                            text = "${q}p",
+                                                            fontWeight = if (q == (selectedVideoFile?.resolution ?: 0)) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (q == (selectedVideoFile?.resolution ?: 0)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        if (q == (selectedVideoFile?.resolution ?: 0)) {
+                                                            Spacer(modifier = Modifier.width(8.dp))
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                onClick = {
+                                                    landscapeQualityMenuExpanded = false
+                                                    val targetFile = availableVideoFiles.find { it.resolution == q }
+                                                    if (targetFile != null && targetFile != selectedVideoFile) {
+                                                        val currentPos = exoPlayer.currentPosition
+                                                        playStreamFile(targetFile, seekPos = currentPos)
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+
                             Spacer(modifier = Modifier.width(12.dp))
 
                             // Episodes Button
@@ -1508,6 +1627,8 @@ fun OfflinePlayerScreen(
                         "$baseSeriesTitle - الموسم ${epItem.season} الحلقة ${epItem.episode}"
                     }
                     activeLocalFilePath = epItem.localFilePath
+                    availableVideoFiles = emptyList()
+                    selectedVideoFile = null
                 },
                 parsedSubtitles = parsedSubtitles,
                 subtitleStatusText = subtitleStatusText,
@@ -1520,13 +1641,13 @@ fun OfflinePlayerScreen(
                 onOpenSubtitleSourceSheet = {
                     showSubtitleDrawer = true
                 },
-                onMinimizePiP = {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        val aspectRatio = android.util.Rational(16, 9)
-                        val params = android.app.PictureInPictureParams.Builder()
-                            .setAspectRatio(aspectRatio)
-                            .build()
-                        activity?.enterPictureInPictureMode(params)
+                availableQualities = availableVideoFiles.map { it.resolution }.distinct().sorted(),
+                selectedQuality = selectedVideoFile?.resolution ?: streamResolutionText.removeSuffix("p").toIntOrNull(),
+                onSelectQuality = { res ->
+                    val targetFile = availableVideoFiles.find { it.resolution == res }
+                    if (targetFile != null && targetFile != selectedVideoFile) {
+                        val currentPos = exoPlayer.currentPosition
+                        playStreamFile(targetFile, seekPos = currentPos)
                     }
                 },
                 playbackSpeed = playbackSpeed,

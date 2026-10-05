@@ -70,8 +70,11 @@ fun PortraitPlayerBottomContent(
     isSubtitleHidden: Boolean,
     onToggleSubtitleHidden: () -> Unit,
     onOpenSubtitleSourceSheet: () -> Unit,
+    // Quality selection
+    availableQualities: List<Int> = emptyList(),
+    selectedQuality: Int? = null,
+    onSelectQuality: ((Int) -> Unit)? = null,
     // Action callbacks
-    onMinimizePiP: () -> Unit,
     playbackSpeed: Float,
     onCycleSpeed: () -> Unit,
     onDownloadClick: (() -> Unit)? = null,
@@ -164,7 +167,7 @@ fun PortraitPlayerBottomContent(
             }
         }
 
-        // 2. ACTION ROW (iOS-style pill buttons: Minimize / PiP, Speed, Download)
+        // 2. ACTION ROW (iOS-style pill buttons: Quality Dropdown, Speed, Download)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -172,12 +175,96 @@ fun PortraitPlayerBottomContent(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ActionPillButton(
-                icon = Icons.Default.PictureInPictureAlt,
-                label = "تصغير (PiP)",
-                onClick = onMinimizePiP,
-                modifier = Modifier.weight(1f)
-            )
+            // Quality Dropdown Menu Pill
+            var qualityMenuExpanded by remember { mutableStateOf(false) }
+
+            Box(modifier = Modifier.weight(1f)) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .clickable(enabled = isStream && availableQualities.isNotEmpty()) {
+                            qualityMenuExpanded = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HighQuality,
+                            contentDescription = null,
+                            tint = if (isStream && availableQualities.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (selectedQuality != null && selectedQuality > 0) "${selectedQuality}p"
+                            else if (isStream) (if (streamResolution.isNotEmpty()) streamResolution else "الجودة")
+                            else "محلي",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isStream && availableQualities.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                        if (isStream && availableQualities.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (isStream && availableQualities.isNotEmpty()) {
+                    DropdownMenu(
+                        expanded = qualityMenuExpanded,
+                        onDismissRequest = { qualityMenuExpanded = false },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 8.dp,
+                        tonalElevation = 0.dp
+                    ) {
+                        availableQualities.forEach { q ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "${q}p",
+                                            fontWeight = if (q == selectedQuality) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (q == selectedQuality) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (q == selectedQuality) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    qualityMenuExpanded = false
+                                    onSelectQuality?.invoke(q)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             ActionPillButton(
                 icon = Icons.Default.Speed,
