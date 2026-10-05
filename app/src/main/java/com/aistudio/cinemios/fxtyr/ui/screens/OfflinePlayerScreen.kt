@@ -70,7 +70,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.aistudio.cinemios.fxtyr.MainActivity
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
-import com.aistudio.cinemios.fxtyr.data.remote.RequestState
+import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchCard
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleDownloadViewType
@@ -730,7 +730,7 @@ fun OfflinePlayerScreen(
         // - Centered horizontally, positioned near the top of the video (top padding 32dp)
         // - Dark semi-transparent capsule with leading icon + horizontal level bar + percentage
         // - Visibility tied to showAdjustOverlay; auto-hide is driven by overlayHideTrigger (FIX 1)
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visible = showAdjustOverlay && adjustMode != null,
             enter = fadeIn(animationSpec = tween(150)),
             exit = fadeOut(animationSpec = tween(250)),
@@ -1112,7 +1112,7 @@ fun OfflinePlayerScreen(
 
 
         // Custom UI Controls Overlay
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visible = showControls || showEpisodesDrawer || showSubtitleDrawer,
             enter = fadeIn(animationSpec = tween(300)),
             exit = fadeOut(animationSpec = tween(300))
@@ -2291,7 +2291,6 @@ fun OfflinePlayerScreen(
             }
         }
     }
-}
 
 private fun formatTimeRange(millis: Long): String {
     val totalSeconds = millis / 1000
