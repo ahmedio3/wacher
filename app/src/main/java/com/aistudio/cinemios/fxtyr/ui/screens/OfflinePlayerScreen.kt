@@ -172,6 +172,7 @@ fun OfflinePlayerScreen(
 
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
+    var isBuffering by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var totalDuration by remember { mutableLongStateOf(0L) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
@@ -421,6 +422,22 @@ fun OfflinePlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Attach ExoPlayer listener to track buffering / loading state
+    DisposableEffect(exoPlayer) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = (playbackState == androidx.media3.common.Player.STATE_BUFFERING)
+            }
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+        }
+    }
+
     // Load Media (Offline file or Online stream)
     LaunchedEffect(activeId, activeLocalFilePath) {
         var pathToPlay = activeLocalFilePath
@@ -599,6 +616,7 @@ fun OfflinePlayerScreen(
             val dur = exoPlayer.duration
             if (dur > 0) totalDuration = dur
             isPlaying = exoPlayer.isPlaying
+            isBuffering = (exoPlayer.playbackState == androidx.media3.common.Player.STATE_BUFFERING)
             if (currentPosition > 0 && currentPosition % 5000 < 50) {
                 prefs.edit().putLong("pos_$activeId", currentPosition).apply()
             }
@@ -770,7 +788,7 @@ fun OfflinePlayerScreen(
                     PortraitPlayerVideoOverlay(
                         showControls = showControls,
                         isPlaying = isPlaying,
-                        isLoading = isStreamLoading,
+                        isLoading = isStreamLoading || isBuffering,
                         currentPosition = currentPosition,
                         totalDuration = totalDuration,
                         onPlayPause = {
@@ -1419,22 +1437,38 @@ fun OfflinePlayerScreen(
                             Icon(Icons.Default.Replay10, "تأخير ١٠ ثوان", tint = Color.White, modifier = Modifier.size(40.dp))
                         }
 
-                        IconButton(
-                            onClick = {
-                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                isPlaying = exoPlayer.isPlaying
-                            },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "تشغيل / إيقاف",
-                                tint = Color.White,
-                                modifier = Modifier.size(40.dp)
-                            )
+                        if (isStreamLoading || isBuffering) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                    isPlaying = exoPlayer.isPlaying
+                                },
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "تشغيل / إيقاف",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
                         }
 
                         IconButton(
@@ -1568,20 +1602,33 @@ fun OfflinePlayerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(20.dp)
                             ) {
-                                // Play/Pause
-                                IconButton(
-                                    onClick = {
-                                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                        isPlaying = exoPlayer.isPlaying
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "تشغيل / إيقاف",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(28.dp)
-                                    )
+                                // Play/Pause or buffering indicator
+                                if (isStreamLoading || isBuffering) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                } else {
+                                    IconButton(
+                                        onClick = {
+                                            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                            isPlaying = exoPlayer.isPlaying
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = "تشغيل / إيقاف",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
                                 }
 
                                 // Next episode (only for TV series)

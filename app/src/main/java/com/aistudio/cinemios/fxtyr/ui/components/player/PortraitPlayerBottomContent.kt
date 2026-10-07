@@ -186,6 +186,7 @@ fun PortraitPlayerBottomContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(38.dp)
+                        .clip(CircleShape)
                         .clickable(enabled = isStream && availableQualities.isNotEmpty()) {
                             qualityMenuExpanded = true
                         }
@@ -465,29 +466,33 @@ fun PortraitPlayerBottomContent(
                                 color = if (isPlayingThis) {
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                 } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                    Color.Transparent
                                 },
                                 border = if (isPlayingThis) {
                                     BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
                                 } else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
                                     .clickable { onSelectEpisode(ep) }
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp),
+                                        .padding(
+                                            horizontal = if (isPlayingThis) 12.dp else 6.dp,
+                                            vertical = if (isPlayingThis) 12.dp else 8.dp
+                                        ),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     // Episode Number badge / play state
                                     Box(
                                         modifier = Modifier
-                                            .size(42.dp)
+                                            .size(if (isPlayingThis) 40.dp else 34.dp)
                                             .clip(CircleShape)
                                             .background(
                                                 if (isPlayingThis) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.surfaceVariant
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -496,14 +501,14 @@ fun PortraitPlayerBottomContent(
                                                 imageVector = Icons.Default.PlayArrow,
                                                 contentDescription = null,
                                                 tint = Color.White,
-                                                modifier = Modifier.size(24.dp)
+                                                modifier = Modifier.size(22.dp)
                                             )
                                         } else {
                                             Text(
                                                 text = "${ep.episode}",
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp
+                                                fontSize = 14.sp
                                             )
                                         }
                                     }
@@ -511,44 +516,20 @@ fun PortraitPlayerBottomContent(
                                     Spacer(modifier = Modifier.width(12.dp))
 
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(
-                                                text = ep.title.ifEmpty { "الحلقة ${ep.episode}" },
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = if (isPlayingThis) FontWeight.Bold else FontWeight.Medium
-                                                ),
-                                                color = if (isPlayingThis) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                        Text(
+                                            text = ep.title.ifEmpty { "الحلقة ${ep.episode}" },
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = if (isPlayingThis) FontWeight.Bold else FontWeight.Medium
+                                            ),
+                                            color = if (isPlayingThis) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                                        )
 
-                                            if (isPlayingThis) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = MaterialTheme.colorScheme.primary
-                                                ) {
-                                                    Text(
-                                                        text = "جاري التشغيل",
-                                                        fontSize = 10.sp,
-                                                        color = Color.White,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        if (ep.overview.isNotEmpty()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
+                                        if (isPlayingThis && ep.overview.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = ep.overview,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                                             )
                                         }
                                     }
@@ -784,6 +765,7 @@ private fun ActionPillButton(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
         modifier = modifier
             .height(38.dp)
+            .clip(CircleShape)
             .clickable(onClick = onClick)
     ) {
         Row(

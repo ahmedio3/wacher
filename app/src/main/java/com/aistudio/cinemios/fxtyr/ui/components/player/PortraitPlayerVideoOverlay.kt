@@ -44,26 +44,28 @@ fun PortraitPlayerVideoOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
+                .background(if (showControls) Color.Black.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.25f))
         ) {
-            // TOP BAR: Back button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .align(Alignment.TopStart),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(36.dp)
+            // TOP BAR: Back button (visible only when showControls is true)
+            if (showControls) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .align(Alignment.TopStart),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "رجوع",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "رجوع",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
 
@@ -78,7 +80,7 @@ fun PortraitPlayerVideoOverlay(
                         strokeWidth = 3.dp,
                         modifier = Modifier.size(44.dp)
                     )
-                } else {
+                } else if (showControls) {
                     IconButton(
                         onClick = onPlayPause,
                         modifier = Modifier
@@ -95,13 +97,14 @@ fun PortraitPlayerVideoOverlay(
                 }
             }
 
-            // BOTTOM BAR: Seekbar + Time + Expand to Landscape button
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .align(Alignment.BottomCenter)
-            ) {
+            // BOTTOM BAR: Seekbar + Time + Expand to Landscape button (visible only when showControls is true)
+            if (showControls) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .align(Alignment.BottomCenter)
+                ) {
                 // Seekbar slider (slim, matching landscape mode)
                 var isDragging by remember { mutableStateOf(false) }
                 var dragFraction by remember { mutableFloatStateOf(0f) }
