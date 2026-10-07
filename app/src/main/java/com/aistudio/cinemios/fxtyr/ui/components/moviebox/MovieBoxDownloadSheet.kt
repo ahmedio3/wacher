@@ -343,15 +343,56 @@ fun MovieBoxDownloadSheet(
                                     selectedEpisodeIds = if (allSelected) emptySet() else eligibleIds.toSet()
                                 }
                                 
+                                // Auto-select requested episode if present in eligibleIds
+                                LaunchedEffect(eligibleIds, episodeInfo) {
+                                    if (episodeInfo != null && episodeInfo > 0 && episodeInfo in eligibleIds && selectedEpisodeIds.isEmpty()) {
+                                        selectedEpisodeIds = setOf(episodeInfo)
+                                    }
+                                }
+
+                                // Warning banner if requested episode is not available in loaded episodes
+                                if (episodeInfo != null && episodeInfo > 0 && episodeInfo !in episodeIds) {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Error,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = "الحلقة $episodeInfo غير متوفرة حالياً في هذا الموسم على السيرفر",
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+
+                                val validSelectedIds = selectedEpisodeIds.filter { it in episodeIds }.toSet()
+
                                 // Batch download button (shown when items selected) — animated
                                 AnimatedVisibility(
-                                    visible = selectedEpisodeIds.isNotEmpty(),
+                                    visible = validSelectedIds.isNotEmpty(),
                                     enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Top, animationSpec = tween(200)),
                                     exit = fadeOut(tween(150)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(150))
                                 ) {
                                     Button(
                                         onClick = {
-                                            selectedEpisodeIds.forEach { epId ->
+                                            validSelectedIds.forEach { epId ->
                                                 val file = seasonLinks.find { it.episode == epId && it.resolution == selectedQuality }
                                                     ?: seasonLinks.filter { it.episode == epId }.minByOrNull { Math.abs(it.resolution - selectedQuality) }
                                                 if (file != null) {
@@ -365,7 +406,7 @@ fun MovieBoxDownloadSheet(
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                                     ) {
                                         Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                                        Text("تحميل المحدد (${selectedEpisodeIds.size} / ${episodeIds.size})")
+                                        Text("تحميل المحدد (${validSelectedIds.size} / ${episodeIds.size})")
                                     }
                                 }
                                 
@@ -510,7 +551,9 @@ fun MovieBoxDownloadSheet(
                                     }
 
                                     // Load More Episodes Button
-                                    if (hasMorePages) {
+                                    val distinctEpsInMaxPage = episodeIds.count { it in (maxLoadedPage - 1) * 10 + 1 .. maxLoadedPage * 10 }
+                                    val canHaveMore = hasMorePages && (distinctEpsInMaxPage >= 10)
+                                    if (canHaveMore) {
                                         item(key = "load_more_button") {
                                             OutlinedButton(
                                                 onClick = {
@@ -525,8 +568,14 @@ fun MovieBoxDownloadSheet(
                                                             limit = 10
                                                         ) { success ->
                                                             isLoadingMore = false
-                                                            if (success) {
+                                                            val allCurrentLinks = (viewModel.downloadLinks.value as? MovieBoxState.Success)?.data ?: emptyList()
+                                                            val loadedSeasonEps = allCurrentLinks.filter { it.season == selectedSeason }.map { it.episode }.distinct()
+                                                            val newlyLoadedInPage = loadedSeasonEps.filter { it in (nextPage - 1) * 10 + 1 .. nextPage * 10 }
+                                                            if (success && newlyLoadedInPage.isNotEmpty()) {
                                                                 maxLoadedPage = nextPage
+                                                                if (newlyLoadedInPage.size < 10) {
+                                                                    hasMorePages = false
+                                                                }
                                                             } else {
                                                                 hasMorePages = false
                                                             }
