@@ -553,7 +553,7 @@ fun MovieBoxDetailScreen(
                 onDismissRequest = { showMovieBoxSheet = false },
                 onTryOtherMethod = { showMovieBoxSheet = false },
                 initialSubjectId = subjectId,
-                initialLinks = videoLinks.takeIf { it.isNotEmpty() },
+                initialLinks = if (isTv && pendingDownloadEpisode > 10) null else videoLinks.takeIf { it.isNotEmpty() },
                 onDownloadClick = { url, quality, s, ep, still, headers ->
                     viewModel.requestDownload(
                         mediaId = subjectId,

@@ -57,13 +57,34 @@ fun MovieBoxDownloadSheet(
     initialLinks: List<VideoFile>? = null
 ) {
     val context = LocalContext.current
-    val hasDirectLinks = !initialLinks.isNullOrEmpty()
+    val isTv = mediaType == "tv"
+    val initialPage = if (isTv && episodeInfo != null && episodeInfo > 0) ((episodeInfo - 1) / 10) + 1 else 1
+
+    var minLoadedPage by remember { mutableIntStateOf(initialPage) }
+    var maxLoadedPage by remember { mutableIntStateOf(initialPage) }
+    var hasMorePages by remember { mutableStateOf(true) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var isLoadingPrevious by remember { mutableStateOf(false) }
+
+    val canUseDirectLinks = !initialLinks.isNullOrEmpty() && (!isTv || episodeInfo == null || episodeInfo <= 10)
+    val hasDirectLinks = canUseDirectLinks
+
     val searchState by viewModel.searchResults.collectAsState()
     val rawDownloadLinksState by viewModel.downloadLinks.collectAsState()
     val downloadLinksState = remember(hasDirectLinks, initialLinks, rawDownloadLinksState) {
-        if (hasDirectLinks) MovieBoxState.Success(initialLinks!!)
-        else rawDownloadLinksState
+        if (hasDirectLinks && rawDownloadLinksState !is MovieBoxState.Success) {
+            MovieBoxState.Success(initialLinks!!)
+        } else {
+            rawDownloadLinksState
+        }
     }
+
+    LaunchedEffect(hasDirectLinks, initialLinks) {
+        if (hasDirectLinks && initialLinks != null && rawDownloadLinksState !is MovieBoxState.Success) {
+            viewModel.setDownloadLinks(initialLinks)
+        }
+    }
+
     val qualityPrefs = context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE)
 
     // Quality + batch-selection state hoisted to the sheet level so the header quality
@@ -72,7 +93,9 @@ fun MovieBoxDownloadSheet(
     val savedQuality = qualityPrefs.getInt("q_${movieTitle.replace(" ", "_")}", 1080)
     var selectedQuality by remember { mutableIntStateOf(if (savedQuality in standardQualities) savedQuality else 1080) }
     var qualityMenuExpanded by remember { mutableStateOf(false) }
-    var selectedEpisodeIds by remember { mutableStateOf(setOf<Int>()) }
+    var selectedEpisodeIds by remember {
+        mutableStateOf(if (episodeInfo != null && episodeInfo > 0) setOf(episodeInfo) else setOf<Int>())
+    }
     LaunchedEffect(selectedQuality) {
         qualityPrefs.edit().putInt("q_${movieTitle.replace(" ", "_")}", selectedQuality).apply()
     }
@@ -80,11 +103,20 @@ fun MovieBoxDownloadSheet(
     var subjectId by remember { mutableStateOf<String?>(initialSubjectId) }
     var searchInitiated by remember { mutableStateOf(false) }
 
+    val targetSeason = if (seasonInfo != null && seasonInfo > 0) seasonInfo else null
+    val targetPage = if (isTv) initialPage else null
+    val targetLimit = if (isTv) 10 else null
+
     LaunchedEffect(movieTitle, initialSubjectId, hasDirectLinks) {
         if (!hasDirectLinks && !searchInitiated) {
             searchInitiated = true
             if (!initialSubjectId.isNullOrEmpty()) {
-                viewModel.getDownloadLinks(initialSubjectId)
+                viewModel.getDownloadLinks(
+                    subjectId = initialSubjectId,
+                    season = targetSeason,
+                    page = targetPage,
+                    limit = targetLimit
+                )
             } else {
                 viewModel.search(movieTitle)
             }
@@ -101,7 +133,12 @@ fun MovieBoxDownloadSheet(
 
             if (matchedResult != null) {
                 subjectId = matchedResult.subjectId
-                viewModel.getDownloadLinks(matchedResult.subjectId)
+                viewModel.getDownloadLinks(
+                    subjectId = matchedResult.subjectId,
+                    season = targetSeason,
+                    page = targetPage,
+                    limit = targetLimit
+                )
             } else {
                 Toast.makeText(context, "لم يتم العثور على نتائج في MovieBox", Toast.LENGTH_SHORT).show()
                 onTryOtherMethod()
@@ -236,15 +273,10 @@ fun MovieBoxDownloadSheet(
                         )
                     } else {
                         if (mediaType == "tv") {
-                            var filteredLinks = links
-                            if (seasonInfo != null && seasonInfo > 0 && episodeInfo != null && episodeInfo > 0) {
-                                filteredLinks = links.filter { it.season == seasonInfo && it.episode == episodeInfo }
-                            }
-                            
-                            val availableSeasons = filteredLinks.map { it.season }.distinct().sorted()
+                            val availableSeasons = links.map { it.season }.distinct().sorted()
                             var selectedSeason by remember { mutableIntStateOf(seasonInfo ?: availableSeasons.firstOrNull() ?: 1) }
                             
-                            val seasonLinks = filteredLinks.filter { it.season == selectedSeason }
+                            val seasonLinks = links.filter { it.season == selectedSeason }
 
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 // Season selector
@@ -260,7 +292,24 @@ fun MovieBoxDownloadSheet(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(16.dp))
                                                     .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                                    .clickable { selectedSeason = s; selectedEpisodeIds = emptySet() }
+                                                    .clickable {
+                                                        if (selectedSeason != s) {
+                                                            selectedSeason = s
+                                                            selectedEpisodeIds = emptySet()
+                                                            minLoadedPage = 1
+                                                            maxLoadedPage = 1
+                                                            hasMorePages = true
+                                                            val currentSubId = subjectId ?: initialSubjectId
+                                                            if (!currentSubId.isNullOrEmpty()) {
+                                                                viewModel.getDownloadLinks(
+                                                                    subjectId = currentSubId,
+                                                                    season = s,
+                                                                    page = 1,
+                                                                    limit = 10
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                                             ) {
                                                 Text(
@@ -338,8 +387,54 @@ fun MovieBoxDownloadSheet(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    // Load Previous Episodes Button (when started from page > 1)
+                                    if (minLoadedPage > 1) {
+                                        item(key = "load_prev_button") {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val currentSubId = subjectId ?: initialSubjectId ?: return@OutlinedButton
+                                                    if (!isLoadingPrevious) {
+                                                        isLoadingPrevious = true
+                                                        val prevPage = minLoadedPage - 1
+                                                        viewModel.prependDownloadLinks(
+                                                            subjectId = currentSubId,
+                                                            season = selectedSeason,
+                                                            page = prevPage,
+                                                            limit = 10
+                                                        ) { success ->
+                                                            isLoadingPrevious = false
+                                                            if (success) {
+                                                                minLoadedPage = prevPage
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                shape = RoundedCornerShape(12.dp),
+                                                enabled = !isLoadingPrevious,
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                            ) {
+                                                if (isLoadingPrevious) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("جاري تحميل الحلقات السابقة...", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    val startEp = (minLoadedPage - 2) * 10 + 1
+                                                    val endEp = (minLoadedPage - 1) * 10
+                                                    Text("تحميل الحلقات السابقة ($startEp - $endEp)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     episodesMap.forEach { (episodeId, files) ->
-                                        item {
+                                        item(key = "ep_$episodeId") {
                                             val exactFile = files.find { it.resolution == selectedQuality }
                                             val nearestFile = files.minByOrNull { Math.abs(it.resolution - selectedQuality) }
                                             val isExact = exactFile != null
@@ -385,8 +480,9 @@ fun MovieBoxDownloadSheet(
                                                             Text("تم التحميل", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                                         }
                                                     } else if (isExact) {
+                                                        val displaySize = getDisplaySize(exactFile, files)
                                                         Text(
-                                                            text = formatSize(exactFile.size),
+                                                            text = formatSize(displaySize),
                                                             fontSize = 11.sp,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             fontFamily = JetBrainsMonoFontFamily
@@ -412,6 +508,54 @@ fun MovieBoxDownloadSheet(
                                             }
                                         }
                                     }
+
+                                    // Load More Episodes Button
+                                    if (hasMorePages) {
+                                        item(key = "load_more_button") {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val currentSubId = subjectId ?: initialSubjectId ?: return@OutlinedButton
+                                                    if (!isLoadingMore) {
+                                                        isLoadingMore = true
+                                                        val nextPage = maxLoadedPage + 1
+                                                        viewModel.appendDownloadLinks(
+                                                            subjectId = currentSubId,
+                                                            season = selectedSeason,
+                                                            page = nextPage,
+                                                            limit = 10
+                                                        ) { success ->
+                                                            isLoadingMore = false
+                                                            if (success) {
+                                                                maxLoadedPage = nextPage
+                                                            } else {
+                                                                hasMorePages = false
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                shape = RoundedCornerShape(12.dp),
+                                                enabled = !isLoadingMore,
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                            ) {
+                                                if (isLoadingMore) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        strokeWidth = 2.dp,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("جاري تحميل المزيد...", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                                } else {
+                                                    val startEp = maxLoadedPage * 10 + 1
+                                                    val endEp = (maxLoadedPage + 1) * 10
+                                                    Text("تحميل المزيد من الحلقات ($startEp - $endEp)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -425,6 +569,7 @@ fun MovieBoxDownloadSheet(
                                 items(availableQualities) { videoFile ->
                                     QualityItem(
                                         videoFile = videoFile,
+                                        allFiles = availableQualities,
                                         onClick = {
                                             onDownloadClick(videoFile.url, "${videoFile.resolution}p", 0, 0, "", videoFile.headers)
                                         }
@@ -480,7 +625,11 @@ private fun ErrorState(message: String, onTryOtherMethod: () -> Unit) {
 }
 
 @Composable
-private fun QualityItem(videoFile: VideoFile, onClick: () -> Unit) {
+private fun QualityItem(
+    videoFile: VideoFile,
+    allFiles: List<VideoFile> = emptyList(),
+    onClick: () -> Unit
+) {
     val resolutionName = when (videoFile.resolution) {
         1080 -> "FHD (دقة فائقة الوضوح)"
         720 -> "HD (دقة عالية الوضوح)"
@@ -507,8 +656,9 @@ private fun QualityItem(videoFile: VideoFile, onClick: () -> Unit) {
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            val displaySize = getDisplaySize(videoFile, allFiles)
             Text(
-                text = formatSize(videoFile.size),
+                text = formatSize(displaySize),
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = JetBrainsMonoFontFamily
@@ -526,6 +676,22 @@ private fun QualityItem(videoFile: VideoFile, onClick: () -> Unit) {
             Text("تحميل الفيلم")
         }
     }
+}
+
+private fun getDisplaySize(file: VideoFile, allFiles: List<VideoFile>): Long {
+    if (file.size <= 0L) return 0L
+    val distinctSizes = allFiles.map { it.size }.filter { it > 0L }.distinct()
+    if (distinctSizes.size == 1 && allFiles.map { it.resolution }.distinct().size > 1) {
+        val baseSize = distinctSizes.first()
+        return when (file.resolution) {
+            1080 -> baseSize
+            720 -> (baseSize * 0.54).toLong()
+            480 -> (baseSize * 0.28).toLong()
+            360 -> (baseSize * 0.16).toLong()
+            else -> baseSize
+        }
+    }
+    return file.size
 }
 
 private fun formatSize(size: Long): String {

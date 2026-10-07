@@ -81,6 +81,72 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
         }
     }
 
+    fun setDownloadLinks(links: List<VideoFile>) {
+        _downloadLinks.value = MovieBoxState.Success(links)
+    }
+
+    fun appendDownloadLinks(
+        subjectId: String,
+        resolution: Int? = null,
+        season: Int? = null,
+        page: Int? = null,
+        limit: Int? = 10,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val result = withTimeout(25_000L) {
+                    repository.getDownloadLinks(subjectId, resolution, season, null, page, limit, forceRefresh = false)
+                }
+                result.onSuccess { newLinks ->
+                    if (newLinks.isNotEmpty()) {
+                        val current = (_downloadLinks.value as? MovieBoxState.Success)?.data ?: emptyList()
+                        val merged = (current + newLinks).distinctBy { "${it.season}_${it.episode}_${it.resolution}" }
+                        _downloadLinks.value = MovieBoxState.Success(merged)
+                        onComplete?.invoke(true)
+                    } else {
+                        onComplete?.invoke(false)
+                    }
+                }.onFailure {
+                    onComplete?.invoke(false)
+                }
+            } catch (e: Exception) {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
+    fun prependDownloadLinks(
+        subjectId: String,
+        resolution: Int? = null,
+        season: Int? = null,
+        page: Int? = null,
+        limit: Int? = 10,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val result = withTimeout(25_000L) {
+                    repository.getDownloadLinks(subjectId, resolution, season, null, page, limit, forceRefresh = false)
+                }
+                result.onSuccess { newLinks ->
+                    if (newLinks.isNotEmpty()) {
+                        val current = (_downloadLinks.value as? MovieBoxState.Success)?.data ?: emptyList()
+                        val merged = (newLinks + current).distinctBy { "${it.season}_${it.episode}_${it.resolution}" }
+                        _downloadLinks.value = MovieBoxState.Success(merged)
+                        onComplete?.invoke(true)
+                    } else {
+                        onComplete?.invoke(false)
+                    }
+                }.onFailure {
+                    onComplete?.invoke(false)
+                }
+            } catch (e: Exception) {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
     fun browse(genre: String? = null, type: String? = null, sort: String? = null, safeMode: Boolean? = null, limit: Int = 20) {
         viewModelScope.launch {
             _browseResults.value = MovieBoxState.Loading
