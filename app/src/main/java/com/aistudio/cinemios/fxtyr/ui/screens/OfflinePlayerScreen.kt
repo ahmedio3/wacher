@@ -77,9 +77,11 @@ import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchCard
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleDownloadViewType
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleSourceSheet
+import com.aistudio.cinemios.fxtyr.ui.components.player.DoubleTapSeekOverlay
 import com.aistudio.cinemios.fxtyr.ui.components.player.PlayerEpisodeItem
 import com.aistudio.cinemios.fxtyr.ui.components.player.PortraitPlayerBottomContent
 import com.aistudio.cinemios.fxtyr.ui.components.player.PortraitPlayerVideoOverlay
+import com.aistudio.cinemios.fxtyr.ui.components.player.SeekDirection
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleHelper
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleLine
@@ -197,6 +199,18 @@ fun OfflinePlayerScreen(
         if (overlayHideTrigger > 0) {
             delay(2000)
             showAdjustOverlay = false
+        }
+    }
+
+    // Double-tap seek visual feedback (YouTube style)
+    var seekOverlayDirection by remember { mutableStateOf<SeekDirection?>(null) }
+    var seekOverlaySeconds by remember { mutableIntStateOf(0) }
+    var seekOverlayTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(seekOverlayTrigger) {
+        if (seekOverlayTrigger > 0 && seekOverlayDirection != null) {
+            delay(750)
+            seekOverlayDirection = null
+            seekOverlaySeconds = 0
         }
     }
 
@@ -636,6 +650,28 @@ fun OfflinePlayerScreen(
         }
     }
 
+    val currentSeekOverlayDir by rememberUpdatedState(seekOverlayDirection)
+
+    val handleDoubleTapSeek: (Boolean) -> Unit = { isForward ->
+        val dir = if (isForward) SeekDirection.FORWARD else SeekDirection.REWIND
+        val targetPos = if (isForward) {
+            (exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration)
+        } else {
+            (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+        }
+        exoPlayer.seekTo(targetPos)
+        currentPosition = targetPos
+
+        if (seekOverlayDirection == dir) {
+            seekOverlaySeconds += 10
+        } else {
+            seekOverlayDirection = dir
+            seekOverlaySeconds = 10
+        }
+        seekOverlayTrigger++
+        showControls = false
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -719,6 +755,14 @@ fun OfflinePlayerScreen(
                     }
                 }
 
+                // YouTube-style Double Tap Seek Animation Overlay (shared for Portrait & Landscape)
+                DoubleTapSeekOverlay(
+                    direction = seekOverlayDirection,
+                    seconds = seekOverlaySeconds,
+                    triggerCount = seekOverlayTrigger,
+                    isPortrait = isPortrait
+                )
+
                 if (isPortrait) {
                     // Portrait Gestures: tap toggles controls, double-tap seeks +/- 10s, continuous long-press speeds up 2x
                     Box(
@@ -765,18 +809,27 @@ fun OfflinePlayerScreen(
                                             down.position.y - startY
                                         )
                                         if (elapsedMs < 350L && dist < viewConfiguration.touchSlop) {
+                                            val isRight = startX > size.width / 2f
+                                            if (currentSeekOverlayDir != null) {
+                                                val isMatchingSide = (isRight && currentSeekOverlayDir == SeekDirection.FORWARD) ||
+                                                        (!isRight && currentSeekOverlayDir == SeekDirection.REWIND)
+                                                if (isMatchingSide) {
+                                                    handleDoubleTapSeek(isRight)
+                                                    return@awaitEachGesture
+                                                }
+                                            }
+
                                             val secondDown = withTimeoutOrNull(250L) {
                                                 awaitFirstDown(requireUnconsumed = false)
                                             }
                                             if (secondDown != null) {
                                                 secondDown.consume()
-                                                if (secondDown.position.x > size.width / 2f) {
-                                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                                                } else {
-                                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                                                }
+                                                val secondRight = secondDown.position.x > size.width / 2f
+                                                handleDoubleTapSeek(secondRight)
                                             } else {
-                                                showControls = !showControls
+                                                if (currentSeekOverlayDir == null) {
+                                                    showControls = !showControls
+                                                }
                                             }
                                         }
                                     }
@@ -1048,6 +1101,16 @@ fun OfflinePlayerScreen(
                         // ─── After first pointer up: first-tap candidate ───────────
                         if (gestureKind != "TAP1") return@awaitEachGesture
 
+                        if (currentSeekOverlayDir != null) {
+                            val isFirstTapRight = startX > size.width / 2f
+                            val isMatchingSide = (isFirstTapRight && currentSeekOverlayDir == SeekDirection.FORWARD) ||
+                                    (!isFirstTapRight && currentSeekOverlayDir == SeekDirection.REWIND)
+                            if (isMatchingSide) {
+                                handleDoubleTapSeek(isFirstTapRight)
+                                return@awaitEachGesture
+                            }
+                        }
+
                         // Wait for a possible second tap within the double-tap window
                         val secondDown = withTimeoutOrNull(doubleTapTimeoutMs) {
                             awaitFirstDown(requireUnconsumed = true)
@@ -1103,11 +1166,8 @@ fun OfflinePlayerScreen(
                                         if (isUp2) {
                                             // Clean second tap → fire double-tap seek
                                             val tapX = change.position.x
-                                            if (tapX > size.width / 2f) {
-                                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                                            } else {
-                                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                                            }
+                                            val isSecondRight = tapX > size.width / 2f
+                                            handleDoubleTapSeek(isSecondRight)
                                             break
                                         }
 
@@ -1186,7 +1246,9 @@ fun OfflinePlayerScreen(
                             }
                         } else {
                             // ── Second tap timeout → single tap ──
-                            showControls = !showControls
+                            if (currentSeekOverlayDir == null) {
+                                showControls = !showControls
+                            }
                         }
                     }
                 }
@@ -1431,7 +1493,7 @@ fun OfflinePlayerScreen(
                         horizontalArrangement = Arrangement.spacedBy(40.dp)
                     ) {
                         IconButton(
-                            onClick = { exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0)) },
+                            onClick = { handleDoubleTapSeek(false) },
                             modifier = Modifier.size(56.dp)
                         ) {
                             Icon(Icons.Default.Replay10, "تأخير ١٠ ثوان", tint = Color.White, modifier = Modifier.size(40.dp))
@@ -1472,7 +1534,7 @@ fun OfflinePlayerScreen(
                         }
 
                         IconButton(
-                            onClick = { exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration)) },
+                            onClick = { handleDoubleTapSeek(true) },
                             modifier = Modifier.size(56.dp)
                         ) {
                             Icon(Icons.Default.Forward10, "تقديم ١٠ ثوان", tint = Color.White, modifier = Modifier.size(40.dp))
