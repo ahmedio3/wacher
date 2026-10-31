@@ -21,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -32,11 +31,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.BuildConfig
 import com.aistudio.cinemios.fxtyr.auth.AuthManager
+import com.aistudio.cinemios.fxtyr.subscription.formatSubscriptionDate
+import com.aistudio.cinemios.fxtyr.ui.components.seeplus.ProfileAvatar
+import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusChip
+import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusSettingsCard
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
-import com.aistudio.cinemios.fxtyr.ui.theme.PaletteSuccess
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -47,10 +48,12 @@ fun SettingsScreen(
     viewModel: MovieViewModel,
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToSubtitleDownloads: () -> Unit = {},
+    onNavigateToSubscription: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val subscription by viewModel.subscriptionState.collectAsState()
 
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
     var showAuthSheet by remember { mutableStateOf(false) }
@@ -72,7 +75,17 @@ fun SettingsScreen(
 
         ProfileCard(
             user = user,
+            isPremium = subscription.isActive,
             onClick = { showAuthSheet = true }
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        SeePlusSettingsCard(
+            isPremium = subscription.isActive,
+            planTitle = subscription.plan?.title,
+            expiryLabel = formatSubscriptionDate(subscription.expiresAt),
+            onClick = onNavigateToSubscription
         )
 
         Spacer(modifier = Modifier.height(22.dp))
@@ -213,6 +226,7 @@ private fun SettingsHeader() {
 @Composable
 private fun ProfileCard(
     user: FirebaseUser?,
+    isPremium: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -247,62 +261,34 @@ private fun ProfileCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(modifier = Modifier.size(54.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!photoUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = photoUrl,
-                                contentDescription = "صورة الحساب",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-
-                    if (user != null) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .size(15.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(3.dp)
-                                .clip(CircleShape)
-                                .background(PaletteSuccess)
-                        )
-                    }
-                }
+                ProfileAvatar(
+                    photoUrl = photoUrl,
+                    isPremium = isPremium,
+                    showOnlineDot = user != null && !isPremium
+                )
 
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    Text(
-                        text = user?.displayName?.takeIf { it.isNotBlank() } ?: "مرحباً بك",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = user?.displayName?.takeIf { it.isNotBlank() } ?: "مرحباً بك",
+                            modifier = Modifier.weight(1f, fill = false),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isPremium) {
+                            SeePlusChip()
+                        }
+                    }
                     Text(
                         text = user?.email ?: "سجّل الدخول لمزامنة مكتبتك وترجماتك",
                         fontSize = 12.sp,

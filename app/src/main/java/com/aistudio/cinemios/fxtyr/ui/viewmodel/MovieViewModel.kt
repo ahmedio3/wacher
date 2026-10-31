@@ -15,6 +15,11 @@ import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
 import com.aistudio.cinemios.fxtyr.data.remote.*
 import com.aistudio.cinemios.fxtyr.data.repository.MovieRepository
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.repository.MovieBoxRepository
+import com.aistudio.cinemios.fxtyr.subscription.PremiumFeature
+import com.aistudio.cinemios.fxtyr.subscription.PremiumFeatureAccess
+import com.aistudio.cinemios.fxtyr.subscription.SubscriptionManager
+import com.aistudio.cinemios.fxtyr.subscription.SubscriptionPlan
+import com.aistudio.cinemios.fxtyr.subscription.SubscriptionState
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,6 +62,10 @@ class MovieViewModel(
     // Settings Configuration
     private val sharedPrefs = application.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
 
+    // seePlus subscription (persisted locally, simulated payment)
+    private val subscriptionManager = SubscriptionManager(sharedPrefs)
+    val subscriptionState: StateFlow<SubscriptionState> = subscriptionManager.state
+
     // Arabic vs English posters
     private val _isArabicPosters = MutableStateFlow(sharedPrefs.getBoolean("arabic_posters", false))
     val isArabicPosters: StateFlow<Boolean> = _isArabicPosters.asStateFlow()
@@ -78,6 +87,29 @@ class MovieViewModel(
         sharedPrefs.edit().putBoolean("dark_mode", enabled).apply()
         _isDarkMode.value = enabled
     }
+
+    fun refreshSubscription() {
+        subscriptionManager.refresh()
+    }
+
+    fun activateSubscription(plan: SubscriptionPlan, pin: String): Boolean =
+        subscriptionManager.activate(plan, pin)
+
+    fun cancelSubscription() {
+        subscriptionManager.cancel()
+    }
+
+    fun setSubscriptionAutoRenew(enabled: Boolean) {
+        subscriptionManager.setAutoRenew(enabled)
+    }
+
+    /**
+     * Future seePlus gating entry point.
+     * Every PremiumFeature.requiresPremium flag is currently false, so all
+     * existing features stay available to everyone.
+     */
+    fun isPremiumFeatureUnlocked(feature: PremiumFeature): Boolean =
+        PremiumFeatureAccess.isUnlocked(feature, subscriptionManager.state.value)
 
     fun setArabicPosters(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("arabic_posters", enabled).apply()

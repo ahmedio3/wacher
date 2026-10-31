@@ -422,7 +422,15 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                 SettingsScreen(
                     viewModel = movieViewModel,
                     onNavigateToWatchlist = { navController.navigate("watchlist") },
-                    onNavigateToSubtitleDownloads = { navController.navigate("subtitle-downloads") }
+                    onNavigateToSubtitleDownloads = { navController.navigate("subtitle-downloads") },
+                    onNavigateToSubscription = { navController.navigate("subscription") }
+                )
+            }
+
+            composable("subscription") {
+                SubscriptionScreen(
+                    viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
