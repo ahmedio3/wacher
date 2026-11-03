@@ -53,16 +53,15 @@ fun MovieDetailContent(
     onNavigateToDetails: (Int, String) -> Unit = { _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
-    val posterUrl = "https://image.tmdb.org/t/p/w342${movie.posterPath}"
     val isFavorited by viewModel.isItemInWatchlist(movie.id.toString()).collectAsState(initial = false)
 
     Column {
         if (!isPlayerPlaying) {
-            // Double layered Poster Card with high backdrop glare (Hidden during inline playback)
+            // Full-width backdrop; the gradient is functional, keeping the title readable.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(264.dp)
+                    .height(290.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -79,19 +78,6 @@ fun MovieDetailContent(
                                 colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background)
                             )
                         )
-                )
-
-                // Centered Overlay Poster
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = movie.title,
-                    modifier = Modifier
-                        .width(110.dp)
-                        .height(160.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(2.dp, Color.White, RoundedCornerShape(16.dp))
-                        .align(Alignment.BottomCenter),
-                    contentScale = ContentScale.Crop
                 )
             }
         }
@@ -281,7 +267,7 @@ fun MovieDetailContent(
                     Icon(
                         imageVector = Icons.Default.Subtitles,
                         contentDescription = "تحميل ترجمة",
-                        tint = Color.Black
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }

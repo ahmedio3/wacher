@@ -28,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -38,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,8 +45,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMediaItem
 import com.aistudio.cinemios.fxtyr.ui.components.rememberPressState
-import kotlin.math.absoluteValue
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -63,22 +59,6 @@ fun FeaturedCarousel(
         pageCount = { items.size }
     )
 
-    // Gentle auto-scroll when user is not touching/scrolling
-    LaunchedEffect(pagerState, items.size) {
-        if (items.size > 1) {
-            while (true) {
-                delay(4500L)
-                if (!pagerState.isScrollInProgress) {
-                    val nextPage = (pagerState.currentPage + 1) % items.size
-                    pagerState.animateScrollToPage(
-                        page = nextPage,
-                        animationSpec = tween(durationMillis = 650)
-                    )
-                }
-            }
-        }
-    }
-
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -90,7 +70,7 @@ fun FeaturedCarousel(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "المميز اليوم",
+                text = "مميز اليوم",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -100,32 +80,15 @@ fun FeaturedCarousel(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(190.dp),
-            contentPadding = PaddingValues(horizontal = 38.dp),
+                .height(200.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
             pageSpacing = 12.dp
         ) { page ->
             val item = items[page]
-            val pageOffset = (
-                (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-            ).absoluteValue
-            val progress = (1f - pageOffset.coerceIn(0f, 1f))
-            val scale = 0.88f + (1f - 0.88f) * progress
-            val alpha = 0.60f + (1f - 0.60f) * progress
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        this.alpha = alpha
-                    }
-            ) {
-                FeaturedBackdropCard(
-                    item = item,
-                    onClick = { onItemClick(item) }
-                )
-            }
+            FeaturedBackdropCard(
+                item = item,
+                onClick = { onItemClick(item) }
+            )
         }
 
         // Modern animated indicator pills below carousel

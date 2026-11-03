@@ -55,7 +55,7 @@ fun HomeScreen(
         // 1. Sleek Top Header
         HomeHeader()
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // 2. Featured Carousel (Top 5 trending movies)
         when (val trendingState = trendingMoviesState) {
@@ -89,7 +89,7 @@ fun HomeScreen(
             else -> {}
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         // 3. Watchlist Section (قائمتي) — shown if not empty
         if (watchlistItems.isNotEmpty()) {
@@ -143,13 +143,12 @@ fun HomeScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
 
         // 4. Trending Movies (الأفلام الرائجة)
         MediaCategoryCarousel(
             title = "الأفلام الرائجة هذا الأسبوع",
-            icon = Icons.Default.Movie,
             state = trendingMoviesState,
             onItemClick = { item ->
                 viewModel.recordRecentView(
@@ -175,12 +174,11 @@ fun HomeScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         // 5. Trending TV Shows (المسلسلات الرائجة)
         MediaCategoryCarousel(
             title = "المسلسلات الرائجة هذا الأسبوع",
-            icon = Icons.Default.LiveTv,
             state = trendingTvState,
             onItemClick = { item ->
                 viewModel.recordRecentView(

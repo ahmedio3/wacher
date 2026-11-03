@@ -24,23 +24,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.*
 import com.aistudio.cinemios.fxtyr.ui.components.detail.*
-import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
-import com.aistudio.cinemios.fxtyr.utils.isLatinText
 import com.aistudio.cinemios.fxtyr.ui.components.VideoPlayerView
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
@@ -143,16 +136,6 @@ fun DetailScreen(
         }
     }
 
-    val appBarTitle = remember(mediaType, mediaId, movieDetailsMap[mediaId], tvDetailsMap[mediaId]) {
-        if (mediaType == "movie") {
-            val state = movieDetailsMap[mediaId]
-            if (state is RequestState.Success) state.data.title ?: "تفاصيل الفيلم" else "تفاصيل الفيلم"
-        } else {
-            val state = tvDetailsMap[mediaId]
-            if (state is RequestState.Success) state.data.name ?: "تفاصيل المسلسل" else "تفاصيل المسلسل"
-        }
-    }
-
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             topBar = { },
@@ -163,16 +146,13 @@ fun DetailScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Immersive floating header overlay (back button + title pill) drawn above the backdrop
-                Row(
+                // Minimal floating back button over the backdrop
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .fillMaxWidth()
                         .zIndex(1f)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     IconButton(
                         onClick = onBackClick,
@@ -186,26 +166,6 @@ fun DetailScreen(
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
-                    }
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = appBarTitle,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = if (isLatinText(appBarTitle)) JetBrainsMonoFontFamily else null,
-                                    textDirection = if (isLatinText(appBarTitle)) TextDirection.Ltr else TextDirection.Rtl
-                                ),
-                                color = MaterialTheme.colorScheme.onBackground,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
                 }
                 Column(
