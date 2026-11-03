@@ -58,6 +58,24 @@ val Typography = Typography(
         fontSize = 24.sp,
         lineHeight = 30.sp
     ),
+    headlineLarge = TextStyle(
+        fontFamily = IBMPlexSansArabicFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 32.sp,
+        lineHeight = 38.sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = IBMPlexSansArabicFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = IBMPlexSansArabicFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp
+    ),
     titleLarge = TextStyle(
         fontFamily = IBMPlexSansArabicFontFamily,
         fontWeight = FontWeight.Bold,
@@ -105,5 +123,11 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = IBMPlexSansArabicFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 14.sp
     )
 )

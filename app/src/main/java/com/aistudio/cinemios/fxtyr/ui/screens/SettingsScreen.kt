@@ -59,6 +59,17 @@ fun SettingsScreen(
     var showAuthSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val isPremium = user != null && subscription.isActive
+
+    DisposableEffect(Unit) {
+        val auth = FirebaseAuth.getInstance()
+        val listener = FirebaseAuth.AuthStateListener { authState ->
+            user = authState.currentUser
+            viewModel.refreshSubscription()
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
 
     Column(
         modifier = modifier
@@ -75,18 +86,20 @@ fun SettingsScreen(
 
         ProfileCard(
             user = user,
-            isPremium = subscription.isActive,
+            isPremium = isPremium,
             onClick = { showAuthSheet = true }
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        if (user != null) {
+            Spacer(modifier = Modifier.height(14.dp))
 
-        SeePlusSettingsCard(
-            isPremium = subscription.isActive,
-            planTitle = subscription.plan?.title,
-            expiryLabel = formatSubscriptionDate(subscription.expiresAt),
-            onClick = onNavigateToSubscription
-        )
+            SeePlusSettingsCard(
+                isPremium = isPremium,
+                planTitle = subscription.plan?.title,
+                expiryLabel = formatSubscriptionDate(subscription.expiresAt),
+                onClick = onNavigateToSubscription
+            )
+        }
 
         Spacer(modifier = Modifier.height(22.dp))
 
@@ -156,6 +169,7 @@ fun SettingsScreen(
             onDismiss = { showAuthSheet = false },
             onSignedIn = { signedInUser ->
                 user = signedInUser
+                viewModel.refreshSubscription()
                 showAuthSheet = false
             }
         )
@@ -178,6 +192,7 @@ fun SettingsScreen(
             onConfirm = {
                 FirebaseAuth.getInstance().signOut()
                 user = null
+                viewModel.refreshSubscription()
                 showLogoutDialog = false
             }
         )
@@ -186,40 +201,22 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsHeader() {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                text = "الإعدادات",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "خصّص تجربتك كما تحب",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Tune,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(22.dp)
-            )
-        }
+        Text(
+            text = "الإعدادات",
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "خصّص تجربتك كما تحب",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+        )
     }
 }
 

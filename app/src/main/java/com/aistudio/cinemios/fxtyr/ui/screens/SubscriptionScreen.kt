@@ -48,6 +48,7 @@ import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteSuccess
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,6 +60,11 @@ fun SubscriptionScreen(
 ) {
     val subscription by viewModel.subscriptionState.collectAsState()
     val context = LocalContext.current
+
+    if (FirebaseAuth.getInstance().currentUser == null) {
+        SignInRequiredSubscription(onBackClick = onBackClick)
+        return
+    }
 
     var selectedPlanKey by rememberSaveable { mutableStateOf(SubscriptionPlan.YEARLY.storageKey) }
     val selectedPlan = SubscriptionPlan.fromKey(selectedPlanKey) ?: SubscriptionPlan.YEARLY
@@ -234,6 +240,84 @@ private fun SubscriptionTopBar(onBackClick: () -> Unit) {
                 letterSpacing = 0.6.sp,
                 color = SeePlusColors.DeepGold
             )
+        }
+    }
+}
+
+@Composable
+private fun SignInRequiredSubscription(onBackClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        SubscriptionTopBar(onBackClick = onBackClick)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(CircleShape)
+                        .background(SeePlusColors.Gold.copy(alpha = 0.14f))
+                        .border(
+                            width = 1.dp,
+                            color = SeePlusColors.Gold.copy(alpha = 0.35f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = SeePlusColors.DeepGold,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+
+                Text(
+                    text = "seePlus لأعضاء Watchera",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                Text(
+                    text = "سجّل الدخول من الإعدادات أولًا، ثم عد لإدارة اشتراكك والاستفادة من مزايا seePlus.",
+                    textAlign = TextAlign.Center,
+                    fontSize = 12.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Button(
+                    onClick = onBackClick,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SeePlusColors.Gold,
+                        contentColor = SeePlusColors.Espresso
+                    ),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Text(
+                        text = "العودة إلى الإعدادات",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
         }
     }
 }

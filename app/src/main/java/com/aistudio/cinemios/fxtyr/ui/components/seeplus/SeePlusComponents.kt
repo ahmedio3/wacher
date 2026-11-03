@@ -30,13 +30,17 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteSuccess
 
 object SeePlusColors {
@@ -54,30 +58,28 @@ fun SeePlusWordmark(
     fontSize: TextUnit = 22.sp,
     onDark: Boolean = false
 ) {
-    Row(
+    val seeColor = if (onDark) SeePlusColors.Cream else MaterialTheme.colorScheme.onBackground
+    val plusColor = if (onDark) SeePlusColors.Gold else SeePlusColors.DeepGold
+
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = seeColor, fontStyle = FontStyle.Italic)) {
+                append("see")
+            }
+            withStyle(SpanStyle(color = plusColor)) {
+                append("Plus")
+            }
+        },
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "see",
-            color = if (onDark) SeePlusColors.Cream else MaterialTheme.colorScheme.onBackground,
-            fontSize = fontSize,
-            fontWeight = FontWeight.Black,
-            fontStyle = FontStyle.Italic,
-            letterSpacing = (-0.6).sp,
-            lineHeight = fontSize,
-            maxLines = 1
-        )
-        Text(
-            text = "Plus",
-            color = if (onDark) SeePlusColors.Gold else SeePlusColors.DeepGold,
-            fontSize = fontSize,
-            fontWeight = FontWeight.Black,
-            letterSpacing = (-0.6).sp,
-            lineHeight = fontSize,
-            maxLines = 1
-        )
-    }
+        color = seeColor,
+        fontSize = fontSize,
+        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsMonoFontFamily,
+        fontStyle = FontStyle.Normal,
+        letterSpacing = (-0.3).sp,
+        lineHeight = fontSize,
+        maxLines = 1
+    )
 }
 
 @Composable

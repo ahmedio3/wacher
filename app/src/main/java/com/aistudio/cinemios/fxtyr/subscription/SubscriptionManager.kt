@@ -11,11 +11,14 @@ import java.util.UUID
 /**
  * Persists the local seePlus subscription and exposes it as a StateFlow.
  *
+ * The subscription is scoped to the signed-in Firebase user: when no user is
+ * signed in, the effective state is always inactive and no mutation is allowed.
  * The payment step is simulated by [activate]: it only accepts the secret
  * confirmation PIN configured below and never talks to a payment provider.
  */
 class SubscriptionManager(
-    private val preferences: SharedPreferences
+    private val preferences: SharedPreferences,
+    private val uidProvider: () -> String?
 ) {
     private val _state = MutableStateFlow(readState())
     val state: StateFlow<SubscriptionState> = _state.asStateFlow()
@@ -27,6 +30,7 @@ class SubscriptionManager(
      * Returns true when the subscription was activated.
      */
     fun activate(plan: SubscriptionPlan, pin: String): Boolean {
+        val uid = currentUid() ?: return false
         if (!verifyPin(pin)) return false
 
         val now = System.currentTimeMillis()
@@ -39,24 +43,26 @@ class SubscriptionManager(
             transactionId = generateTransactionId(now)
         )
 
-        persist(state)
+        persist(state, uid)
         _state.value = state
         return true
     }
 
     fun cancel() {
+        val uid = currentUid() ?: return
         val current = _state.value
         val cancelled = current.copy(isActive = false, autoRenew = false)
-        persist(cancelled)
+        persist(cancelled, uid)
         _state.value = cancelled
     }
 
     fun setAutoRenew(enabled: Boolean) {
+        val uid = currentUid() ?: return
         val current = _state.value
         if (!current.isActive) return
 
         val updated = current.copy(autoRenew = enabled)
-        persist(updated)
+        persist(updated, uid)
         _state.value = updated
     }
 
@@ -65,6 +71,9 @@ class SubscriptionManager(
     }
 
     fun verifyPin(pin: String): Boolean = pin == CONFIRMATION_PIN
+
+    private fun currentUid(): String? =
+        uidProvider()?.takeIf { it.isNotBlank() }
 
     private fun calculateExpiry(plan: SubscriptionPlan, now: Long): Long {
         val calendar = Calendar.getInstance().apply {
@@ -88,32 +97,68 @@ class SubscriptionManager(
     }
 
     private fun readState(): SubscriptionState {
-        val plan = SubscriptionPlan.fromKey(preferences.getString(KEY_PLAN, null))
-        val expiresAt = preferences.getLong(KEY_EXPIRES_AT, 0L)
-        val isActive = preferences.getBoolean(KEY_ACTIVE, false) &&
+        val uid = currentUid() ?: return SubscriptionState()
+        migrateLegacyIfNeeded(uid)
+
+        val plan = SubscriptionPlan.fromKey(preferences.getString(key(KEY_PLAN, uid), null))
+        val expiresAt = preferences.getLong(key(KEY_EXPIRES_AT, uid), 0L)
+        val isActive = preferences.getBoolean(key(KEY_ACTIVE, uid), false) &&
             plan != null &&
             expiresAt > System.currentTimeMillis()
 
         return SubscriptionState(
             isActive = isActive,
             plan = plan,
-            startedAt = preferences.getLong(KEY_STARTED_AT, 0L),
+            startedAt = preferences.getLong(key(KEY_STARTED_AT, uid), 0L),
             expiresAt = expiresAt,
-            autoRenew = isActive && preferences.getBoolean(KEY_AUTO_RENEW, true),
-            transactionId = preferences.getString(KEY_TRANSACTION_ID, "").orEmpty()
+            autoRenew = isActive && preferences.getBoolean(key(KEY_AUTO_RENEW, uid), true),
+            transactionId = preferences.getString(key(KEY_TRANSACTION_ID, uid), "").orEmpty()
         )
     }
 
-    private fun persist(state: SubscriptionState) {
+    private fun persist(state: SubscriptionState, uid: String) {
         preferences.edit()
-            .putBoolean(KEY_ACTIVE, state.isActive)
-            .putString(KEY_PLAN, state.plan?.storageKey)
-            .putLong(KEY_STARTED_AT, state.startedAt)
-            .putLong(KEY_EXPIRES_AT, state.expiresAt)
-            .putBoolean(KEY_AUTO_RENEW, state.autoRenew)
-            .putString(KEY_TRANSACTION_ID, state.transactionId)
+            .putBoolean(key(KEY_ACTIVE, uid), state.isActive)
+            .putString(key(KEY_PLAN, uid), state.plan?.storageKey)
+            .putLong(key(KEY_STARTED_AT, uid), state.startedAt)
+            .putLong(key(KEY_EXPIRES_AT, uid), state.expiresAt)
+            .putBoolean(key(KEY_AUTO_RENEW, uid), state.autoRenew)
+            .putString(key(KEY_TRANSACTION_ID, uid), state.transactionId)
             .apply()
     }
+
+    /**
+     * Older builds stored a single subscription without a user scope. Move it
+     * to the first account that signs in so existing members keep their plan.
+     */
+    private fun migrateLegacyIfNeeded(uid: String) {
+        val scopedPlanKey = key(KEY_PLAN, uid)
+        if (preferences.contains(scopedPlanKey)) return
+
+        val legacyPlan = preferences.getString(KEY_PLAN, null) ?: return
+        preferences.edit()
+            .putBoolean(key(KEY_ACTIVE, uid), preferences.getBoolean(KEY_ACTIVE, false))
+            .putString(scopedPlanKey, legacyPlan)
+            .putLong(key(KEY_STARTED_AT, uid), preferences.getLong(KEY_STARTED_AT, 0L))
+            .putLong(key(KEY_EXPIRES_AT, uid), preferences.getLong(KEY_EXPIRES_AT, 0L))
+            .putBoolean(key(KEY_AUTO_RENEW, uid), preferences.getBoolean(KEY_AUTO_RENEW, true))
+            .putString(
+                key(KEY_TRANSACTION_ID, uid),
+                preferences.getString(KEY_TRANSACTION_ID, "").orEmpty()
+            )
+            .apply()
+
+        preferences.edit()
+            .remove(KEY_ACTIVE)
+            .remove(KEY_PLAN)
+            .remove(KEY_STARTED_AT)
+            .remove(KEY_EXPIRES_AT)
+            .remove(KEY_AUTO_RENEW)
+            .remove(KEY_TRANSACTION_ID)
+            .apply()
+    }
+
+    private fun key(base: String, uid: String): String = "${base}_$uid"
 
     companion object {
         private const val CONFIRMATION_PIN = "8999"

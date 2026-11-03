@@ -62,9 +62,15 @@ class MovieViewModel(
     // Settings Configuration
     private val sharedPrefs = application.getSharedPreferences("watchera_prefs", android.content.Context.MODE_PRIVATE)
 
-    // seePlus subscription (persisted locally, simulated payment)
-    private val subscriptionManager = SubscriptionManager(sharedPrefs)
+    // seePlus subscription (persisted locally per signed-in user, simulated payment)
+    private val subscriptionManager = SubscriptionManager(sharedPrefs) {
+        FirebaseAuth.getInstance().currentUser?.uid
+    }
     val subscriptionState: StateFlow<SubscriptionState> = subscriptionManager.state
+
+    private val subscriptionAuthListener = FirebaseAuth.AuthStateListener {
+        subscriptionManager.refresh()
+    }
 
     // Arabic vs English posters
     private val _isArabicPosters = MutableStateFlow(sharedPrefs.getBoolean("arabic_posters", false))
@@ -105,11 +111,16 @@ class MovieViewModel(
 
     /**
      * Future seePlus gating entry point.
+     * Premium-only features also require a signed-in account.
      * Every PremiumFeature.requiresPremium flag is currently false, so all
      * existing features stay available to everyone.
      */
-    fun isPremiumFeatureUnlocked(feature: PremiumFeature): Boolean =
-        PremiumFeatureAccess.isUnlocked(feature, subscriptionManager.state.value)
+    fun isPremiumFeatureUnlocked(feature: PremiumFeature): Boolean {
+        if (feature.requiresPremium && FirebaseAuth.getInstance().currentUser == null) {
+            return false
+        }
+        return PremiumFeatureAccess.isUnlocked(feature, subscriptionManager.state.value)
+    }
 
     fun setArabicPosters(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("arabic_posters", enabled).apply()
@@ -267,6 +278,8 @@ class MovieViewModel(
         // Fetch Home content on startup
         fetchHomeContent()
 
+        FirebaseAuth.getInstance().addAuthStateListener(subscriptionAuthListener)
+
         // Debounced auto-search: waits 750ms of inactivity, min 2 chars, cancels previous queries
         viewModelScope.launch {
             _searchQuery
@@ -277,6 +290,11 @@ class MovieViewModel(
                     performSearch(query.trim(), saveToHistory = false)
                 }
         }
+    }
+
+    override fun onCleared() {
+        FirebaseAuth.getInstance().removeAuthStateListener(subscriptionAuthListener)
+        super.onCleared()
     }
 
     private val _isMovieBoxSearchMode = MutableStateFlow(false)
