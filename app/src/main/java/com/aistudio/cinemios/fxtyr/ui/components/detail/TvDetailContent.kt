@@ -34,6 +34,7 @@ import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMediaItem
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbSeasonDetails
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbTvDetails
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
@@ -48,20 +49,19 @@ fun TvDetailContent(
     recommendations: List<TmdbMediaItem> = emptyList(),
     viewModel: MovieViewModel,
     seasonDetailsMap: Map<String, RequestState<TmdbSeasonDetails>>,
+    selectedSeasonNumber: Int,
+    onSeasonSelected: (Int) -> Unit,
     isPlayerPlaying: Boolean,
     onPlayEpisode: (Int, Int) -> Unit,
     onDownloadEpisode: (String, String, String, String, String, Int, Int) -> Unit,
     onDownloadFullSeries: () -> Unit = {},
     onSubtitleDownloadClick: (String, String, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
-    onLongPressWatchlist: () -> Unit = {},
     onNavigateToDetails: (Int, String) -> Unit = { _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${tv.backdropPath ?: tv.posterPath}"
-    val isFavorited by viewModel.isItemInWatchlist(tv.id.toString()).collectAsState(initial = false)
 
     // Season switcher selector states
     val validSeasons = tv.seasons?.filter { it.seasonNumber > 0 } ?: emptyList()
-    var selectedSeasonNumber by remember { mutableIntStateOf(if (validSeasons.isNotEmpty()) validSeasons[0].seasonNumber else 1) }
 
     LaunchedEffect(selectedSeasonNumber) {
         viewModel.fetchSeasonDetails(tv.id, selectedSeasonNumber)
@@ -189,87 +189,32 @@ fun TvDetailContent(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Action bar: Download series / Bookmark / Subtitles
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Action bar: download the full series
+            Button(
+                onClick = onDownloadFullSeries,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                // Download full series button (main action, weight 1)
-                Button(
-                    onClick = onDownloadFullSeries,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-                        Text(
-                            "تحميل المسلسل كاملًا",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-
-                // Bookmark icon button (with long-press for status picker)
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        .combinedClickable(
-                            onClick = {
-                                viewModel.toggleWatchlist(
-                                    id = tv.id.toString(),
-                                    title = tv.name ?: "",
-                                    posterPath = tv.posterPath ?: "",
-                                    mediaType = "tv",
-                                    rating = tv.voteAverage ?: 0.0
-                                )
-                            },
-                            onLongClick = onLongPressWatchlist
-                        ),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
-                        contentDescription = "قائمة المشاهدة",
-                        tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
+                        imageVector = IosIcons.Download,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
                     )
-                }
-
-                // Subtitle download icon button
-                IconButton(
-                    onClick = {
-                        onSubtitleDownloadClick(
-                            tv.id.toString(),
-                            tv.name ?: "",
-                            tv.posterPath ?: "",
-                            selectedSeasonNumber,
-                            1
-                        )
-                    },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Subtitles,
-                        contentDescription = "تحميل ترجمة",
-                        tint = MaterialTheme.colorScheme.onBackground
+                    Text(
+                        "تحميل المسلسل كاملًا",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -321,7 +266,7 @@ fun TvDetailContent(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { selectedSeasonNumber = s.seasonNumber }
+                                .clickable { onSeasonSelected(s.seasonNumber) }
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(

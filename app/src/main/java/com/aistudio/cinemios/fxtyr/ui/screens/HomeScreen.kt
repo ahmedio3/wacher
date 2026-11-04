@@ -32,6 +32,7 @@ fun HomeScreen(
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToWatchlist: () -> Unit = {},
+    onResumePlayback: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -39,6 +40,7 @@ fun HomeScreen(
     val watchlistItems by viewModel.watchlist.collectAsState()
     val trendingMoviesState by viewModel.trendingMovies.collectAsState()
     val trendingTvState by viewModel.trendingTv.collectAsState()
+    val continueWatching by viewModel.continueWatching.collectAsState()
     val context = LocalContext.current
 
     var showShareSheet by remember { mutableStateOf(false) }
@@ -91,7 +93,27 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // 3. Watchlist Section (قائمتي) — shown if not empty
+        // 3. Continue Watching (متابعة المشاهدة) — direct resume, one card per show
+        if (continueWatching.isNotEmpty()) {
+            ContinueWatchingSection(
+                items = continueWatching,
+                onResume = { item ->
+                    val playbackTitle = if (item.mediaType == "tv") {
+                        "${item.title} - الموسم ${item.season} الحلقة ${item.episode}"
+                    } else {
+                        item.title
+                    }
+                    val localPath = item.localFilePath.takeIf {
+                        it.isNotBlank() &&
+                            (it.startsWith("content://") || java.io.File(it).exists())
+                    }.orEmpty()
+                    onResumePlayback(item.id, playbackTitle, localPath)
+                }
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+        }
+
+        // 4. Watchlist Section (قائمتي) — shown if not empty
         if (watchlistItems.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -146,7 +168,7 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(28.dp))
         }
 
-        // 4. Trending Movies (الأفلام الرائجة)
+        // 5. Trending Movies (الأفلام الرائجة)
         MediaCategoryCarousel(
             title = "الأفلام الرائجة هذا الأسبوع",
             state = trendingMoviesState,
@@ -176,7 +198,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // 5. Trending TV Shows (المسلسلات الرائجة)
+        // 6. Trending TV Shows (المسلسلات الرائجة)
         MediaCategoryCarousel(
             title = "المسلسلات الرائجة هذا الأسبوع",
             state = trendingTvState,

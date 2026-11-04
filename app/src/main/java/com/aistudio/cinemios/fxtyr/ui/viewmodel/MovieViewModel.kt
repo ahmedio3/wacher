@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.aistudio.cinemios.fxtyr.data.local.ContinueWatchingItem
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.EpisodeWatchStatusEntity
 import com.aistudio.cinemios.fxtyr.data.local.MovieDatabase
@@ -422,6 +423,211 @@ class MovieViewModel(
     fun clearRecentViewedShows() {
         _recentViewedShows.value = emptyList()
         sharedPrefs.edit().remove("recent_viewed_shows").apply()
+    }
+
+    // Continue watching (local, persisted as JSON)
+    private val _continueWatching = MutableStateFlow<List<ContinueWatchingItem>>(loadContinueWatching())
+    val continueWatching: StateFlow<List<ContinueWatchingItem>> = _continueWatching.asStateFlow()
+
+    private fun loadContinueWatching(): List<ContinueWatchingItem> {
+        val json = sharedPrefs.getString("continue_watching_v1", "[]") ?: "[]"
+        return try {
+            val arr = org.json.JSONArray(json)
+            val list = mutableListOf<ContinueWatchingItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val id = obj.optString("id", "")
+                val parentId = obj.optString("parentId", "")
+                if (id.isEmpty() || parentId.isEmpty()) continue
+                list.add(
+                    ContinueWatchingItem(
+                        id = id,
+                        parentId = parentId,
+                        title = obj.optString("title", ""),
+                        episodeTitle = obj.optString("episodeTitle", ""),
+                        posterPath = obj.optString("posterPath", ""),
+                        imagePath = obj.optString("imagePath", ""),
+                        mediaType = obj.optString("mediaType", "movie"),
+                        season = obj.optInt("season", 0),
+                        episode = obj.optInt("episode", 0),
+                        positionMs = obj.optLong("positionMs", 0L),
+                        durationMs = obj.optLong("durationMs", 0L),
+                        updatedAt = obj.optLong("updatedAt", 0L),
+                        localFilePath = obj.optString("localFilePath", "")
+                    )
+                )
+            }
+            list.filter {
+                val progress = if (it.durationMs > 0L) {
+                    it.positionMs.toFloat() / it.durationMs.toFloat()
+                } else 0f
+                it.durationMs > 0L &&
+                    it.positionMs >= 5_000L &&
+                    it.positionMs <= it.durationMs &&
+                    progress < 0.97f &&
+                    !(it.durationMs - it.positionMs <= 20_000L && progress >= 0.90f)
+            }
+                .sortedByDescending { it.updatedAt }
+                .distinctBy { if (it.mediaType == "tv") "tv:${it.parentId}" else "movie:${it.id}" }
+                .take(12)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun persistContinueWatching(items: List<ContinueWatchingItem>) {
+        try {
+            val arr = org.json.JSONArray()
+            for (item in items) {
+                val obj = org.json.JSONObject()
+                obj.put("id", item.id)
+                obj.put("parentId", item.parentId)
+                obj.put("title", item.title)
+                obj.put("episodeTitle", item.episodeTitle)
+                obj.put("posterPath", item.posterPath)
+                obj.put("imagePath", item.imagePath)
+                obj.put("mediaType", item.mediaType)
+                obj.put("season", item.season)
+                obj.put("episode", item.episode)
+                obj.put("positionMs", item.positionMs)
+                obj.put("durationMs", item.durationMs)
+                obj.put("updatedAt", item.updatedAt)
+                obj.put("localFilePath", item.localFilePath)
+                arr.put(obj)
+            }
+            sharedPrefs.edit().putString("continue_watching_v1", arr.toString()).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Called periodically by the player. Keeps one entry per series (latest episode)
+     * and one per movie, and drops entries that are effectively finished.
+     */
+    fun updatePlaybackProgress(
+        mediaId: String,
+        playbackTitle: String,
+        positionMs: Long,
+        durationMs: Long
+    ) {
+        if (mediaId.isBlank() || positionMs <= 0L || durationMs <= 0L) return
+        if (positionMs < 5_000L) return
+
+        val isTv = mediaId.contains("-s") && mediaId.contains("-e")
+        val parentId = if (isTv) mediaId.substringBefore("-s") else mediaId
+        val parentInt = parentId.toIntOrNull() ?: return
+        val season = if (isTv) {
+            mediaId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 0
+        } else 0
+        val episode = if (isTv) mediaId.substringAfter("-e").toIntOrNull() ?: 0 else 0
+
+        val progress = positionMs.toFloat() / durationMs.toFloat()
+        val current = _continueWatching.value
+        val existing = current.firstOrNull { it.id == mediaId }
+        val seriesEntry = if (isTv) {
+            current.firstOrNull { it.mediaType == "tv" && it.parentId == parentId }
+        } else {
+            existing
+        }
+        val download = downloads.value.firstOrNull { it.id == mediaId && it.status == "completed" }
+
+        // Finished or almost finished: remove it from the shelf
+        val finished = progress >= 0.97f ||
+            (durationMs - positionMs <= 20_000L && progress >= 0.90f)
+        if (finished) {
+            val cleaned = current.filterNot {
+                if (isTv) it.mediaType == "tv" && it.parentId == parentId
+                else it.id == mediaId
+            }
+            if (cleaned.size != current.size) {
+                _continueWatching.value = cleaned
+                persistContinueWatching(cleaned)
+            }
+            return
+        }
+
+        var resolvedTitle = seriesEntry?.title.orEmpty()
+        var poster = seriesEntry?.posterPath.orEmpty()
+        // Never carry an episode still or resume file from a different episode.
+        var image = if (existing?.id == mediaId) existing.imagePath else ""
+        var episodeTitle = if (existing?.id == mediaId) existing.episodeTitle else ""
+
+        if (isTv) {
+            val tvState = _tvDetails.value[parentInt]
+            if (tvState is RequestState.Success) {
+                val tv = tvState.data
+                if (!tv.name.isNullOrBlank()) resolvedTitle = tv.name
+                if (!tv.posterPath.isNullOrBlank()) poster = tv.posterPath
+                if (!tv.backdropPath.isNullOrBlank()) image = tv.backdropPath
+
+                val seasonState = _seasonDetails.value["$parentId-$season"]
+                if (seasonState is RequestState.Success) {
+                    val ep = seasonState.data.episodes?.firstOrNull { it.episodeNumber == episode }
+                    if (ep != null) {
+                        if (!ep.name.isNullOrBlank()) episodeTitle = ep.name
+                        if (!ep.stillPath.isNullOrBlank()) image = ep.stillPath
+                    }
+                }
+            }
+        } else {
+            val movieState = _movieDetails.value[parentInt]
+            if (movieState is RequestState.Success) {
+                val movie = movieState.data
+                if (!movie.title.isNullOrBlank()) resolvedTitle = movie.title
+                if (!movie.posterPath.isNullOrBlank()) poster = movie.posterPath
+                if (!movie.backdropPath.isNullOrBlank()) image = movie.backdropPath
+            }
+        }
+
+        if (resolvedTitle.isBlank()) {
+            resolvedTitle = if (isTv) {
+                playbackTitle.substringBefore(" - ").trim().ifBlank { playbackTitle.trim() }
+            } else {
+                playbackTitle.trim()
+            }
+        }
+        if (poster.isBlank()) {
+            poster = download?.posterPath
+                ?: _recentViewedShows.value.firstOrNull { it.id == parentId }?.posterPath
+                ?: ""
+        }
+        if (image.isBlank()) {
+            image = if (isTv && !download?.stillPath.isNullOrBlank()) {
+                download?.stillPath.orEmpty()
+            } else {
+                download?.posterPath ?: poster
+            }
+        }
+        if (resolvedTitle.isBlank()) return
+
+        val item = ContinueWatchingItem(
+            id = mediaId,
+            parentId = parentId,
+            title = resolvedTitle,
+            episodeTitle = if (isTv) episodeTitle else "",
+            posterPath = poster,
+            imagePath = image,
+            mediaType = if (isTv) "tv" else "movie",
+            season = season,
+            episode = episode,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            updatedAt = System.currentTimeMillis(),
+            localFilePath = download?.localFilePath ?: existing?.localFilePath ?: ""
+        )
+
+        val updated = buildList {
+            add(item)
+            addAll(
+                current.filterNot {
+                    if (isTv) it.mediaType == "tv" && it.parentId == parentId
+                    else it.id == mediaId
+                }
+            )
+        }.sortedByDescending { it.updatedAt }.take(12)
+
+        _continueWatching.value = updated
+        persistContinueWatching(updated)
     }
 
     private var activeSearchJob: Job? = null

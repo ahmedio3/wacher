@@ -361,6 +361,16 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     },
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
+                    },
+                    onResumePlayback = { id, title, localPath ->
+                        val encodedId = Uri.encode(id)
+                        val encodedTitle = Uri.encode(title)
+                        val encodedPath = Uri.encode(localPath)
+                        if (localPath.isNotEmpty()) {
+                            navController.navigate("offline_player/$encodedId/$encodedTitle?localFilePath=$encodedPath")
+                        } else {
+                            navController.navigate("player/$encodedId/$encodedTitle?localFilePath=")
+                        }
                     }
                 )
             }

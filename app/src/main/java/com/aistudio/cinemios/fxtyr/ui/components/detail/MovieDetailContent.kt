@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMediaItem
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMovieDetails
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.utils.isLatinText
@@ -48,12 +49,9 @@ fun MovieDetailContent(
     isPlayerPlaying: Boolean,
     onPlayClick: () -> Unit,
     onDownloadClick: (String, String, String, String) -> Unit,
-    onSubtitleDownloadClick: (String, String, String) -> Unit = { _, _, _ -> },
-    onLongPressWatchlist: () -> Unit = {},
     onNavigateToDetails: (Int, String) -> Unit = { _, _ -> }
 ) {
     val backupUrl = "https://image.tmdb.org/t/p/w780${movie.backdropPath ?: movie.posterPath}"
-    val isFavorited by viewModel.isItemInWatchlist(movie.id.toString()).collectAsState(initial = false)
 
     Column {
         if (!isPlayerPlaying) {
@@ -187,7 +185,7 @@ fun MovieDetailContent(
                 Button(
                     onClick = onPlayClick,
                     modifier = Modifier
-                        .weight(1.5f)
+                        .weight(1f)
                         .height(52.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -201,34 +199,7 @@ fun MovieDetailContent(
                     }
                 }
 
-                // Add Watchlist Action Circle (tap = save/delete, long-press = status picker)
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .combinedClickable(
-                            onClick = {
-                                viewModel.toggleWatchlist(
-                                    id = movie.id.toString(),
-                                    title = movie.title ?: "",
-                                    posterPath = movie.posterPath ?: "",
-                                    mediaType = "movie",
-                                    rating = movie.voteAverage ?: 0.0
-                                )
-                            },
-                            onLongClick = onLongPressWatchlist
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
-                        contentDescription = "قائمة المشاهدة",
-                        tint = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                    )
-                }
-
-                // Download Simulated Action Circle
+                // Offline download action
                 IconButton(
                     onClick = {
                         onDownloadClick(
@@ -244,30 +215,10 @@ fun MovieDetailContent(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowCircleDown,
+                        imageVector = IosIcons.Download,
                         contentDescription = "تحميل المشاهدة أوفلاين",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                // Subtitle download action circle
-                IconButton(
-                    onClick = {
-                        onSubtitleDownloadClick(
-                            movie.id.toString(),
-                            movie.title ?: "",
-                            movie.posterPath ?: ""
-                        )
-                    },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Subtitles,
-                        contentDescription = "تحميل ترجمة",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }

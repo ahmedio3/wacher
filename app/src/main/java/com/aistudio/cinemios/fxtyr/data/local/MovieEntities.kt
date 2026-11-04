@@ -154,3 +154,23 @@ data class RecentViewedItem(
     val isMovieBox: Boolean = false,
     val viewedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * One resumable entry for the "Continue Watching" shelf.
+ * Movies use the TMDB id as [id]; series use the episode id (tmdbId-sX-eY).
+ */
+data class ContinueWatchingItem(
+    val id: String,
+    val parentId: String,
+    val title: String,
+    val episodeTitle: String = "",
+    val posterPath: String = "",
+    val imagePath: String = "",
+    val mediaType: String = "movie",
+    val season: Int = 0,
+    val episode: Int = 0,
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L,
+    val updatedAt: Long = 0L,
+    val localFilePath: String = ""
+)

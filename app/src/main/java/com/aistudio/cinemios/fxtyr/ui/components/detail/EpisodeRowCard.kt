@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbEpisode
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.utils.isLatinText
 
@@ -117,10 +118,14 @@ fun EpisodeRowCard(
             contentPadding = PaddingValues(0.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.primary
+                contentColor = MaterialTheme.colorScheme.onBackground
             )
         ) {
-            Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل حلقة أوفلاين", modifier = Modifier.size(18.dp))
+            Icon(
+                imageVector = IosIcons.Download,
+                contentDescription = "تحميل حلقة أوفلاين",
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

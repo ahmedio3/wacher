@@ -240,6 +240,8 @@ fun OfflinePlayerScreen(
     var activeId by remember { mutableStateOf(mediaId) }
     var activeTitle by remember { mutableStateOf(title) }
     var activeLocalFilePath by remember { mutableStateOf(localFilePath) }
+    val latestActiveId by rememberUpdatedState(activeId)
+    val latestActiveTitle by rememberUpdatedState(activeTitle)
 
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
@@ -625,14 +627,24 @@ fun OfflinePlayerScreen(
 
     // High frequency position & state tracker
     LaunchedEffect(activeId) {
+        var lastReportedPosition = 0L
         while (true) {
             currentPosition = exoPlayer.currentPosition
             val dur = exoPlayer.duration
             if (dur > 0) totalDuration = dur
             isPlaying = exoPlayer.isPlaying
             isBuffering = (exoPlayer.playbackState == androidx.media3.common.Player.STATE_BUFFERING)
-            if (currentPosition > 0 && currentPosition % 5000 < 50) {
+            if (currentPosition > 0 &&
+                kotlin.math.abs(currentPosition - lastReportedPosition) >= 5_000L
+            ) {
+                lastReportedPosition = currentPosition
                 prefs.edit().putLong("pos_$activeId", currentPosition).apply()
+                viewModel.updatePlaybackProgress(
+                    mediaId = activeId,
+                    playbackTitle = activeTitle,
+                    positionMs = currentPosition,
+                    durationMs = totalDuration
+                )
             }
             delay(50)
         }
@@ -645,7 +657,17 @@ fun OfflinePlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+            val finalPosition = exoPlayer.currentPosition
+            val finalDuration = exoPlayer.duration
+            prefs.edit().putLong("pos_$latestActiveId", finalPosition).apply()
+            if (finalPosition > 0L && finalDuration > 0L) {
+                viewModel.updatePlaybackProgress(
+                    mediaId = latestActiveId,
+                    playbackTitle = latestActiveTitle,
+                    positionMs = finalPosition,
+                    durationMs = finalDuration
+                )
+            }
             exoPlayer.release()
         }
     }
@@ -1703,6 +1725,12 @@ fun OfflinePlayerScreen(
                                         IconButton(
                                             onClick = {
                                                 prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                                                viewModel.updatePlaybackProgress(
+                                                    mediaId = activeId,
+                                                    playbackTitle = activeTitle,
+                                                    positionMs = exoPlayer.currentPosition,
+                                                    durationMs = exoPlayer.duration
+                                                )
                                                 activeId = nextEp.id
                                                 activeTitle = nextEp.title
                                                 activeLocalFilePath = nextEp.localFilePath
@@ -1757,6 +1785,12 @@ fun OfflinePlayerScreen(
                 onSelectSeason = { s -> selectedSeason = s },
                 onSelectEpisode = { epItem ->
                     prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                    viewModel.updatePlaybackProgress(
+                        mediaId = activeId,
+                        playbackTitle = activeTitle,
+                        positionMs = exoPlayer.currentPosition,
+                        durationMs = exoPlayer.duration
+                    )
                     activeId = epItem.id
                     val baseSeriesTitle = activeTitle.substringBefore(" - ")
                     activeTitle = if (epItem.title.contains("الحلقة")) {
@@ -2497,6 +2531,12 @@ fun OfflinePlayerScreen(
                                                 .background(if (isPlayingThis) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                                 .clickable {
                                                     prefs.edit().putLong("pos_$activeId", exoPlayer.currentPosition).apply()
+                                                    viewModel.updatePlaybackProgress(
+                                                        mediaId = activeId,
+                                                        playbackTitle = activeTitle,
+                                                        positionMs = exoPlayer.currentPosition,
+                                                        durationMs = exoPlayer.duration
+                                                    )
                                                     activeId = ep.id
                                                     activeTitle = ep.title
                                                     activeLocalFilePath = ep.localFilePath

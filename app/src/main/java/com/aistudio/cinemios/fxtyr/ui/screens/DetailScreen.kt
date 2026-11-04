@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.*
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
+import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
+import com.aistudio.cinemios.fxtyr.ui.components.shareShow
 import com.aistudio.cinemios.fxtyr.ui.components.detail.*
 import com.aistudio.cinemios.fxtyr.ui.components.VideoPlayerView
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
@@ -91,6 +94,18 @@ fun DetailScreen(
     var showStatusPicker by remember { mutableStateOf(false) }
     var pendingWatchlist by remember { mutableStateOf<PendingWatchlist?>(null) }
 
+    // Share sheet state
+    var showShareSheet by remember { mutableStateOf(false) }
+    var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
+
+    // Selected season is hoisted so the floating subtitle action targets the same season
+    val loadedTvDetails = (tvDetailsMap[mediaId] as? RequestState.Success)?.data
+    var selectedTvSeason by remember(mediaId, loadedTvDetails?.id) {
+        mutableIntStateOf(
+            loadedTvDetails?.seasons?.firstOrNull { it.seasonNumber > 0 }?.seasonNumber ?: 1
+        )
+    }
+
     // Quality chooser states
     var showMovieBoxSheet by remember { mutableStateOf(false) }
     var pendingDownloadId by remember { mutableStateOf("") }
@@ -103,6 +118,7 @@ fun DetailScreen(
     var pendingDownloadYear by remember { mutableStateOf<Int?>(null) }
 
     val context = LocalContext.current.applicationContext as android.app.Application
+    val shareContext = LocalContext.current
     val movieBoxViewModel: MovieBoxViewModel = viewModel(factory = ViewModelFactory(context))
 
     // Init fetch
@@ -136,6 +152,74 @@ fun DetailScreen(
         }
     }
 
+    // Single source of truth for the floating capsule actions
+    val watchlistTarget: PendingWatchlist? = remember(
+        mediaType,
+        movieDetailsMap[mediaId],
+        tvDetailsMap[mediaId]
+    ) {
+        if (mediaType == "movie") {
+            val state = movieDetailsMap[mediaId]
+            if (state is RequestState.Success) {
+                val movie = state.data
+                PendingWatchlist(
+                    id = movie.id.toString(),
+                    title = movie.title ?: "",
+                    posterPath = movie.posterPath ?: "",
+                    mediaType = "movie",
+                    rating = movie.voteAverage ?: 0.0
+                )
+            } else null
+        } else {
+            val state = tvDetailsMap[mediaId]
+            if (state is RequestState.Success) {
+                val tv = state.data
+                PendingWatchlist(
+                    id = tv.id.toString(),
+                    title = tv.name ?: "",
+                    posterPath = tv.posterPath ?: "",
+                    mediaType = "tv",
+                    rating = tv.voteAverage ?: 0.0
+                )
+            } else null
+        }
+    }
+
+    val shareTarget: PendingShare? = watchlistTarget?.let {
+        PendingShare(title = it.title, id = it.id, mediaType = it.mediaType)
+    }
+
+    val favoriteFlow = remember(mediaId) { viewModel.isItemInWatchlist(mediaId.toString()) }
+    val isFavorited by favoriteFlow.collectAsState(initial = false)
+
+    val openSubtitleSheet: () -> Unit = {
+        if (mediaType == "movie") {
+            val state = movieDetailsMap[mediaId]
+            if (state is RequestState.Success) {
+                val movie = state.data
+                subtitleSheetTmdbId = movie.id.toString()
+                subtitleSheetIsTv = false
+                subtitleSheetSeason = 0
+                subtitleSheetEpisode = 0
+                subtitleSheetTitle = movie.title ?: ""
+                subtitleSheetPoster = movie.posterPath ?: ""
+                showSubtitleSheet = true
+            }
+        } else {
+            val state = tvDetailsMap[mediaId]
+            if (state is RequestState.Success) {
+                val tv = state.data
+                subtitleSheetTmdbId = tv.id.toString()
+                subtitleSheetIsTv = true
+                subtitleSheetSeason = selectedTvSeason
+                subtitleSheetEpisode = 1
+                subtitleSheetTitle = tv.name ?: ""
+                subtitleSheetPoster = tv.posterPath ?: ""
+                showSubtitleSheet = true
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             topBar = { },
@@ -146,7 +230,7 @@ fun DetailScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Minimal floating back button over the backdrop
+                // Floating back button — same refined border as the seePlus top bar
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -160,11 +244,77 @@ fun DetailScreen(
                             .size(40.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                shape = CircleShape
+                            )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+
+                // Floating action capsule: share / subtitles / favorite
+                if (watchlistTarget != null && shareTarget != null) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .zIndex(1f)
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(50)
+                            )
+                            .padding(horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DetailCapsuleAction(
+                            icon = IosIcons.Share,
+                            contentDescription = "مشاركة العرض",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            onClick = {
+                                shareTarget?.let {
+                                    pendingShare = it
+                                    showShareSheet = true
+                                }
+                            }
+                        )
+                        DetailCapsuleAction(
+                            icon = Icons.Default.Subtitles,
+                            contentDescription = "تحميل ترجمة",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            onClick = openSubtitleSheet
+                        )
+                        DetailCapsuleAction(
+                            icon = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                            contentDescription = "قائمة المشاهدة",
+                            tint = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                            onClick = {
+                                watchlistTarget?.let {
+                                    viewModel.toggleWatchlist(
+                                        id = it.id,
+                                        title = it.title,
+                                        posterPath = it.posterPath,
+                                        mediaType = it.mediaType,
+                                        rating = it.rating
+                                    )
+                                }
+                            },
+                            onLongClick = {
+                                watchlistTarget?.let {
+                                    pendingWatchlist = it
+                                    showStatusPicker = true
+                                }
+                            }
                         )
                     }
                 }
@@ -209,25 +359,6 @@ fun DetailScreen(
                                             pendingDownloadYear = movie.releaseDate?.take(4)?.toIntOrNull()
                                             showMovieBoxSheet = true
                                         },
-                                        onSubtitleDownloadClick = { id, title, poster ->
-                                            subtitleSheetTmdbId = id
-                                            subtitleSheetIsTv = false
-                                            subtitleSheetSeason = 0
-                                            subtitleSheetEpisode = 0
-                                            subtitleSheetTitle = title
-                                            subtitleSheetPoster = poster
-                                            showSubtitleSheet = true
-                                        },
-                                        onLongPressWatchlist = {
-                                            pendingWatchlist = PendingWatchlist(
-                                                id = movie.id.toString(),
-                                                title = movie.title ?: "",
-                                                posterPath = movie.posterPath ?: "",
-                                                mediaType = "movie",
-                                                rating = movie.voteAverage ?: 0.0
-                                            )
-                                            showStatusPicker = true
-                                        },
                                         onNavigateToDetails = { id, type -> onNavigateToDetails(id, type) }
                                     )
                             }
@@ -254,6 +385,8 @@ fun DetailScreen(
                                         recommendations = tvRecommendationsList,
                                         viewModel = viewModel,
                                         seasonDetailsMap = seasonDetailsMap,
+                                        selectedSeasonNumber = selectedTvSeason,
+                                        onSeasonSelected = { selectedTvSeason = it },
                                         isPlayerPlaying = false,
                                         onPlayEpisode = { s, e ->
                                             val activeId = "${tv.id}-s$s-e$e"
@@ -291,16 +424,6 @@ fun DetailScreen(
                                             subtitleSheetTitle = title
                                             subtitleSheetPoster = poster
                                             showSubtitleSheet = true
-                                        },
-                                        onLongPressWatchlist = {
-                                            pendingWatchlist = PendingWatchlist(
-                                                id = tv.id.toString(),
-                                                title = tv.name ?: "",
-                                                posterPath = tv.posterPath ?: "",
-                                                mediaType = "tv",
-                                                rating = tv.voteAverage ?: 0.0
-                                            )
-                                            showStatusPicker = true
                                         },
                                         onNavigateToDetails = { id, type -> onNavigateToDetails(id, type) }
                                     )
@@ -429,6 +552,49 @@ fun DetailScreen(
                 }
             }
         }
+
+        // SHARE SHEET (same feature used by long-press on show cards)
+        pendingShare?.let { target ->
+            ShowShareSheet(
+                visible = showShareSheet,
+                title = target.title,
+                id = target.id,
+                mediaType = target.mediaType,
+                onDismiss = { showShareSheet = false },
+                onNativeShare = {
+                    shareShow(shareContext, target.title, target.id, target.mediaType)
+                    showShareSheet = false
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DetailCapsuleAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
