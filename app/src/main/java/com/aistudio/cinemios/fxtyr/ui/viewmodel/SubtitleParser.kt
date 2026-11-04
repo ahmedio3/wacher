@@ -1,7 +1,11 @@
 package com.aistudio.cinemios.fxtyr.ui.viewmodel
 
 import java.io.File
-import java.util.regex.Pattern
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
 
 data class SubtitleLine(
     val startTime: Long,
@@ -9,175 +13,302 @@ data class SubtitleLine(
     val text: String
 )
 
+/**
+ * Tolerant subtitle parser for SRT, WebVTT and ASS/SSA.
+ *
+ * Design goals:
+ *  - Never fail because of a BOM, CR-only line endings, cue settings
+ *    (VTT `align:start position:10%`), missing cue indexes, 1-digit hours,
+ *    dot-separated milliseconds, or uppercase extensions.
+ *  - Decode Arabic legacy encodings (Windows-1256) instead of producing
+ *    mojibake through a blind UTF-8 read.
+ *  - Keep the SRT/VTT millisecond math unchanged (it was already correct).
+ *  - Return an empty list for unsupported/corrupt input rather than throwing.
+ */
 object SubtitleParser {
-    fun parseBlock(file: File): List<SubtitleLine> {
-        val lines = mutableListOf<SubtitleLine>()
-        if (!file.exists()) return lines
 
-        val content = file.readText()
-        if (file.name.endsWith(".srt")) {
-            lines.addAll(parseSrt(content))
-        } else if (file.name.endsWith(".vtt")) {
-            lines.addAll(parseVtt(content))
-        } else if (file.name.endsWith(".ass") || file.name.endsWith(".ssa")) {
-            lines.addAll(parseAss(content))
+    private enum class Format { SRT, VTT, ASS, UNKNOWN }
+
+    private val SRT_TIME = Regex("""(\d{1,3}):(\d{2}):(\d{2})[,.](\d{1,3})""")
+    private val VTT_TIME = Regex("""(?:(\d{1,3}):)?(\d{2}):(\d{2})[.,](\d{1,3})""")
+    private val ASS_TIME = Regex("""(\d+):(\d{2}):(\d{2})[.:](\d{1,3})""")
+    private val HTML_TAG = Regex("""<[^>]*>""")
+    private val ASS_TAG = Regex("""\{[^}]*}""")
+    private val BLANK_LINES = Regex("""\n{2,}""")
+
+    fun parseBlock(file: File): List<SubtitleLine> {
+        if (!file.exists() || file.length() == 0L) return emptyList()
+        return try {
+            val content = decode(file.readBytes())
+            when (detectFormat(file.name, content)) {
+                Format.SRT -> parseSrt(content)
+                Format.VTT -> parseVtt(content)
+                Format.ASS -> parseAss(content)
+                Format.UNKNOWN -> emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
-        return lines
     }
 
-    private fun parseSrt(content: String): List<SubtitleLine> {
+    private fun detectFormat(fileName: String, content: String): Format {
+        val lowerName = fileName.lowercase()
+        when {
+            lowerName.endsWith(".srt") -> return Format.SRT
+            lowerName.endsWith(".vtt") -> return Format.VTT
+            lowerName.endsWith(".ass") || lowerName.endsWith(".ssa") -> return Format.ASS
+        }
+
+        val head = content.take(4096)
+        return when {
+            head.contains("[Events]", ignoreCase = true) ||
+                head.contains("Dialogue:", ignoreCase = true) -> Format.ASS
+            head.trimStart().startsWith("WEBVTT", ignoreCase = true) -> Format.VTT
+            head.contains("-->") -> Format.SRT
+            else -> Format.UNKNOWN
+        }
+    }
+
+    /**
+     * Decode bytes using BOM first, then strict UTF-8, then Windows-1256
+     * (the common legacy Arabic encoding), with UTF-8 as a last resort.
+     */
+    private fun decode(bytes: ByteArray): String {
+        if (bytes.size >= 3 &&
+            bytes[0] == 0xEF.toByte() &&
+            bytes[1] == 0xBB.toByte() &&
+            bytes[2] == 0xBF.toByte()
+        ) {
+            return String(bytes, 3, bytes.size - 3, StandardCharsets.UTF_8)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+            return String(bytes, 2, bytes.size - 2, StandardCharsets.UTF_16LE)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+            return String(bytes, 2, bytes.size - 2, StandardCharsets.UTF_16BE)
+        }
+
+        // UTF-16 without BOM: look for the NUL-byte pattern in the first 1 KiB.
+        val sample = bytes.take(minOf(bytes.size, 1024))
+        val nulOdd = sample.indices.count { it % 2 == 1 && sample[it] == 0.toByte() }
+        val nulEven = sample.indices.count { it % 2 == 0 && sample[it] == 0.toByte() }
+        if (sample.size >= 8 && nulOdd > sample.size / 4) {
+            return String(bytes, StandardCharsets.UTF_16LE)
+        }
+        if (sample.size >= 8 && nulEven > sample.size / 4) {
+            return String(bytes, StandardCharsets.UTF_16BE)
+        }
+
+        try {
+            val decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+            return decoder.decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (_: CharacterCodingException) {
+            // Fall through to legacy Arabic.
+        }
+
+        return try {
+            String(bytes, Charset.forName("windows-1256"))
+        } catch (_: Exception) {
+            String(bytes, StandardCharsets.UTF_8)
+        }
+    }
+
+    private fun normalize(raw: String): String =
+        raw.replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .removePrefix("\uFEFF")
+
+    private fun parseSrt(raw: String): List<SubtitleLine> {
         val result = mutableListOf<SubtitleLine>()
-        val blocks = content.split("\r\n\r\n", "\n\n")
-        val timePattern = Pattern.compile("(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})\\s*-->\\s*(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})")
-        
-        for (block in blocks) {
+        for (block in normalize(raw).split(BLANK_LINES)) {
             val lines = block.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            if (lines.size >= 3) {
-                val timeMatcher = timePattern.matcher(lines[1])
-                if (timeMatcher.matches()) {
-                    val start = parseTime(timeMatcher.group(1)!!, timeMatcher.group(2)!!, timeMatcher.group(3)!!, timeMatcher.group(4)!!)
-                    val end = parseTime(timeMatcher.group(5)!!, timeMatcher.group(6)!!, timeMatcher.group(7)!!, timeMatcher.group(8)!!)
-                    val text = lines.subList(2, lines.size).joinToString("\n").replace(Regex("<[^>]*>"), "")
-                    result.add(SubtitleLine(start, end, text))
-                }
-            }
+            if (lines.isEmpty()) continue
+
+            val timeIndex = lines.indexOfFirst { it.contains("-->") }
+            if (timeIndex == -1) continue
+
+            val matches = SRT_TIME.findAll(lines[timeIndex]).toList()
+            if (matches.size < 2) continue
+
+            val text = lines.drop(timeIndex + 1).joinToString("\n")
+            if (text.isBlank()) continue
+
+            result.add(
+                SubtitleLine(
+                    startTime = parseTime(matches[0]),
+                    endTime = parseTime(matches[1]),
+                    text = cleanText(text)
+                )
+            )
         }
         return result
     }
 
-    private fun parseVtt(content: String): List<SubtitleLine> {
+    private fun parseVtt(raw: String): List<SubtitleLine> {
         val result = mutableListOf<SubtitleLine>()
-        val blocks = content.split("\r\n\r\n", "\n\n")
-        // VTT time format: 00:00:00.000 or 00:00.000
-        val timePattern = Pattern.compile("(?:(\\d{2}):)?(\\d{2}):(\\d{2})\\.(\\d{3})\\s*-->\\s*(?:(\\d{2}):)?(\\d{2}):(\\d{2})\\.(\\d{3})")
-        
-        for (block in blocks) {
-            if (block.startsWith("WEBVTT")) continue
-            val lines = block.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            var timeLineIndex = -1
-            for (i in lines.indices) {
-                if (lines[i].contains("-->")) {
-                    timeLineIndex = i
-                    break
-                }
+        for (block in normalize(raw).split(BLANK_LINES)) {
+            val trimmedBlock = block.trim()
+            if (trimmedBlock.isEmpty()) continue
+
+            // VTT metadata blocks are not cues.
+            val upper = trimmedBlock.uppercase()
+            if (upper.startsWith("WEBVTT") ||
+                upper.startsWith("NOTE") ||
+                upper.startsWith("STYLE") ||
+                upper.startsWith("REGION")
+            ) {
+                continue
             }
-            if (timeLineIndex != -1 && timeLineIndex + 1 < lines.size) {
-                val timeMatcher = timePattern.matcher(lines[timeLineIndex])
-                if (timeMatcher.matches()) {
-                    val h1 = timeMatcher.group(1) ?: "00"
-                    val h2 = timeMatcher.group(5) ?: "00"
-                    val start = parseTime(h1, timeMatcher.group(2)!!, timeMatcher.group(3)!!, timeMatcher.group(4)!!)
-                    val end = parseTime(h2, timeMatcher.group(6)!!, timeMatcher.group(7)!!, timeMatcher.group(8)!!)
-                    val text = lines.subList(timeLineIndex + 1, lines.size).joinToString("\n")
-                        .replace(Regex("<[^>]*>"), "")
-                    result.add(SubtitleLine(start, end, text))
-                }
-            }
+
+            val lines = trimmedBlock.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val timeIndex = lines.indexOfFirst { it.contains("-->") }
+            if (timeIndex == -1) continue
+
+            // Use findAll so trailing cue settings are ignored.
+            val matches = VTT_TIME.findAll(lines[timeIndex]).toList()
+            if (matches.size < 2) continue
+
+            val text = lines.drop(timeIndex + 1).joinToString("\n")
+            if (text.isBlank()) continue
+
+            result.add(
+                SubtitleLine(
+                    startTime = parseVttTime(matches[0]),
+                    endTime = parseVttTime(matches[1]),
+                    text = cleanText(text)
+                )
+            )
         }
         return result
     }
 
     /**
-     * Parse ASS/SSA (SubStation Alpha) subtitle format.
-     * Extracts Dialogue lines from the [Events] section.
-     * ASS time format: H:MM:SS.CC (centiseconds)
-     * Dialogue format: Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+     * Parse ASS/SSA.
+     *
+     * The previous implementation split the whole `Dialogue:` line, which
+     * shifted every field by one. Here we strip `Dialogue:` first and use the
+     * `Format:` column order directly. Splitting with a limit equal to the
+     * column count preserves commas inside the Text column.
      */
-    private fun parseAss(content: String): List<SubtitleLine> {
+    private fun parseAss(raw: String): List<SubtitleLine> {
+        val lines = normalize(raw).lines()
         val result = mutableListOf<SubtitleLine>()
-        val lines = content.lines()
 
-        // Find the [Events] section and read the Format line to determine column indices
         var inEvents = false
-        var dialogueStartIdx = -1
-        var dialogueEndIdx = -1
-        var dialogueTextIdx = -1
+        var formatCols: List<String>? = null
 
-        for (i in lines.indices) {
-            val trimmed = lines[i].trim()
-            if (trimmed.equals("[events]", ignoreCase = true)) {
-                inEvents = true
-                continue
-            }
-            if (inEvents) {
-                if (trimmed.startsWith("[")) break // Next section
-                if (trimmed.startsWith("format:", ignoreCase = true)) {
-                    val cols = trimmed.substringAfter("format:", "").split(",").map { it.trim().lowercase() }
-                    dialogueStartIdx = cols.indexOf("start")
-                    dialogueEndIdx = cols.indexOf("end")
-                    dialogueTextIdx = cols.indexOf("text")
-                    break
-                }
-            }
-        }
-
-        if (dialogueStartIdx < 0 || dialogueEndIdx < 0 || dialogueTextIdx < 0) return result
-
-        // ASS time regex: H:MM:SS.CC
-        val assTimePattern = Pattern.compile(
-            "(\\d+):(\\d{2}):(\\d{2})\\.(\\d{2})"
-        )
-
-        // Now parse all Dialogue lines
-        inEvents = false
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.equals("[events]", ignoreCase = true)) {
+            if (trimmed.equals("[Events]", ignoreCase = true)) {
                 inEvents = true
                 continue
             }
             if (!inEvents) continue
-            if (trimmed.startsWith("[")) break // Next section
+            if (trimmed.startsWith("[") && !trimmed.equals("[Events]", ignoreCase = true)) break
 
-            if (trimmed.startsWith("dialogue:", ignoreCase = true)) {
-                val parts = trimmed.split(",", limit = 10)
-                if (parts.size < 10) continue
-
-                val startStr = parts[1 + dialogueStartIdx].trim()
-                val endStr = parts[1 + dialogueEndIdx].trim()
-                var text = parts.drop(1 + dialogueTextIdx).joinToString(",").trim()
-
-                // Strip ASS override tags like {\...}
-                text = text.replace(Regex("\\{[^}]*}"), "")
-                // Strip line breaks and leading/trailing spaces
-                text = text.replace("\\N", "\n").trim()
-                if (text.isEmpty()) continue
-
-                val startMatcher = assTimePattern.matcher(startStr)
-                val endMatcher = assTimePattern.matcher(endStr)
-                if (startMatcher.find() && endMatcher.find()) {
-                    val start = parseAssTime(
-                        startMatcher.group(1) ?: "0",
-                        startMatcher.group(2) ?: "00",
-                        startMatcher.group(3) ?: "00",
-                        startMatcher.group(4) ?: "00"
-                    )
-                    val end = parseAssTime(
-                        endMatcher.group(1) ?: "0",
-                        endMatcher.group(2) ?: "00",
-                        endMatcher.group(3) ?: "00",
-                        endMatcher.group(4) ?: "00"
-                    )
-                    result.add(SubtitleLine(start, end, text))
-                }
+            if (trimmed.startsWith("Format:", ignoreCase = true)) {
+                formatCols = trimmed.substringAfter(":", "")
+                    .split(",")
+                    .map { it.trim().lowercase() }
+                break
             }
         }
 
+        if (formatCols.isNullOrEmpty()) return result
+
+        val startIdx = formatCols.indexOf("start")
+        val endIdx = formatCols.indexOf("end")
+        val textIdx = formatCols.indexOf("text")
+        if (startIdx < 0 || endIdx < 0 || textIdx < 0) return result
+
+        val requiredIndex = maxOf(startIdx, endIdx, textIdx)
+        inEvents = false
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.equals("[Events]", ignoreCase = true)) {
+                inEvents = true
+                continue
+            }
+            if (!inEvents) continue
+            if (trimmed.startsWith("[") && !trimmed.equals("[Events]", ignoreCase = true)) break
+            if (!trimmed.startsWith("Dialogue:", ignoreCase = true)) continue
+
+            val payload = trimmed.substringAfter(":", "").trim()
+            if (payload.isEmpty()) continue
+
+            // The Text column is last; preserving commas is mandatory.
+            val parts = payload.split(",", limit = maxOf(formatCols.size, textIdx + 1))
+            if (parts.size <= requiredIndex) continue
+
+            val startMatch = ASS_TIME.find(parts[startIdx].trim()) ?: continue
+            val endMatch = ASS_TIME.find(parts[endIdx].trim()) ?: continue
+
+            var text = parts.drop(textIdx).joinToString(",").trim()
+            text = text.replace(ASS_TAG, "")
+                .replace("\\N", "\n")
+                .replace("\\n", "\n")
+                .replace("\\h", " ")
+                .trim()
+
+            if (text.isEmpty()) continue
+
+            result.add(
+                SubtitleLine(
+                    startTime = parseAssTime(startMatch),
+                    endTime = parseAssTime(endMatch),
+                    text = text
+                )
+            )
+        }
         return result
     }
 
-    /**
-     * Parse ASS time format: H:MM:SS.CC (centiseconds)
-     * Returns milliseconds.
-     */
-    private fun parseAssTime(h: String, m: String, s: String, cs: String): Long {
-        return (h.toLong() * 3600000L) +
-                (m.toLong() * 60000L) +
-                (s.toLong() * 1000L) +
-                (cs.toLong() * 10L)
+    private fun parseTime(match: MatchResult): Long {
+        val h = match.groupValues[1].toLongOrNull() ?: 0L
+        val m = match.groupValues[2].toLongOrNull() ?: 0L
+        val s = match.groupValues[3].toLongOrNull() ?: 0L
+        val ms = fractionToMillis(match.groupValues[4])
+        return h * 3_600_000L + m * 60_000L + s * 1_000L + ms
     }
 
-    private fun parseTime(h: String, m: String, s: String, ms: String): Long {
-        return (h.toLong() * 3600000) + (m.toLong() * 60000) + (s.toLong() * 1000) + ms.toLong()
+    private fun parseVttTime(match: MatchResult): Long {
+        val h = match.groupValues[1].toLongOrNull() ?: 0L
+        val m = match.groupValues[2].toLongOrNull() ?: 0L
+        val s = match.groupValues[3].toLongOrNull() ?: 0L
+        val ms = fractionToMillis(match.groupValues[4])
+        return h * 3_600_000L + m * 60_000L + s * 1_000L + ms
     }
+
+    private fun parseAssTime(match: MatchResult): Long {
+        val h = match.groupValues[1].toLongOrNull() ?: 0L
+        val m = match.groupValues[2].toLongOrNull() ?: 0L
+        val s = match.groupValues[3].toLongOrNull() ?: 0L
+        // ASS normally uses centiseconds (2 digits); accept milliseconds too.
+        val fraction = match.groupValues[4]
+        val ms = when (fraction.length) {
+            1 -> (fraction.toLongOrNull() ?: 0L) * 100L
+            2 -> (fraction.toLongOrNull() ?: 0L) * 10L
+            else -> fraction.toLongOrNull() ?: 0L
+        }
+        return h * 3_600_000L + m * 60_000L + s * 1_000L + ms
+    }
+
+    private fun fractionToMillis(fraction: String): Long = when (fraction.length) {
+        1 -> (fraction.toLongOrNull() ?: 0L) * 100L
+        2 -> (fraction.toLongOrNull() ?: 0L) * 10L
+        else -> fraction.toLongOrNull() ?: 0L
+    }
+
+    private fun cleanText(text: String): String =
+        text.replace(HTML_TAG, "")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&lrm;", "")
+            .replace("&rlm;", "")
+            .trim()
 }
