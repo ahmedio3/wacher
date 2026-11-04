@@ -559,14 +559,16 @@ class MovieViewModel(
                 if (!tv.name.isNullOrBlank()) resolvedTitle = tv.name
                 if (!tv.posterPath.isNullOrBlank()) poster = tv.posterPath
                 if (!tv.backdropPath.isNullOrBlank()) image = tv.backdropPath
+            }
 
-                val seasonState = _seasonDetails.value["$parentId-$season"]
-                if (seasonState is RequestState.Success) {
-                    val ep = seasonState.data.episodes?.firstOrNull { it.episodeNumber == episode }
-                    if (ep != null) {
-                        if (!ep.name.isNullOrBlank()) episodeTitle = ep.name
-                        if (!ep.stillPath.isNullOrBlank()) image = ep.stillPath
-                    }
+            // Season details are also fetched by the player, so use them even when
+            // the user opened the episode directly from Downloads.
+            val seasonState = _seasonDetails.value["$parentId-$season"]
+            if (seasonState is RequestState.Success) {
+                val ep = seasonState.data.episodes?.firstOrNull { it.episodeNumber == episode }
+                if (ep != null) {
+                    if (!ep.name.isNullOrBlank()) episodeTitle = ep.name
+                    if (!ep.stillPath.isNullOrBlank()) image = ep.stillPath
                 }
             }
         } else {
