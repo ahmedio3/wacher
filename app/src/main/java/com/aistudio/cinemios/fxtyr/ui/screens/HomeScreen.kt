@@ -22,6 +22,7 @@ import com.aistudio.cinemios.fxtyr.ui.components.shareShow
 import com.aistudio.cinemios.fxtyr.ui.components.home.*
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
+import com.google.firebase.auth.FirebaseAuth
 
 data class PendingShare(val title: String, val id: String, val mediaType: String)
 
@@ -32,6 +33,7 @@ fun HomeScreen(
     onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToWatchlist: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onResumePlayback: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -41,7 +43,19 @@ fun HomeScreen(
     val trendingMoviesState by viewModel.trendingMovies.collectAsState()
     val trendingTvState by viewModel.trendingTv.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
+    val subscription by viewModel.subscriptionState.collectAsState()
     val context = LocalContext.current
+
+    var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+
+    DisposableEffect(Unit) {
+        val auth = FirebaseAuth.getInstance()
+        val listener = FirebaseAuth.AuthStateListener { authState ->
+            user = authState.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
 
     var showShareSheet by remember { mutableStateOf(false) }
     var pendingShare by remember { mutableStateOf<PendingShare?>(null) }
@@ -55,7 +69,11 @@ fun HomeScreen(
             .verticalScroll(scrollState)
     ) {
         // 1. Sleek Top Header
-        HomeHeader()
+        HomeHeader(
+            photoUrl = user?.photoUrl?.toString(),
+            isSubscribed = user != null && subscription.isActive,
+            onAvatarClick = onNavigateToProfile
+        )
 
         Spacer(modifier = Modifier.height(4.dp))
 

@@ -1,6 +1,8 @@
 package com.aistudio.cinemios.fxtyr.ui.components.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,8 +31,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -45,6 +53,10 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMediaItem
 import com.aistudio.cinemios.fxtyr.ui.components.rememberPressState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+private const val FEATURED_AUTO_ADVANCE_MS = 6000
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -58,6 +70,35 @@ fun FeaturedCarousel(
         initialPage = 0,
         pageCount = { items.size }
     )
+
+    val indicatorProgress = remember { Animatable(0f) }
+    val autoAdvanceScope = rememberCoroutineScope()
+    var autoAdvanceJob by remember { mutableStateOf<Job?>(null) }
+
+    LaunchedEffect(items.size, pagerState.currentPage, pagerState.isScrollInProgress) {
+        if (items.size <= 1 || pagerState.isScrollInProgress) return@LaunchedEffect
+
+        indicatorProgress.snapTo(0f)
+        indicatorProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = FEATURED_AUTO_ADVANCE_MS,
+                easing = LinearEasing
+            )
+        )
+
+        if (!pagerState.isScrollInProgress) {
+            autoAdvanceJob?.cancel()
+            autoAdvanceJob = autoAdvanceScope.launch {
+                val nextPage = (pagerState.currentPage + 1) % items.size
+                pagerState.animateScrollToPage(nextPage)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { autoAdvanceJob?.cancel() }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -103,12 +144,16 @@ fun FeaturedCarousel(
                 repeat(items.size) { index ->
                     val isSelected = pagerState.currentPage == index
                     val width by animateDpAsState(
-                        targetValue = if (isSelected) 22.dp else 6.dp,
+                        targetValue = if (isSelected) 26.dp else 6.dp,
                         animationSpec = tween(300),
                         label = "indicator_width"
                     )
-                    val color by animateColorAsState(
-                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                    val trackColor by animateColorAsState(
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                        },
                         animationSpec = tween(300),
                         label = "indicator_color"
                     )
@@ -118,8 +163,17 @@ fun FeaturedCarousel(
                             .height(6.dp)
                             .width(width)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(color)
-                    )
+                            .background(trackColor)
+                    ) {
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(indicatorProgress.value)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -245,22 +299,6 @@ fun FeaturedBackdropCard(
                         text = year,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                         color = Color.White.copy(alpha = 0.75f)
-                    )
-                }
-
-                // Media type badge
-                val isTv = item.firstAirDate != null || item.name != null
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (isTv) "مسلسل" else "فيلم",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.9f)
                     )
                 }
             }

@@ -362,6 +362,9 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     onNavigateToWatchlist = {
                         navController.navigate("watchlist")
                     },
+                    onNavigateToProfile = {
+                        // Reserved for the upcoming profile screen.
+                    },
                     onResumePlayback = { id, title, localPath ->
                         val encodedId = Uri.encode(id)
                         val encodedTitle = Uri.encode(title)

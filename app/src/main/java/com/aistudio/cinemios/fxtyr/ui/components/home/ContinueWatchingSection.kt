@@ -167,14 +167,34 @@ private fun ContinueWatchingCard(
 
         Spacer(modifier = Modifier.height(7.dp))
 
-        Text(
-            text = item.title,
+        Row(
             modifier = Modifier.padding(horizontal = 2.dp),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = item.title,
+                modifier = Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = JetBrainsMonoFontFamily
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = "${formatWatchTime(item.positionMs)} / ${formatWatchTime(item.durationMs)}",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = JetBrainsMonoFontFamily,
+                    textDirection = TextDirection.Ltr,
+                    fontSize = 11.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
+                maxLines = 1
+            )
+        }
 
         Spacer(modifier = Modifier.height(2.dp))
 
@@ -186,24 +206,6 @@ private fun ContinueWatchingCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Row(
-            modifier = Modifier.padding(horizontal = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "${formatWatchTime(item.positionMs)} / ${formatWatchTime(item.durationMs)}",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = JetBrainsMonoFontFamily,
-                    textDirection = TextDirection.Ltr,
-                    fontSize = 11.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
-            )
-        }
     }
 }
 
