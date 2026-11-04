@@ -1,30 +1,21 @@
 package com.aistudio.cinemios.fxtyr.ui.components.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusColors
+import androidx.compose.ui.unit.sp
+import com.aistudio.cinemios.fxtyr.ui.components.seeplus.ProfileAvatar
 
 @Composable
 fun HomeHeader(
@@ -42,44 +33,24 @@ fun HomeHeader(
     ) {
         Text(
             text = "مرحباً بك",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                lineHeight = 28.sp
+            ),
             color = MaterialTheme.colorScheme.onBackground
         )
 
-        // In RTL this sits at the visual top-left. The callback is ready for the
-        // upcoming profile screen; for now it intentionally does nothing.
-        Box(
+        // Uses the same avatar treatment as Settings (animated seePlus ring,
+        // inner gap, and scaled premium badge). In RTL this sits at top-left.
+        ProfileAvatar(
+            photoUrl = photoUrl,
+            isPremium = isSubscribed,
+            showOnlineDot = false,
             modifier = Modifier
-                .size(44.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    width = if (isSubscribed) 2.dp else 1.dp,
-                    color = if (isSubscribed) {
-                        SeePlusColors.Gold
-                    } else {
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-                    },
-                    shape = CircleShape
-                )
                 .clickable(onClick = onAvatarClick),
-            contentAlignment = Alignment.Center
-        ) {
-            if (!photoUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = photoUrl,
-                    contentDescription = "الحساب",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "الحساب",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
+            size = 42.dp
+        )
     }
 }

@@ -112,9 +112,19 @@ fun ProfileAvatar(
     photoUrl: String?,
     isPremium: Boolean,
     showOnlineDot: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 62.dp
 ) {
-    Box(modifier = modifier.size(62.dp)) {
+    val scale = size.value / 62f
+    val gapSize = 56.dp * scale
+    val imageSize = 52.dp * scale
+    val standardAvatarSize = 54.dp * scale
+    val iconSize = 28.dp * scale
+    val onlineDotSize = 15.dp * scale
+    val onlineDotPadding = 3.dp * scale
+    val badgeSize = 22.dp * scale
+
+    Box(modifier = modifier.size(size)) {
         if (isPremium) {
             val transition = rememberInfiniteTransition(label = "seeplus_ring")
             val rotation by transition.animateFloat(
@@ -145,7 +155,7 @@ fun ProfileAvatar(
 
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(gapSize)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface)
@@ -153,22 +163,23 @@ fun ProfileAvatar(
 
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(imageSize)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                AvatarContent(photoUrl = photoUrl, iconSize = 28.dp)
+                AvatarContent(photoUrl = photoUrl, iconSize = iconSize)
             }
 
             PremiumBadge(
-                modifier = Modifier.align(Alignment.BottomEnd)
+                modifier = Modifier.align(Alignment.BottomEnd),
+                size = badgeSize
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(54.dp)
+                    .size(standardAvatarSize)
                     .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -179,17 +190,17 @@ fun ProfileAvatar(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                AvatarContent(photoUrl = photoUrl, iconSize = 28.dp)
+                AvatarContent(photoUrl = photoUrl, iconSize = iconSize)
             }
 
             if (showOnlineDot) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .size(15.dp)
+                        .size(onlineDotSize)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface)
-                        .padding(3.dp)
+                        .padding(onlineDotPadding)
                         .clip(CircleShape)
                         .background(PaletteSuccess)
                 )
@@ -218,10 +229,11 @@ private fun AvatarContent(photoUrl: String?, iconSize: Dp) {
 }
 
 @Composable
-private fun PremiumBadge(modifier: Modifier = Modifier) {
+private fun PremiumBadge(modifier: Modifier = Modifier, size: Dp = 22.dp) {
+    val scale = size.value / 22f
     Box(
         modifier = modifier
-            .size(22.dp)
+            .size(size)
             .clip(CircleShape)
             .background(
                 brush = Brush.linearGradient(
@@ -233,7 +245,7 @@ private fun PremiumBadge(modifier: Modifier = Modifier) {
                 )
             )
             .border(
-                width = 2.dp,
+                width = 2.dp * scale,
                 color = MaterialTheme.colorScheme.surface,
                 shape = CircleShape
             ),
@@ -243,7 +255,7 @@ private fun PremiumBadge(modifier: Modifier = Modifier) {
             imageVector = Icons.Default.WorkspacePremium,
             contentDescription = "عضو seePlus",
             tint = SeePlusColors.Espresso,
-            modifier = Modifier.size(13.dp)
+            modifier = Modifier.size(13.dp * scale)
         )
     }
 }

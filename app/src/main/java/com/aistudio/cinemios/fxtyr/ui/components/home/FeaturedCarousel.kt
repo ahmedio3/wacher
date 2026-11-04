@@ -1,8 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.home
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,9 +51,10 @@ import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.remote.TmdbMediaItem
 import com.aistudio.cinemios.fxtyr.ui.components.rememberPressState
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val FEATURED_AUTO_ADVANCE_MS = 6000
+private const val FEATURED_AUTO_ADVANCE_MS = 6000L
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -71,27 +69,19 @@ fun FeaturedCarousel(
         pageCount = { items.size }
     )
 
-    val indicatorProgress = remember { Animatable(0f) }
     val autoAdvanceScope = rememberCoroutineScope()
     var autoAdvanceJob by remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(items.size, pagerState.currentPage, pagerState.isScrollInProgress) {
         if (items.size <= 1 || pagerState.isScrollInProgress) return@LaunchedEffect
 
-        indicatorProgress.snapTo(0f)
-        indicatorProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = FEATURED_AUTO_ADVANCE_MS,
-                easing = LinearEasing
-            )
-        )
+        val pageToAdvance = pagerState.currentPage
+        delay(FEATURED_AUTO_ADVANCE_MS)
 
-        if (!pagerState.isScrollInProgress) {
+        if (pagerState.currentPage == pageToAdvance && !pagerState.isScrollInProgress) {
             autoAdvanceJob?.cancel()
             autoAdvanceJob = autoAdvanceScope.launch {
-                val nextPage = (pagerState.currentPage + 1) % items.size
-                pagerState.animateScrollToPage(nextPage)
+                pagerState.animateScrollToPage((pageToAdvance + 1) % items.size)
             }
         }
     }
@@ -148,9 +138,9 @@ fun FeaturedCarousel(
                         animationSpec = tween(300),
                         label = "indicator_width"
                     )
-                    val trackColor by animateColorAsState(
+                    val color by animateColorAsState(
                         targetValue = if (isSelected) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                            MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                         },
@@ -163,17 +153,8 @@ fun FeaturedCarousel(
                             .height(6.dp)
                             .width(width)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(trackColor)
-                    ) {
-                        if (isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(indicatorProgress.value)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                    }
+                            .background(color)
+                    )
                 }
             }
         }
