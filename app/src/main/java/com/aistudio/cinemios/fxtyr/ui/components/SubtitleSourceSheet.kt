@@ -51,7 +51,7 @@ fun SubtitleSourceSheet(
     onNavigateBack: () -> Unit = {},
     onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String, name: String, matchedEpisode: Int, batchId: String) -> Unit = { _, _, _, _, _, _, _ -> },
     onBatchComplete: (batchId: String, count: Int, releaseName: String) -> Unit = { _, _, _ -> },
-    customDownload: (suspend (downloadUrl: String) -> List<Pair<File, Int>>)? = null
+    customDownload: (suspend (downloadUrl: String, onError: (SubtitleHelper.SubtitleError) -> Unit) -> List<Pair<File, Int>>)? = null
 ) {
     // All state is internal — completely isolated per instance
     var subtitlePage by remember { mutableIntStateOf(1) }
@@ -62,13 +62,16 @@ fun SubtitleSourceSheet(
     var currentlyDownloadingSourceUrl by remember { mutableStateOf<String?>(null) }
     var isLoadingSources by remember { mutableStateOf(false) }
     var currentSubPage by remember { mutableIntStateOf(initialPage) }
+    var downloadError by remember { mutableStateOf<String?>(null) }
+    var subdlError by remember { mutableStateOf<String?>(null) }
+    var openSubError by remember { mutableStateOf<String?>(null) }
 
     // Update subtitlePage reactively
     subtitlePage = currentSubPage
 
     // Default download: standalone to standalone_subtitles/
-    val defaultDownload: suspend (String) -> List<Pair<File, Int>> = { url ->
-        SubtitleHelper.downloadSubtitleStandalone(context, url, UUID.randomUUID().toString())
+    val defaultDownload: suspend (String, (SubtitleHelper.SubtitleError) -> Unit) -> List<Pair<File, Int>> = { url, onError ->
+        SubtitleHelper.downloadSubtitleStandalone(context, url, UUID.randomUUID().toString(), onError)
     }
     val downloadFn = customDownload ?: defaultDownload
 
@@ -100,6 +103,35 @@ fun SubtitleSourceSheet(
     }
 
     Spacer(modifier = Modifier.height(8.dp))
+
+    // Visible failure state: a real error must never look like "no results".
+    val activeError = downloadError
+        ?: if (subtitlePage == 2) subdlError
+        else if (subtitlePage == 3) openSubError
+        else null
+    activeError?.let { message ->
+        Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = { downloadError = null; subdlError = null; openSubError = null },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(Icons.Default.Close, "إغلاق", modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
 
     // Page content
     AnimatedContent(
@@ -229,14 +261,22 @@ fun SubtitleSourceSheet(
                                             IconButton(onClick = {
                                                 movieScope.launch {
                                                     currentlyDownloadingUrl = sub.url
+                                                    downloadError = null
                                                     val batchId = UUID.randomUUID().toString()
-                                                    val files = downloadFn(sub.url)
+                                                    var downloadFailure: String? = null
+                                                    val files = downloadFn(sub.url) { error ->
+                                                        downloadFailure = error.userMessage
+                                                    }
                                                     var savedCount = 0
                                                     for ((file, matchedEp) in files) {
                                                         onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
                                                         savedCount++
                                                     }
-                                                    if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
+                                                    if (savedCount > 0) {
+                                                        onBatchComplete(batchId, savedCount, sub.name)
+                                                    } else {
+                                                        downloadError = downloadFailure ?: "تعذر تحميل الترجمة. قد يكون الملف غير مدعوم أو الرابط منتهيًا."
+                                                    }
                                                     currentlyDownloadingUrl = null
                                                 }
                                             }) {
@@ -263,9 +303,15 @@ fun SubtitleSourceSheet(
                 LaunchedEffect(Unit) {
                     isLoadingSources = true
                     subdlSources = null
-                    subdlSources = withContext(Dispatchers.IO) {
-                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode)
+                    subdlError = null
+                    var fetchError: String? = null
+                    val result = withContext(Dispatchers.IO) {
+                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode) { error ->
+                            fetchError = error.userMessage
+                        }
                     }
+                    subdlSources = result
+                    subdlError = fetchError
                     isLoadingSources = false
                 }
 
@@ -277,9 +323,15 @@ fun SubtitleSourceSheet(
                                 sourceScope.launch {
                                     isLoadingSources = true
                                     subdlSources = null
-                                    subdlSources = withContext(Dispatchers.IO) {
-                                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode)
+                                    subdlError = null
+                                    var fetchError: String? = null
+                                    val result = withContext(Dispatchers.IO) {
+                                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode) { error ->
+                                            fetchError = error.userMessage
+                                        }
                                     }
+                                    subdlSources = result
+                                    subdlError = fetchError
                                     isLoadingSources = false
                                 }
                             },
@@ -317,14 +369,22 @@ fun SubtitleSourceSheet(
                                         SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
                                             sourceScope.launch {
                                                 currentlyDownloadingSourceUrl = sub.url
+                                                downloadError = null
                                                 val batchId = UUID.randomUUID().toString()
-                                                val files = downloadFn(sub.url)
+                                                var downloadFailure: String? = null
+                                                val files = downloadFn(sub.url) { error ->
+                                                    downloadFailure = error.userMessage
+                                                }
                                                 var savedCount = 0
                                                 for ((file, matchedEp) in files) {
                                                     onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
                                                     savedCount++
                                                 }
-                                                if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
+                                                if (savedCount > 0) {
+                                                    onBatchComplete(batchId, savedCount, sub.name)
+                                                } else {
+                                                    downloadError = downloadFailure ?: "تعذر تحميل الترجمة. قد يكون الملف غير مدعوم أو الرابط منتهيًا."
+                                                }
                                                 currentlyDownloadingSourceUrl = null
                                             }
                                         })
@@ -347,9 +407,15 @@ fun SubtitleSourceSheet(
                 LaunchedEffect(Unit) {
                     isLoadingSources = true
                     openSubSources = null
-                    openSubSources = withContext(Dispatchers.IO) {
-                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode)
+                    openSubError = null
+                    var fetchError: String? = null
+                    val result = withContext(Dispatchers.IO) {
+                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode) { error ->
+                            fetchError = error.userMessage
+                        }
                     }
+                    openSubSources = result
+                    openSubError = fetchError
                     isLoadingSources = false
                 }
 
@@ -361,9 +427,15 @@ fun SubtitleSourceSheet(
                                 sourceScope.launch {
                                     isLoadingSources = true
                                     openSubSources = null
-                                    openSubSources = withContext(Dispatchers.IO) {
-                                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode)
+                                    openSubError = null
+                                    var fetchError: String? = null
+                                    val result = withContext(Dispatchers.IO) {
+                                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode) { error ->
+                                            fetchError = error.userMessage
+                                        }
                                     }
+                                    openSubSources = result
+                                    openSubError = fetchError
                                     isLoadingSources = false
                                 }
                             },
@@ -398,19 +470,36 @@ fun SubtitleSourceSheet(
                                 if (subs.isNotEmpty()) {
                                     item { SectionHeader(title = "OpenSubtitles", count = subs.size, color = Color(0xFF7CB342)) }
                                     items(subs) { sub ->
-                                        SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == sub.url, onDownload = {
+                                        val downloadKey = sub.fileId ?: sub.url
+                                        SourceSubtitleCard(item = sub, isDownloading = currentlyDownloadingSourceUrl == downloadKey, onDownload = {
                                             sourceScope.launch {
-                                                currentlyDownloadingSourceUrl = sub.url
+                                                currentlyDownloadingSourceUrl = downloadKey
+                                                downloadError = null
                                                 val batchId = UUID.randomUUID().toString()
-                                                val downloadUrl = if (sub.fileId != null) SubtitleHelper.getOpenSubtitleDownloadUrl(sub.fileId) ?: sub.url else sub.url
+                                                var downloadFailure: String? = null
+                                                val downloadUrl = if (sub.fileId != null) {
+                                                    SubtitleHelper.getOpenSubtitleDownloadUrl(sub.fileId) { error ->
+                                                        downloadFailure = error.userMessage
+                                                    } ?: sub.url
+                                                } else {
+                                                    sub.url
+                                                }
                                                 if (downloadUrl.isNotEmpty()) {
-                                                    val files = downloadFn(downloadUrl)
+                                                    val files = downloadFn(downloadUrl) { error ->
+                                                        downloadFailure = error.userMessage
+                                                    }
                                                     var savedCount = 0
                                                     for ((file, matchedEp) in files) {
                                                         onSubtitleLoaded(file, sub.lang, sub.langCode, sub.source, sub.name, matchedEp, batchId)
                                                         savedCount++
                                                     }
-                                                    if (savedCount > 0) onBatchComplete(batchId, savedCount, sub.name)
+                                                    if (savedCount > 0) {
+                                                        onBatchComplete(batchId, savedCount, sub.name)
+                                                    } else {
+                                                        downloadError = downloadFailure ?: "تعذر تحميل الترجمة. قد يكون الملف غير مدعوم أو الرابط منتهيًا."
+                                                    }
+                                                } else {
+                                                    downloadError = downloadFailure ?: "تعذر الحصول على رابط التحميل من OpenSubtitles."
                                                 }
                                                 currentlyDownloadingSourceUrl = null
                                             }

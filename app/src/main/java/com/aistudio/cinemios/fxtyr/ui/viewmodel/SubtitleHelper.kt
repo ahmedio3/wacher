@@ -5,17 +5,42 @@ import com.aistudio.cinemios.fxtyr.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 
 object SubtitleHelper {
-    private const val USER_AGENT = "Cinemios v1.0"
-    
+    private const val USER_AGENT = "Cinemios v1.0 (Android)"
+    private const val SUBDL_REFERER = "https://subdl.com/"
+    private const val SUBDL_DOWNLOAD_HOST = "https://dl.subdl.com"
+    private const val MAX_DOWNLOAD_BYTES = 60L * 1024 * 1024
+    private const val MAX_ZIP_ENTRIES = 200
+    private const val MAX_ZIP_ENTRY_BYTES = 20L * 1024 * 1024
+    private const val MAX_ZIP_TOTAL_BYTES = 120L * 1024 * 1024
+
+    /** Typed failure so the UI can distinguish "no results" from a real error. */
+    sealed class SubtitleError(val userMessage: String) {
+        data object MissingKey : SubtitleError("مفتاح المصدر غير مُعد في هذا الإصدار.")
+        data object Unauthorized : SubtitleError("المفتاح غير صالح أو انتهت صلاحيته. تحقق من إعدادات المصدر.")
+        data object ServerRefused : SubtitleError("رفض الخادم الطلب. تحقق من إعدادات المصدر.")
+        data class RateLimited(val retryAfterSec: Long? = null) :
+            SubtitleError("تم تجاوز حد الطلبات. حاول بعد قليل.")
+        data class Http(val code: Int) : SubtitleError("فشل الطلب من الخادم (HTTP $code).")
+        data class Network(val detail: String) : SubtitleError("تعذر الاتصال بالخادم: $detail")
+        data object NotSubtitle : SubtitleError("الملف الذي تم تنزيله ليس ترجمة صالحة.")
+        data object UnsupportedFormat : SubtitleError("صيغة الترجمة غير مدعومة أو الملف تالف.")
+        data object Empty : SubtitleError("الملف الذي تم تنزيله فارغ.")
+        data object NoEpisodeMatch : SubtitleError("لم أجد حلقة مطابقة داخل الملف. لم يتم تطبيق أي ترجمة.")
+        data object NoResults : SubtitleError("لا توجد تراجم متاحة من هذا المصدر.")
+    }
+
     data class SubtitleItem(
         val name: String,
         val lang: String,
@@ -23,7 +48,10 @@ object SubtitleHelper {
         val langCode: String,
         val source: String = "MovieBox",
         val fileId: String? = null,
-        val downloadCount: Int = 0
+        val downloadCount: Int = 0,
+        val releaseName: String = "",
+        val fps: Double? = null,
+        val format: String = ""
     )
     
     suspend fun fetchSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, searchTitle: String? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
@@ -145,344 +173,589 @@ object SubtitleHelper {
         } catch (_: Exception) { }
     }
 
-    // Downloads and extracts to local storage, returns the local extracted File (.srt or .vtt)
-    suspend fun downloadAndExtractSubtitle(context: Context, downloadUrlPath: String, mediaId: String): File? = withContext(Dispatchers.IO) {
-        try {
-            val isDirectUrl = downloadUrlPath.startsWith("http")
-            val downloadUrl = if (isDirectUrl) downloadUrlPath else "https://dl.subdl.com$downloadUrlPath"
-            
-            val conn = URL(downloadUrl).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 15000  // 15 seconds to connect
-            conn.readTimeout = 30000     // 30 seconds to read data
-            conn.instanceFollowRedirects = true
-            conn.connect()
-            
-            if (conn.responseCode == 200) {
-                val downloadsDir = File(context.filesDir, "downloads")
-                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+    // ===== Shared download plumbing =====
 
-                // Detect content type: ZIP, GZIP, or raw subtitle
-                // Primary detection: magic bytes (first 4 bytes of response body)
-                val rawInput = BufferedInputStream(conn.inputStream)
-                rawInput.mark(4)
-                val magic = ByteArray(4)
-                val magicBytesRead = rawInput.read(magic)
-                rawInput.reset()
+    private fun normalizeDownloadUrl(path: String): String {
+        if (path.startsWith("http://", true) || path.startsWith("https://", true)) return path
+        return if (path.startsWith("/")) "$SUBDL_DOWNLOAD_HOST$path" else "$SUBDL_DOWNLOAD_HOST/$path"
+    }
 
-                val hasMagic = magicBytesRead >= 2
-                val magicZip = hasMagic && magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte() && magic[2] == 0x03.toByte() && magic[3] == 0x04.toByte()
-                val magicGzip = hasMagic && magic[0] == 0x1F.toByte() && magic[1] == 0x8B.toByte()
+    private fun isSubdlDownload(url: String): Boolean =
+        url.contains("dl.subdl.com", ignoreCase = true)
 
-                // Fallback: URL extension + Content-Encoding header
-                val isZip = magicZip || downloadUrl.endsWith(".zip", ignoreCase = true)
-                val isGzip = magicGzip || downloadUrl.endsWith(".gz", ignoreCase = true) ||
-                    conn.contentEncoding?.lowercase()?.contains("gzip") == true
-                val isRawSub = !isZip && !isGzip
+    private fun appendSubdlKeyIfNeeded(url: String): String {
+        if (!isSubdlDownload(url)) return url
+        if (BuildConfig.SUBDL_API_KEY.isBlank()) return url
+        if (url.contains("api_key=", ignoreCase = true)) return url
+        val separator = if (url.contains("?")) "&" else "?"
+        return "$url${separator}api_key=${BuildConfig.SUBDL_API_KEY}"
+    }
 
-                if (isRawSub) {
-                    // Direct .srt or .vtt file — save as-is (rawInput is already marked/reset)
-                    val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
-                    val file = File(downloadsDir, "$mediaId$ext")
-                    val fos = FileOutputStream(file)
-                    rawInput.copyTo(fos)
-                    fos.close()
-                    rawInput.close()
-                    conn.disconnect()
-                    return@withContext file
-                }
-
-                if (isGzip) {
-                    // GZIP compressed .srt (OpenSubtitles returns these)
-                    val gzInput = GZIPInputStream(rawInput)
-                    val file = File(downloadsDir, "$mediaId.srt")
-                    val fos = FileOutputStream(file)
-                    gzInput.copyTo(fos)
-                    fos.close()
-                    gzInput.close()
-                    conn.disconnect()
-                    return@withContext file
-                }
-
-                // ZIP file — extract (use the already-created rawInput which was reset)
-                val zis = ZipInputStream(rawInput)
-                var zipEntry = zis.nextEntry
-                
-                val isTv = mediaId.contains("-s") && mediaId.contains("-e")
-                val epStr = if (isTv) {
-                    val afterE = mediaId.substringAfter("-e")
-                    afterE.substringBefore("-s").takeIf { it != afterE } ?: afterE
-                } else ""
-                val epNum = epStr.toIntOrNull() ?: -1
-
-                val extractedFiles = mutableListOf<File>()
-
-                while (zipEntry != null) {
-                    val name = zipEntry.name
-                    if (!zipEntry.isDirectory && (name.endsWith(".srt") || name.endsWith(".vtt"))) {
-                        val tmpName = File(name).name
-                        val tmpFile = File(downloadsDir, "tmp_${System.currentTimeMillis()}_$tmpName")
-                        val fos = FileOutputStream(tmpFile)
-                        val buffer = ByteArray(2048)
-                        var bytesRead: Int
-                        while (zis.read(buffer).also { bytesRead = it } != -1) {
-                            fos.write(buffer, 0, bytesRead)
-                        }
-                        fos.close()
-                        extractedFiles.add(tmpFile)
-                    }
-                    zipEntry = zis.nextEntry
-                }
-                zis.close()
-                conn.disconnect()
-                
-                if (extractedFiles.isEmpty()) return@withContext null
-
-                var bestMatch = extractedFiles.first()
-                val tmdbIdString = if (isTv) mediaId.substringBefore("-s") else mediaId
-                val seasonString = if (isTv) mediaId.substringAfter("-s").substringBefore("-e") else "1"
-
-                if (isTv) {
-                    val generalEpPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)\\b")
-                    for (file in extractedFiles) {
-                        val matcher = generalEpPattern.matcher(file.name)
-                        if (matcher.find()) {
-                            val matchedEpNum = matcher.group(1).toIntOrNull()
-                            if (matchedEpNum != null) {
-                                val ext = if (file.name.endsWith(".srt")) ".srt" else ".vtt"
-                                val targetMediaId = "$tmdbIdString-s$seasonString-e$matchedEpNum"
-                                val targetFinalFile = File(downloadsDir, "$targetMediaId$ext")
-                                if (targetFinalFile.exists()) targetFinalFile.delete()
-                                file.copyTo(targetFinalFile)
-                                
-                                if (matchedEpNum == epNum) {
-                                    bestMatch = file
-                                }
-                            }
-                        }
-                    }
-                    if (!extractedFiles.contains(bestMatch) && epNum != -1) {
-                         val exactPattern = java.util.regex.Pattern.compile("(?i)(?:E|EP|Episode)[\\s_\\.-]*0*$epNum\\b")
-                         for (file in extractedFiles) {
-                             if (exactPattern.matcher(file.name).find()) {
-                                 bestMatch = file
-                                 break
-                             }
-                         }
-                    }
-                }
-
-                val ext = if (bestMatch.name.endsWith(".srt")) ".srt" else ".vtt"
-                val finalFile = File(downloadsDir, "$mediaId$ext")
-                if (finalFile.exists()) finalFile.delete()
-                bestMatch.renameTo(finalFile)
-                
-                for (file in extractedFiles) {
-                    if (file.exists()) file.delete()
-                }
-
-                return@withContext finalFile
+    private fun openDownloadConnection(url: String): HttpURLConnection {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 15000
+        conn.readTimeout = 30000
+        conn.instanceFollowRedirects = true
+        conn.setRequestProperty("User-Agent", USER_AGENT)
+        conn.setRequestProperty("Accept", "*/*")
+        // The app handles real gzip payloads from magic bytes, so ask for no
+        // transfer-level compression to avoid double decompression.
+        conn.setRequestProperty("Accept-Encoding", "identity")
+        if (isSubdlDownload(url)) {
+            conn.setRequestProperty("Referer", SUBDL_REFERER)
+            if (BuildConfig.SUBDL_API_KEY.isNotBlank()) {
+                // Authenticated download on dl.subdl.com (documented query form).
+                conn.setRequestProperty("x-api-key", BuildConfig.SUBDL_API_KEY)
             }
-            conn.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        null
+        conn.connect()
+        return conn
+    }
+
+    private fun readBodyLimited(conn: HttpURLConnection): ByteArray {
+        val input = conn.inputStream
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0L
+        try {
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > MAX_DOWNLOAD_BYTES) throw IOException("payload too large")
+                out.write(buffer, 0, read)
+            }
+        } finally {
+            try { input.close() } catch (_: Exception) { }
+        }
+        return out.toByteArray()
+    }
+
+    private fun isZip(bytes: ByteArray): Boolean =
+        bytes.size >= 4 &&
+            bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() &&
+            bytes[2] == 0x03.toByte() && bytes[3] == 0x04.toByte()
+
+    private fun isGzip(bytes: ByteArray): Boolean =
+        bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte()
+
+    private fun looksLikeHtml(bytes: ByteArray): Boolean {
+        val head = String(bytes, 0, minOf(bytes.size, 1024), StandardCharsets.UTF_8)
+            .trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+            .lowercase()
+        return head.startsWith("<!doctype html") ||
+            head.startsWith("<html") ||
+            head.contains("<title>just a moment") ||
+            head.contains("cloudflare")
+    }
+
+    private fun extensionFromUrl(url: String): String? {
+        val path = url.substringBefore('?').substringBefore('#').lowercase()
+        return when {
+            path.endsWith(".srt") -> ".srt"
+            path.endsWith(".vtt") -> ".vtt"
+            path.endsWith(".ass") -> ".ass"
+            path.endsWith(".ssa") -> ".ssa"
+            else -> null
+        }
+    }
+
+    private fun supportedExtension(name: String): String? {
+        val lower = name.lowercase()
+        return when {
+            lower.endsWith(".srt") -> ".srt"
+            lower.endsWith(".vtt") -> ".vtt"
+            lower.endsWith(".ass") -> ".ass"
+            lower.endsWith(".ssa") -> ".ssa"
+            else -> null
+        }
+    }
+
+    private fun localizedLanguageName(code: String): String = when (code.uppercase()) {
+        "AR", "ARABIC" -> "العربية"
+        "EN", "ENGLISH" -> "English"
+        "FR", "FRENCH" -> "Français"
+        else -> code
+    }
+
+    private fun reportError(onError: ((SubtitleError) -> Unit)?, error: SubtitleError) {
+        try { onError?.invoke(error) } catch (_: Exception) { }
+    }
+
+    private fun mapHttpError(code: Int, retryAfter: String?): SubtitleError = when (code) {
+        401, 403 -> SubtitleError.Unauthorized
+        429 -> SubtitleError.RateLimited(retryAfter?.trim()?.toLongOrNull())
+        else -> SubtitleError.Http(code)
+    }
+
+    /** Sniff the real subtitle format from the payload, not just the URL. */
+    private fun sniffSubtitleExtension(bytes: ByteArray, url: String): String {
+        val head = String(bytes, 0, minOf(bytes.size, 4096), StandardCharsets.UTF_8)
+            .trimStart('\uFEFF', ' ', '\t', '\r', '\n')
+        if (head.startsWith("WEBVTT", ignoreCase = true)) return ".vtt"
+        if (head.contains("[Script Info]", ignoreCase = true) ||
+            head.contains("[Events]", ignoreCase = true) ||
+            head.contains("Dialogue:", ignoreCase = true)
+        ) {
+            return ".ass"
+        }
+        return extensionFromUrl(url) ?: ".srt"
+    }
+
+    private fun writeBytesAtomic(target: File, bytes: ByteArray) {
+        target.parentFile?.mkdirs()
+        val temp = File(target.parentFile, "${target.name}.tmp")
+        FileOutputStream(temp).use { it.write(bytes) }
+        if (target.exists()) target.delete()
+        if (!temp.renameTo(target)) {
+            // Some file systems refuse to rename over an existing file.
+            temp.copyTo(target, overwrite = true)
+            temp.delete()
+        }
+    }
+
+    private fun parseLocalCues(file: File): Boolean {
+        if (!file.exists() || file.length() == 0L) return false
+        return try {
+            SubtitleParser.parseBlock(file).isNotEmpty()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun extractEpisodeNumber(fileName: String): Int {
+        val patterns = listOf(
+            Regex("(?i)S\\d{1,2}[\\s._-]*E(\\d{1,3})(?:\\D|$)"),
+            Regex("(?i)(?:^|[\\s._-])(?:E|EP|Episode)[\\s._-]*0*(\\d{1,3})(?:\\D|$)"),
+            Regex("(?i)(?:^|[\\s._-])\\d{1,2}x0*(\\d{1,3})(?:\\D|$)")
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(fileName) ?: continue
+            return match.groupValues[1].toIntOrNull() ?: 0
+        }
+        return 0
+    }
+
+    private fun extractZipEntries(bytes: ByteArray, directory: File): List<Pair<File, Int>> {
+        val result = mutableListOf<Pair<File, Int>>()
+        var entryCount = 0
+        var totalBytes = 0L
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    entryCount++
+                    if (entryCount > MAX_ZIP_ENTRIES) throw IOException("too many zip entries")
+                    if (supportedExtension(entry.name) != null) {
+                        val safeName = File(entry.name).name
+                        val tempFile = File(directory, "tmp_${System.currentTimeMillis()}_${result.size}_$safeName")
+                        val out = FileOutputStream(tempFile)
+                        try {
+                            val buffer = ByteArray(8192)
+                            var entryBytes = 0L
+                            while (true) {
+                                val read = zis.read(buffer)
+                                if (read < 0) break
+                                entryBytes += read
+                                totalBytes += read
+                                if (entryBytes > MAX_ZIP_ENTRY_BYTES || totalBytes > MAX_ZIP_TOTAL_BYTES) {
+                                    throw IOException("zip entry too large")
+                                }
+                                out.write(buffer, 0, read)
+                            }
+                        } finally {
+                            out.close()
+                        }
+                        result.add(Pair(tempFile, extractEpisodeNumber(safeName)))
+                    }
+                }
+                entry = zis.nextEntry
+            }
+        }
+        return result
+    }
+
+    private fun cleanupTempFiles(files: List<Pair<File, Int>>) {
+        for ((file, _) in files) {
+            try { if (file.exists()) file.delete() } catch (_: Exception) { }
+        }
     }
 
     /**
-     * Downloads subtitle to a standalone directory (not tied to a video download).
-     * Extracts ALL .srt/.vtt files from ZIP archives and matches each to an episode
-     * number using filename regex. For raw or gzip downloads, returns a single-file list.
-     *
-     * @return List of (File, matchedEpisodeNumber) pairs. matchedEpisodeNumber = 0
-     *         when the episode could not be determined from the filename.
+     * Downloads a subtitle and stores it under `downloads/<mediaId>.<ext>` so the
+     * player can find it deterministically. ZIP season packs are also expanded to
+     * per-episode files. Returns null when the payload is not a usable subtitle.
      */
-    suspend fun downloadSubtitleStandalone(context: Context, downloadUrlPath: String, subtitleId: String): List<Pair<File, Int>> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<Pair<File, Int>>()
+    suspend fun downloadAndExtractSubtitle(
+        context: Context,
+        downloadUrlPath: String,
+        mediaId: String,
+        onError: ((SubtitleError) -> Unit)? = null
+    ): File? = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
         try {
-            val isDirectUrl = downloadUrlPath.startsWith("http")
-            val downloadUrl = if (isDirectUrl) downloadUrlPath else "https://dl.subdl.com$downloadUrlPath"
+            val baseUrl = normalizeDownloadUrl(downloadUrlPath)
+            conn = openDownloadConnection(appendSubdlKeyIfNeeded(baseUrl))
 
-            val conn = URL(downloadUrl).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 15000
-            conn.readTimeout = 30000
-            conn.instanceFollowRedirects = true
-            conn.connect()
-
-            if (conn.responseCode == 200) {
-                val subsDir = File(context.filesDir, "standalone_subtitles")
-                if (!subsDir.exists()) subsDir.mkdirs()
-
-                // Detect content type: ZIP, GZIP, or raw subtitle
-                // Primary detection: magic bytes (first 4 bytes of response body)
-                val rawInput = BufferedInputStream(conn.inputStream)
-                rawInput.mark(4)
-                val magic = ByteArray(4)
-                val magicBytesRead = rawInput.read(magic)
-                rawInput.reset()
-
-                val hasMagic = magicBytesRead >= 2
-                val magicZip = hasMagic && magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte() && magic[2] == 0x03.toByte() && magic[3] == 0x04.toByte()
-                val magicGzip = hasMagic && magic[0] == 0x1F.toByte() && magic[1] == 0x8B.toByte()
-
-                // Fallback: URL extension + Content-Encoding header
-                val isZip = magicZip || downloadUrl.endsWith(".zip", ignoreCase = true)
-                val isGzip = magicGzip || downloadUrl.endsWith(".gz", ignoreCase = true) ||
-                    conn.contentEncoding?.lowercase()?.contains("gzip") == true
-                val isRawSub = !isZip && !isGzip
-
-                if (isRawSub) {
-                    val ext = if (downloadUrlPath.endsWith(".vtt")) ".vtt" else ".srt"
-                    val file = File(subsDir, "$subtitleId$ext")
-                    val fos = FileOutputStream(file)
-                    rawInput.copyTo(fos)
-                    fos.close()
-                    rawInput.close()
-                    conn.disconnect()
-                    results.add(Pair(file, 0))
-                    return@withContext results
-                }
-
-                if (isGzip) {
-                    val gzInput = GZIPInputStream(rawInput)
-                    val file = File(subsDir, "$subtitleId.srt")
-                    val fos = FileOutputStream(file)
-                    gzInput.copyTo(fos)
-                    fos.close()
-                    gzInput.close()
-                    conn.disconnect()
-                    results.add(Pair(file, 0))
-                    return@withContext results
-                }
-
-                // ZIP file — extract ALL .srt/.vtt and match episode numbers
-                val zis = ZipInputStream(rawInput)
-                var zipEntry = zis.nextEntry
-
-                // Matches 3 patterns:
-                // 1) E03 / EP 03 / Episode 5
-                // 2) S01E03 / S1.E03 / S01_E03
-                // 3) 1x03
-                val epPattern = java.util.regex.Pattern.compile(
-                    "(?i)(?:(?:E|EP|Episode)[\\s_\\.-]*0*(\\d+)|S\\d+[\\s_\\.-]*E[\\s_\\.-]*0*(\\d+)|(\\d+)x0*(\\d+))\\b"
-                )
-                var fileIndex = 0
-
-                while (zipEntry != null) {
-                    if (!zipEntry.isDirectory && (zipEntry.name.endsWith(".srt") || zipEntry.name.endsWith(".vtt"))) {
-                        val tmpName = File(zipEntry.name).name
-                        val ext = if (tmpName.endsWith(".vtt")) ".vtt" else ".srt"
-                        // Use unique filename per extracted file
-                        val finalName = "${subtitleId}_f${fileIndex}$ext"
-                        val finalFile = File(subsDir, finalName)
-                        val fos = FileOutputStream(finalFile)
-                        val buffer = ByteArray(2048)
-                        var bytesRead: Int
-                        while (zis.read(buffer).also { bytesRead = it } != -1) {
-                            fos.write(buffer, 0, bytesRead)
-                        }
-                        fos.close()
-
-                        // Match episode number from filename — capture first non-null group
-                        val matcher = epPattern.matcher(tmpName)
-                        val matchedEp = if (matcher.find()) {
-                            val g1 = matcher.group(1)  // E03 / Episode5
-                            val g2 = matcher.group(2)  // S01E03 (the episode digits)
-                            val g4 = matcher.group(4)  // 1x03 (the episode digits, group 3 = season)
-                            when {
-                                g1 != null -> g1.toIntOrNull() ?: 0
-                                g2 != null -> g2.toIntOrNull() ?: 0
-                                g4 != null -> g4.toIntOrNull() ?: 0
-                                else -> 0
-                            }
-                        } else 0
-
-                        results.add(Pair(finalFile, matchedEp))
-                        fileIndex++
-                    }
-                    zipEntry = zis.nextEntry
-                }
-                zis.close()
-                conn.disconnect()
-
-                return@withContext results
+            val responseCode = conn.responseCode
+            if (responseCode != 200) {
+                reportError(onError, mapHttpError(responseCode, conn.getHeaderField("Retry-After")))
+                return@withContext null
             }
-            conn.disconnect()
+
+            val body = readBodyLimited(conn)
+            if (body.isEmpty()) {
+                reportError(onError, SubtitleError.Empty)
+                return@withContext null
+            }
+            if (looksLikeHtml(body)) {
+                reportError(onError, SubtitleError.NotSubtitle)
+                return@withContext null
+            }
+
+            val downloadsDir = File(context.filesDir, "downloads")
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+
+            val isTv = mediaId.contains("-s") && mediaId.contains("-e")
+            val tmdbIdString = if (isTv) mediaId.substringBefore("-s") else mediaId
+            val seasonString = if (isTv) mediaId.substringAfter("-s").substringBefore("-e") else "1"
+            val episodeNumber = if (isTv) mediaId.substringAfter("-e").toIntOrNull() ?: -1 else -1
+
+            // ── GZIP: decompress first, then save as a raw subtitle ──
+            if (isGzip(body)) {
+                val decompressed = try {
+                    GZIPInputStream(ByteArrayInputStream(body)).use { it.readBytes() }
+                } catch (_: Exception) {
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext null
+                }
+                if (decompressed.isEmpty()) {
+                    reportError(onError, SubtitleError.Empty)
+                    return@withContext null
+                }
+                if (looksLikeHtml(decompressed)) {
+                    reportError(onError, SubtitleError.NotSubtitle)
+                    return@withContext null
+                }
+                val ext = sniffSubtitleExtension(decompressed, baseUrl)
+                val file = File(downloadsDir, "$mediaId$ext")
+                writeBytesAtomic(file, decompressed)
+                if (!parseLocalCues(file)) {
+                    file.delete()
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext null
+                }
+                return@withContext file
+            }
+
+            // ── Raw subtitle ──
+            if (!isZip(body)) {
+                val ext = sniffSubtitleExtension(body, baseUrl)
+                val file = File(downloadsDir, "$mediaId$ext")
+                writeBytesAtomic(file, body)
+                if (!parseLocalCues(file)) {
+                    file.delete()
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext null
+                }
+                return@withContext file
+            }
+
+            // ── ZIP archive ──
+            val extractedFiles = extractZipEntries(body, downloadsDir)
+            if (extractedFiles.isEmpty()) {
+                reportError(onError, SubtitleError.UnsupportedFormat)
+                return@withContext null
+            }
+
+            var matchedFile: File? = null
+            if (isTv) {
+                for ((tempFile, matchedEpisode) in extractedFiles) {
+                    if (matchedEpisode <= 0) continue
+                    val ext = supportedExtension(tempFile.name) ?: continue
+                    val target = File(downloadsDir, "$tmdbIdString-s$seasonString-e$matchedEpisode$ext")
+                    writeBytesAtomic(target, tempFile.readBytes())
+                    if (matchedEpisode == episodeNumber) matchedFile = target
+                }
+            }
+
+            // Never guess the first file for a TV episode: that silently applies
+            // the wrong episode's dialogue and looks like severe desync.
+            val bestMatch: File? = if (isTv) matchedFile else extractedFiles.firstOrNull()?.first
+            if (bestMatch == null) {
+                cleanupTempFiles(extractedFiles)
+                reportError(onError, SubtitleError.NoEpisodeMatch)
+                return@withContext null
+            }
+
+            val ext = supportedExtension(bestMatch.name)
+                ?: sniffSubtitleExtension(bestMatch.readBytes(), bestMatch.name)
+            val finalFile = File(downloadsDir, "$mediaId$ext")
+            writeBytesAtomic(finalFile, bestMatch.readBytes())
+            cleanupTempFiles(extractedFiles)
+
+            if (!parseLocalCues(finalFile)) {
+                finalFile.delete()
+                reportError(onError, SubtitleError.UnsupportedFormat)
+                return@withContext null
+            }
+            finalFile
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
+            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
         }
-        results
+    }
+
+    /**
+     * Downloads a subtitle to the standalone store. Every supported entry in a
+     * ZIP is kept with its detected episode number (0 = unknown). The real
+     * format extension is preserved, so ASS/SSA no longer become broken `.srt`.
+     */
+    suspend fun downloadSubtitleStandalone(
+        context: Context,
+        downloadUrlPath: String,
+        subtitleId: String,
+        onError: ((SubtitleError) -> Unit)? = null
+    ): List<Pair<File, Int>> = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
+        try {
+            val baseUrl = normalizeDownloadUrl(downloadUrlPath)
+            conn = openDownloadConnection(appendSubdlKeyIfNeeded(baseUrl))
+
+            val responseCode = conn.responseCode
+            if (responseCode != 200) {
+                reportError(onError, mapHttpError(responseCode, conn.getHeaderField("Retry-After")))
+                return@withContext emptyList()
+            }
+
+            val body = readBodyLimited(conn)
+            if (body.isEmpty()) {
+                reportError(onError, SubtitleError.Empty)
+                return@withContext emptyList()
+            }
+            if (looksLikeHtml(body)) {
+                reportError(onError, SubtitleError.NotSubtitle)
+                return@withContext emptyList()
+            }
+
+            val subsDir = File(context.filesDir, "standalone_subtitles")
+            if (!subsDir.exists()) subsDir.mkdirs()
+
+            if (isGzip(body)) {
+                val decompressed = try {
+                    GZIPInputStream(ByteArrayInputStream(body)).use { it.readBytes() }
+                } catch (_: Exception) {
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext emptyList()
+                }
+                if (decompressed.isEmpty()) {
+                    reportError(onError, SubtitleError.Empty)
+                    return@withContext emptyList()
+                }
+                if (looksLikeHtml(decompressed)) {
+                    reportError(onError, SubtitleError.NotSubtitle)
+                    return@withContext emptyList()
+                }
+                val ext = sniffSubtitleExtension(decompressed, baseUrl)
+                val file = File(subsDir, "$subtitleId$ext")
+                writeBytesAtomic(file, decompressed)
+                if (!parseLocalCues(file)) {
+                    file.delete()
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext emptyList()
+                }
+                return@withContext listOf(Pair(file, 0))
+            }
+
+            if (!isZip(body)) {
+                val ext = sniffSubtitleExtension(body, baseUrl)
+                val file = File(subsDir, "$subtitleId$ext")
+                writeBytesAtomic(file, body)
+                if (!parseLocalCues(file)) {
+                    file.delete()
+                    reportError(onError, SubtitleError.UnsupportedFormat)
+                    return@withContext emptyList()
+                }
+                return@withContext listOf(Pair(file, 0))
+            }
+
+            val extractedFiles = extractZipEntries(body, subsDir)
+            if (extractedFiles.isEmpty()) {
+                reportError(onError, SubtitleError.UnsupportedFormat)
+                return@withContext emptyList()
+            }
+
+            val results = mutableListOf<Pair<File, Int>>()
+            var index = 0
+            for ((tempFile, matchedEpisode) in extractedFiles) {
+                val ext = supportedExtension(tempFile.name)
+                    ?: sniffSubtitleExtension(tempFile.readBytes(), tempFile.name)
+                val finalFile = File(subsDir, "${subtitleId}_f${index}$ext")
+                writeBytesAtomic(finalFile, tempFile.readBytes())
+                if (parseLocalCues(finalFile)) {
+                    results.add(Pair(finalFile, matchedEpisode))
+                    index++
+                } else {
+                    finalFile.delete()
+                }
+            }
+            cleanupTempFiles(extractedFiles)
+
+            if (results.isEmpty()) {
+                reportError(onError, SubtitleError.UnsupportedFormat)
+                return@withContext emptyList()
+            }
+
+            results.sortedWith(compareBy({ if (it.second > 0) 0 else 1 }, { it.second }, { it.first.name }))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+            emptyList()
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
+        }
     }
 
     // ===== NEW: Direct Subdl API =====
-    suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, onError: ((SubtitleError) -> Unit)? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
+        var conn: HttpURLConnection? = null
         try {
-            val url = StringBuilder("https://api.subdl.com/api/v1/subtitles?api_key=${BuildConfig.SUBDL_API_KEY}&tmdb_id=$tmdbId&type=${if (isTv) "tv" else "movie"}&languages=ar&unpack=1")
-            if (isTv && season > 0) {
-                url.append("&season_number=$season")
-                if (episode > 0) url.append("&episode_number=$episode")
+            if (BuildConfig.SUBDL_API_KEY.isBlank()) {
+                reportError(onError, SubtitleError.MissingKey)
+                return@withContext emptyList()
             }
-            val conn = URL(url.toString()).openConnection() as HttpURLConnection
+
+            val url = StringBuilder("https://api.subdl.com/api/v1/subtitles")
+                .append("?api_key=").append(BuildConfig.SUBDL_API_KEY)
+                .append("&tmdb_id=").append(tmdbId)
+                .append("&type=").append(if (isTv) "tv" else "movie")
+                .append("&languages=AR")
+                .append("&unpack=1")
+                .append("&subs_per_page=30")
+                .append("&client=cinemios")
+            if (isTv && season > 0) {
+                url.append("&season_number=").append(season)
+                if (episode > 0) url.append("&episode_number=").append(episode)
+            }
+
+            conn = URL(url.toString()).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 15000
             conn.readTimeout = 20000
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Accept", "application/json")
             conn.connect()
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(response)
-                if (json.optBoolean("status")) {
-                    val subtitles = json.optJSONArray("subtitles")
-                    if (subtitles != null) {
-                        for (i in 0 until subtitles.length()) {
-                            val sub = subtitles.getJSONObject(i)
-                            val subUrl = sub.optString("url", "")
-                            val lang = sub.optString("language", "")
-                            val releaseName = sub.optString("release_name", "")
-                            val name = sub.optString("name", releaseName)
-                            // Check for unpacked files (individual files)
-                            val unpackFiles = sub.optJSONArray("unpack_files")
-                            if (unpackFiles != null && unpackFiles.length() > 0) {
-                                for (j in 0 until unpackFiles.length()) {
-                                    val f = unpackFiles.getJSONObject(j)
-                                    val fileUrl = f.optString("url", "")
-                                    val fileName = f.optString("name", "")
-                                    val ep = f.optInt("episode", episode)
-                                    if (fileUrl.isNotEmpty() && (!isTv || ep == episode)) {
-                                        list.add(SubtitleItem(
-                                            name = fileName.ifEmpty { name },
-                                            lang = when (lang.uppercase()) { "AR" -> "العربية"; "EN" -> "English"; else -> lang },
-                                            url = "https://dl.subdl.com$fileUrl",
-                                            langCode = lang.lowercase(),
-                                            source = "Subdl"
-                                        ))
-                                    }
-                                }
-                            } else if (subUrl.isNotEmpty()) {
+
+            if (conn.responseCode != 200) {
+                reportError(onError, mapHttpError(conn.responseCode, conn.getHeaderField("Retry-After")))
+                return@withContext emptyList()
+            }
+
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            if (!json.optBoolean("status")) {
+                val statusCode = json.optInt("statusCode", 0)
+                val error = when (statusCode) {
+                    401, 403 -> SubtitleError.Unauthorized
+                    429 -> SubtitleError.RateLimited()
+                    in 400..599 -> SubtitleError.Http(statusCode)
+                    else -> SubtitleError.ServerRefused
+                }
+                reportError(onError, error)
+                return@withContext emptyList()
+            }
+
+            val subtitles = json.optJSONArray("subtitles")
+            if (subtitles != null) {
+                for (i in 0 until subtitles.length()) {
+                    val sub = subtitles.getJSONObject(i)
+                    val subUrl = sub.optString("url", "")
+                    val lang = sub.optString("language", "")
+                    val releaseName = sub.optString("release_name", "")
+                    val subFormat = sub.optString("format", "")
+                    val fps = sub.optDouble("fps", 0.0).takeIf { it > 0.0 }
+                        ?: sub.optDouble("framerate", 0.0).takeIf { it > 0.0 }
+                    val downloadCount = sub.optInt("download_count", 0)
+                    val name = sub.optString("name", releaseName)
+                    var matchedAny = false
+
+                    // Check for unpacked files (individual files)
+                    val unpackFiles = sub.optJSONArray("unpack_files")
+                    if (unpackFiles != null && unpackFiles.length() > 0) {
+                        for (j in 0 until unpackFiles.length()) {
+                            val f = unpackFiles.getJSONObject(j)
+                            val fileUrl = f.optString("url", "")
+                            val fileName = f.optString("name", "")
+                            val fileLang = f.optString("language", lang)
+                            val fileFormat = f.optString("format", subFormat)
+                            val fileFps = f.optDouble("fps", 0.0).takeIf { it > 0.0 }
+                                ?: f.optDouble("framerate", 0.0).takeIf { it > 0.0 }
+                                ?: fps
+                            val ep = f.optInt("episode", 0)
+                            // 0 / missing means "unknown", not "wrong episode".
+                            if (fileUrl.isNotEmpty() && (!isTv || ep <= 0 || ep == episode)) {
                                 list.add(SubtitleItem(
-                                    name = name,
-                                    lang = when (lang.uppercase()) { "AR" -> "العربية"; "EN" -> "English"; else -> lang },
-                                    url = "https://dl.subdl.com$subUrl",
-                                    langCode = lang.lowercase(),
-                                    source = "Subdl"
+                                    name = fileName.ifEmpty { name },
+                                    lang = localizedLanguageName(fileLang),
+                                    url = normalizeDownloadUrl(fileUrl),
+                                    langCode = fileLang.lowercase(),
+                                    source = "Subdl",
+                                    downloadCount = downloadCount,
+                                    releaseName = releaseName,
+                                    fps = fileFps,
+                                    format = fileFormat
                                 ))
+                                matchedAny = true
                             }
                         }
                     }
+
+                    // Parent archive is a valid fallback when no per-file match exists.
+                    if (!matchedAny && subUrl.isNotEmpty()) {
+                        list.add(SubtitleItem(
+                            name = name,
+                            lang = localizedLanguageName(lang),
+                            url = normalizeDownloadUrl(subUrl),
+                            langCode = lang.lowercase(),
+                            source = "Subdl",
+                            downloadCount = downloadCount,
+                            releaseName = releaseName,
+                            fps = fps,
+                            format = subFormat
+                        ))
+                    }
                 }
             }
-            conn.disconnect()
-        } catch (_: Exception) { }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
+        }
         list.distinctBy { it.url }
     }
 
     // ===== NEW: OpenSubtitles API =====
-    suspend fun fetchOpenSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0): List<SubtitleItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchOpenSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, onError: ((SubtitleError) -> Unit)? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
+        var conn: HttpURLConnection? = null
         try {
-            val url = StringBuilder("https://api.opensubtitles.com/api/v1/subtitles?languages=ar")
+            if (BuildConfig.OPENSUBTITLES_API_KEY.isBlank()) {
+                reportError(onError, SubtitleError.MissingKey)
+                return@withContext emptyList()
+            }
+
+            val url = StringBuilder("https://api.opensubtitles.com/api/v1/subtitles?languages=ar&order_by=download_count")
             if (isTv) {
                 url.append("&parent_tmdb_id=$tmdbId&type=episode")
                 if (season > 0) url.append("&season_number=$season")
@@ -490,57 +763,88 @@ object SubtitleHelper {
             } else {
                 url.append("&tmdb_id=$tmdbId&type=movie")
             }
-            val conn = URL(url.toString()).openConnection() as HttpURLConnection
+
+            conn = URL(url.toString()).openConnection() as HttpURLConnection
             conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
             conn.setRequestProperty("User-Agent", USER_AGENT)
             conn.setRequestProperty("Accept", "application/json")
             conn.connectTimeout = 15000
             conn.readTimeout = 20000
             conn.connect()
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(response)
-                val data = json.optJSONArray("data")
-                if (data != null) {
-                    for (i in 0 until data.length()) {
-                        val item = data.getJSONObject(i)
-                        val attrs = item.optJSONObject("attributes")
-                        if (attrs != null) {
-                            val lang = attrs.optString("language", "")
-                            val subId = attrs.optString("subtitle_id", "")
-                            val downloadCount = attrs.optInt("download_count", 0)
-                            val files = attrs.optJSONArray("files")
-                            if (files != null && files.length() > 0) {
-                                for (j in 0 until files.length()) {
-                                    val file = files.getJSONObject(j)
-                                    val fileId = file.optInt("file_id", 0)
-                                    val fileName = file.optString("file_name", "")
-                                    if (fileId > 0) {
-                                        list.add(SubtitleItem(
-                                            name = fileName.ifEmpty { "OpenSubtitles #$subId" },
-                                            lang = when (lang.uppercase()) { "ARABIC" -> "العربية"; "ENGLISH" -> "English"; else -> lang },
-                                            url = "",
-                                            langCode = when (lang.uppercase()) { "ARABIC" -> "ar"; "ENGLISH" -> "en"; else -> lang.lowercase().take(2) },
-                                            source = "OpenSubtitles",
-                                            fileId = fileId.toString(),
-                                            downloadCount = downloadCount
-                                        ))
-                                    }
-                                }
+
+            if (conn.responseCode != 200) {
+                reportError(onError, mapHttpError(conn.responseCode, conn.getHeaderField("Retry-After")))
+                return@withContext emptyList()
+            }
+
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            val data = json.optJSONArray("data")
+            if (data != null) {
+                for (i in 0 until data.length()) {
+                    val item = data.getJSONObject(i)
+                    val attrs = item.optJSONObject("attributes") ?: continue
+                    val lang = attrs.optString("language", "")
+                    val subId = attrs.optString("subtitle_id", "")
+                    val downloadCount = attrs.optInt("download_count", 0)
+                    val release = attrs.optString("release", "")
+                    val subFormat = attrs.optString("format", "")
+                    val fps = attrs.optDouble("fps", 0.0).takeIf { it > 0.0 }
+                    val featureTitle = attrs.optJSONObject("feature_details")
+                        ?.optString("title", "")
+                        .orEmpty()
+                    val files = attrs.optJSONArray("files")
+                    if (files != null && files.length() > 0) {
+                        for (j in 0 until files.length()) {
+                            val file = files.getJSONObject(j)
+                            val fileId = file.optInt("file_id", 0)
+                            val fileName = file.optString("file_name", "")
+                            if (fileId > 0) {
+                                list.add(SubtitleItem(
+                                    name = fileName.ifEmpty { "OpenSubtitles #$subId" },
+                                    lang = localizedLanguageName(lang),
+                                    url = "",
+                                    langCode = when (lang.uppercase()) {
+                                        "ARABIC" -> "ar"
+                                        "ENGLISH" -> "en"
+                                        else -> lang.lowercase().take(2)
+                                    },
+                                    source = "OpenSubtitles",
+                                    fileId = fileId.toString(),
+                                    downloadCount = downloadCount,
+                                    releaseName = release.ifEmpty { featureTitle },
+                                    fps = fps,
+                                    format = subFormat
+                                ))
                             }
                         }
                     }
                 }
             }
-            conn.disconnect()
-        } catch (_: Exception) { }
-        list
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
+        }
+        // Most downloaded releases first; the UI also shows FPS/release so the
+        // user can pick the version that matches the video.
+        list.sortedWith(
+            compareByDescending<SubtitleItem> { it.downloadCount }
+                .thenByDescending { it.releaseName.length }
+        )
     }
 
     // ===== NEW: Get actual download URL from OpenSubtitles =====
-    suspend fun getOpenSubtitleDownloadUrl(fileId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun getOpenSubtitleDownloadUrl(fileId: String, onError: ((SubtitleError) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
         try {
-            val conn = URL("https://api.opensubtitles.com/api/v1/download").openConnection() as HttpURLConnection
+            if (BuildConfig.OPENSUBTITLES_API_KEY.isBlank()) {
+                reportError(onError, SubtitleError.MissingKey)
+                return@withContext null
+            }
+            conn = URL("https://api.opensubtitles.com/api/v1/download").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
@@ -552,14 +856,30 @@ object SubtitleHelper {
             val body = "{\"file_id\":$fileId}"
             conn.outputStream.write(body.toByteArray())
             conn.connect()
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(response)
-                json.optString("link", null)
-            } else {
-                null
+
+            val responseCode = conn.responseCode
+            if (responseCode != 200) {
+                reportError(onError, mapHttpError(responseCode, conn.getHeaderField("Retry-After")))
+                return@withContext null
             }
-        } catch (_: Exception) { null }
+
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            val link = json.optString("link", "")
+            if (link.isBlank() || link == "null") {
+                reportError(onError, SubtitleError.Empty)
+                null
+            } else {
+                link
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+            null
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) { }
+        }
     }
 
     // Shared: fetch MovieBox Arabic subtitle → download → save to Room → return File
@@ -574,7 +894,8 @@ object SubtitleHelper {
     ): File? = withContext(Dispatchers.IO) {
         try {
             val subs = fetchSubtitles(tmdbId, isTv, season, episode, title.substringBefore(" - "))
-            val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) }
+            val arSub = subs.firstOrNull { it.langCode.equals("ar", ignoreCase = true) }
+                ?: subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) }
                 ?: subs.firstOrNull() ?: return@withContext null
             val file = downloadAndExtractSubtitle(context, arSub.url, mediaId) ?: return@withContext null
 

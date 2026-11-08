@@ -2148,8 +2148,8 @@ fun OfflinePlayerScreen(
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
                                                 showSubtitleDrawer = false
                                             },
-                                            customDownload = { downloadUrl: String ->
-                                                val file = SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId)
+                                            customDownload = { downloadUrl, onError ->
+                                                val file = SubtitleHelper.downloadAndExtractSubtitle(context, downloadUrl, activeId, onError)
                                                 if (file != null) listOf(Pair(file, 0)) else emptyList()
                                             }
                                         )
