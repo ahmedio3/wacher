@@ -49,6 +49,46 @@ interface MovieDao {
     @Query("DELETE FROM subtitle_downloads WHERE id = :id")
     suspend fun deleteSubtitleDownload(vararg id: String)
 
+    @Query("SELECT * FROM subtitle_downloads WHERE id = :id LIMIT 1")
+    suspend fun getSubtitleDownloadById(id: String): SubtitleDownloadEntity?
+
+    @Query("SELECT * FROM subtitle_downloads WHERE isSelected = 1 AND mediaId = :mediaId AND localFilePath != '' ORDER BY downloadedAt DESC LIMIT 1")
+    suspend fun getSelectedSubtitleForMedia(mediaId: String): SubtitleDownloadEntity?
+
+    @Query("SELECT * FROM subtitle_downloads WHERE isSelected = 1 AND tmdbId = :tmdbId AND season = :season AND episode = :episode AND localFilePath != '' ORDER BY downloadedAt DESC LIMIT 1")
+    suspend fun getSelectedSubtitleForEpisode(tmdbId: String, season: Int, episode: Int): SubtitleDownloadEntity?
+
+    // Fallback for rows saved before selection existed (or imported rows).
+    @Query("SELECT * FROM subtitle_downloads WHERE mediaId = :mediaId AND localFilePath != '' ORDER BY downloadedAt DESC LIMIT 1")
+    suspend fun getLatestSubtitleForMedia(mediaId: String): SubtitleDownloadEntity?
+
+    @Query("SELECT * FROM subtitle_downloads WHERE tmdbId = :tmdbId AND season = :season AND episode = :episode AND localFilePath != '' ORDER BY downloadedAt DESC LIMIT 1")
+    suspend fun getLatestSubtitleForEpisode(tmdbId: String, season: Int, episode: Int): SubtitleDownloadEntity?
+
+    @Query("UPDATE subtitle_downloads SET isSelected = 0 WHERE mediaId = :mediaId OR (tmdbId = :tmdbId AND season = :season AND episode = :episode)")
+    suspend fun clearSubtitleSelection(mediaId: String, tmdbId: String, season: Int, episode: Int)
+
+    @Query("UPDATE subtitle_downloads SET isSelected = 1 WHERE id = :id")
+    suspend fun selectSubtitleDownload(id: String)
+
+    @Query("UPDATE subtitle_downloads SET mediaId = :mediaId WHERE id = :id AND mediaId = ''")
+    suspend fun backfillSubtitleMediaId(id: String, mediaId: String)
+
+    @Transaction
+    suspend fun saveSelectedSubtitle(item: SubtitleDownloadEntity) {
+        if (item.isSelected) {
+            clearSubtitleSelection(item.mediaId, item.tmdbId, item.season, item.episode)
+        }
+        insertSubtitleDownload(item)
+    }
+
+    @Transaction
+    suspend fun selectSubtitleById(id: String) {
+        val item = getSubtitleDownloadById(id) ?: return
+        clearSubtitleSelection(item.mediaId, item.tmdbId, item.season, item.episode)
+        selectSubtitleDownload(id)
+    }
+
     // ---- Episode Watch Status ----
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEpisodeWatchStatus(item: EpisodeWatchStatusEntity)

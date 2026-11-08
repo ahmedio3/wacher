@@ -120,7 +120,12 @@ data class SubtitleDownloadEntity(
     val fileName: String = "",               // original file name / release name from search result
     val batchId: String = "",                // UUID grouping all files from one download operation
     val originalUrl: String = "",            // original download URL
-    val downloadedAt: Long = System.currentTimeMillis()
+    val downloadedAt: Long = System.currentTimeMillis(),
+    val mediaId: String = "",                // exact player media id ("123" or "123-s1-e2")
+    val format: String = "",                 // srt / vtt / ass / ssa
+    val releaseName: String = "",            // release name shown in the source list
+    val fps: Double? = null,                 // release frame rate when known
+    val isSelected: Boolean = false          // active subtitle for this media/episode
 )
 
 @Entity(tableName = "downloads")

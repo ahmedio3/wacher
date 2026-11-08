@@ -180,6 +180,54 @@ object SubtitleHelper {
         return if (path.startsWith("/")) "$SUBDL_DOWNLOAD_HOST$path" else "$SUBDL_DOWNLOAD_HOST/$path"
     }
 
+    /**
+     * Safe file key for `downloads/`. Normal media ids ("123-s1-e2") are kept
+     * byte-for-byte so existing lookups keep working; local file paths are
+     * hashed instead of creating nested/illegal directories.
+     */
+    private fun safeMediaKey(mediaId: String): String {
+        val trimmed = mediaId.trim()
+        val safe = trimmed.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        if (safe == trimmed && safe.isNotEmpty()) return safe
+        return "${safe}_${trimmed.hashCode().toUInt().toString(16)}"
+    }
+
+    /** Public format label for Room rows ("srt", "vtt", "ass", "ssa"). */
+    fun detectSubtitleFormat(file: File): String {
+        return try {
+            sniffSubtitleExtension(file.readBytes(), file.name).removePrefix(".")
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /**
+     * Copies a downloaded subtitle to the canonical player path
+     * (`downloads/<mediaId>.<ext>`) and verifies it is parseable.
+     */
+    suspend fun copyToCanonicalPlayerPath(
+        context: Context,
+        source: File,
+        mediaId: String
+    ): File? = withContext(Dispatchers.IO) {
+        try {
+            if (!source.exists() || source.length() == 0L) return@withContext null
+            val bytes = source.readBytes()
+            val ext = sniffSubtitleExtension(bytes, source.name)
+            val dir = File(context.filesDir, "downloads").apply { mkdirs() }
+            val target = File(dir, "${safeMediaKey(mediaId)}$ext")
+            if (source.canonicalPath == target.canonicalPath) return@withContext source
+            writeBytesAtomic(target, bytes)
+            if (!parseLocalCues(target)) {
+                target.delete()
+                return@withContext null
+            }
+            target
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun isSubdlDownload(url: String): Boolean =
         url.contains("dl.subdl.com", ignoreCase = true)
 
@@ -439,7 +487,7 @@ object SubtitleHelper {
                     return@withContext null
                 }
                 val ext = sniffSubtitleExtension(decompressed, baseUrl)
-                val file = File(downloadsDir, "$mediaId$ext")
+                val file = File(downloadsDir, "${safeMediaKey(mediaId)}$ext")
                 writeBytesAtomic(file, decompressed)
                 if (!parseLocalCues(file)) {
                     file.delete()
@@ -452,7 +500,7 @@ object SubtitleHelper {
             // ── Raw subtitle ──
             if (!isZip(body)) {
                 val ext = sniffSubtitleExtension(body, baseUrl)
-                val file = File(downloadsDir, "$mediaId$ext")
+                val file = File(downloadsDir, "${safeMediaKey(mediaId)}$ext")
                 writeBytesAtomic(file, body)
                 if (!parseLocalCues(file)) {
                     file.delete()
@@ -491,7 +539,7 @@ object SubtitleHelper {
 
             val ext = supportedExtension(bestMatch.name)
                 ?: sniffSubtitleExtension(bestMatch.readBytes(), bestMatch.name)
-            val finalFile = File(downloadsDir, "$mediaId$ext")
+            val finalFile = File(downloadsDir, "${safeMediaKey(mediaId)}$ext")
             writeBytesAtomic(finalFile, bestMatch.readBytes())
             cleanupTempFiles(extractedFiles)
 
@@ -882,6 +930,62 @@ object SubtitleHelper {
         }
     }
 
+    /**
+     * Persists a downloaded subtitle as the selected row for its media.
+     * Shared by automatic MovieBox downloads and manual player downloads.
+     */
+    suspend fun registerDownloadedSubtitle(
+        context: Context,
+        file: File,
+        tmdbId: String,
+        mediaId: String,
+        title: String,
+        mediaType: String,
+        season: Int,
+        episode: Int,
+        language: String,
+        languageCode: String,
+        source: String,
+        fileName: String,
+        releaseName: String = "",
+        fps: Double? = null,
+        originalUrl: String = "",
+        batchId: String = ""
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val db = com.aistudio.cinemios.fxtyr.data.local.MovieDatabase.getDatabase(context)
+            val baseId = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
+            val signature = "${languageCode}_${source}_${fileName}"
+                .lowercase()
+                .hashCode()
+                .toUInt()
+                .toString(16)
+            db.movieDao.saveSelectedSubtitle(
+                com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity(
+                    id = "${baseId}_$signature",
+                    tmdbId = tmdbId,
+                    title = title.substringBefore(" - "),
+                    mediaType = mediaType,
+                    season = season,
+                    episode = episode,
+                    language = language,
+                    languageCode = languageCode,
+                    source = source,
+                    localFilePath = file.absolutePath,
+                    fileName = fileName,
+                    batchId = batchId,
+                    originalUrl = originalUrl,
+                    downloadedAt = System.currentTimeMillis(),
+                    mediaId = mediaId,
+                    format = detectSubtitleFormat(file),
+                    releaseName = releaseName,
+                    fps = fps,
+                    isSelected = true
+                )
+            )
+        } catch (_: Exception) { }
+    }
+
     // Shared: fetch MovieBox Arabic subtitle → download → save to Room → return File
     suspend fun fetchAndSaveMovieBoxSubtitle(
         context: Context,
@@ -899,25 +1003,23 @@ object SubtitleHelper {
                 ?: subs.firstOrNull() ?: return@withContext null
             val file = downloadAndExtractSubtitle(context, arSub.url, mediaId) ?: return@withContext null
 
-            val db = com.aistudio.cinemios.fxtyr.data.local.MovieDatabase.getDatabase(context)
-            val entityId = if (isTv) "${tmdbId}_s${season}e${episode}_${arSub.langCode}" else "${tmdbId}_${arSub.langCode}"
-            db.movieDao.insertSubtitleDownload(
-                com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity(
-                    id = entityId,
-                    tmdbId = tmdbId,
-                    title = title.substringBefore(" - "),
-                    mediaType = if (isTv) "tv" else "movie",
-                    season = season,
-                    episode = episode,
-                    language = arSub.lang,
-                    languageCode = arSub.langCode,
-                    source = arSub.source,
-                    localFilePath = file.absolutePath,
-                    fileName = arSub.name,
-                    batchId = "auto_${mediaId}",
-                    originalUrl = arSub.url,
-                    downloadedAt = System.currentTimeMillis()
-                )
+            registerDownloadedSubtitle(
+                context = context,
+                file = file,
+                tmdbId = tmdbId,
+                mediaId = mediaId,
+                title = title,
+                mediaType = if (isTv) "tv" else "movie",
+                season = season,
+                episode = episode,
+                language = arSub.lang,
+                languageCode = arSub.langCode,
+                source = arSub.source,
+                fileName = arSub.name,
+                releaseName = arSub.releaseName,
+                fps = arSub.fps,
+                originalUrl = arSub.url,
+                batchId = "auto_$mediaId"
             )
 
             file

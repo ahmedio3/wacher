@@ -1194,13 +1194,27 @@ class MovieViewModel(
         season: Int = 0,
         episode: Int = 0,
         fileName: String = "",
-        batchId: String = ""
+        batchId: String = "",
+        mediaId: String = "",
+        releaseName: String = "",
+        format: String = "",
+        fps: Double? = null,
+        isSelected: Boolean = true
     ) {
         viewModelScope.launch {
+            val resolvedMediaId = mediaId.ifBlank {
+                if (mediaType == "tv") "${tmdbId}-s${season}-e${episode}" else tmdbId
+            }
+            // Stable id: re-downloading the same release replaces its row instead
+            // of piling up duplicates on every tap.
             val baseId = if (mediaType == "tv") "${tmdbId}_s${season}e${episode}_$languageCode" else "${tmdbId}_$languageCode"
-            val id = if (baseId.endsWith("_$languageCode")) "${baseId}_${System.currentTimeMillis()}" else baseId
+            val signature = "${languageCode}_${source}_${fileName}"
+                .lowercase()
+                .hashCode()
+                .toUInt()
+                .toString(16)
             val entity = SubtitleDownloadEntity(
-                id = id,
+                id = "${baseId}_$signature",
                 tmdbId = tmdbId,
                 title = title,
                 mediaType = mediaType,
@@ -1213,11 +1227,37 @@ class MovieViewModel(
                 episode = episode,
                 fileName = fileName,
                 batchId = batchId,
-                downloadedAt = System.currentTimeMillis()
+                downloadedAt = System.currentTimeMillis(),
+                mediaId = resolvedMediaId,
+                format = format.ifBlank { localFilePath.substringAfterLast('.', "").lowercase() },
+                releaseName = releaseName.ifBlank { fileName },
+                fps = fps,
+                isSelected = isSelected
             )
-            repository.addSubtitleDownload(entity)
+            repository.saveSubtitleDownload(entity)
             // Toast removed: unified batch toast is shown via onBatchComplete
         }
+    }
+
+    /** Marks a downloaded subtitle as the active one for its media/episode. */
+    fun selectSubtitleDownload(id: String) {
+        viewModelScope.launch {
+            repository.selectSubtitleDownload(id)
+        }
+    }
+
+    /** Room-first subtitle lookup used by the player. */
+    suspend fun resolvePlayableSubtitle(
+        mediaId: String,
+        tmdbId: String,
+        season: Int,
+        episode: Int
+    ): SubtitleDownloadEntity? {
+        val row = repository.getPlayableSubtitle(mediaId, tmdbId, season, episode) ?: return null
+        if (row.mediaId.isBlank() && mediaId.isNotBlank()) {
+            repository.backfillSubtitleMediaId(row.id, mediaId)
+        }
+        return row
     }
 
     fun deleteSubtitleDownload(id: String) {

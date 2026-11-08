@@ -539,7 +539,8 @@ fun DetailScreen(
                                 season = subtitleSheetSeason,
                                 episode = if (matchedEpisode > 0) matchedEpisode else subtitleSheetEpisode,
                                 fileName = name,
-                                batchId = batchId
+                                batchId = batchId,
+                                releaseName = name
                             )
                             // Keep sheet open so user can download more subtitles
                         },

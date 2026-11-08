@@ -63,6 +63,38 @@ class MovieRepository(private val movieDao: MovieDao) {
         movieDao.insertSubtitleDownload(item)
     }
 
+    /** Inserts a row and, when requested, makes it the only selected subtitle for the episode. */
+    suspend fun saveSubtitleDownload(item: SubtitleDownloadEntity) {
+        movieDao.saveSelectedSubtitle(item)
+    }
+
+    suspend fun selectSubtitleDownload(id: String) {
+        movieDao.selectSubtitleById(id)
+    }
+
+    /**
+     * Room-first resolver: the explicit selection wins, then the newest row for
+     * the same media/episode (covers downloads made before selection existed).
+     */
+    suspend fun getPlayableSubtitle(
+        mediaId: String,
+        tmdbId: String,
+        season: Int,
+        episode: Int
+    ): SubtitleDownloadEntity? {
+        if (mediaId.isNotBlank()) {
+            movieDao.getSelectedSubtitleForMedia(mediaId)?.let { return it }
+            movieDao.getLatestSubtitleForMedia(mediaId)?.let { return it }
+        }
+        if (tmdbId.isBlank()) return null
+        movieDao.getSelectedSubtitleForEpisode(tmdbId, season, episode)?.let { return it }
+        return movieDao.getLatestSubtitleForEpisode(tmdbId, season, episode)
+    }
+
+    suspend fun backfillSubtitleMediaId(id: String, mediaId: String) {
+        movieDao.backfillSubtitleMediaId(id, mediaId)
+    }
+
     suspend fun removeSubtitleDownload(id: String) {
         movieDao.deleteSubtitleDownload(id)
     }

@@ -103,6 +103,9 @@ import java.util.Locale
 /** Which value the unified center overlay is currently displaying. */
 private enum class AdjustMode { VOLUME, BRIGHTNESS }
 
+/** Subtitle containers the parser can read from the canonical downloads directory. */
+private val SUBTITLE_EXTENSIONS = listOf(".srt", ".vtt", ".ass", ".ssa")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -255,6 +258,38 @@ fun OfflinePlayerScreen(
     val isTv = activeId.contains("-s")
     val currentSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 1
     val currentEpisode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 1
+
+    // Room-first subtitle resolver. Explicit selection wins, then the newest
+    // matching row, then legacy files in the canonical/standalone dirs.
+    suspend fun resolveActiveSubtitleFile(): File? {
+        val tmdbKey = parentTmdbId.takeIf { it.toLongOrNull() != null } ?: ""
+        val row = try {
+            viewModel.resolvePlayableSubtitle(activeId, tmdbKey, currentSeason, currentEpisode)
+        } catch (_: Exception) {
+            null
+        }
+        if (row != null) {
+            val rowFile = File(row.localFilePath)
+            if (rowFile.exists() && rowFile.length() > 0L) {
+                return SubtitleHelper.copyToCanonicalPlayerPath(context, rowFile, activeId) ?: rowFile
+            }
+            // The file was removed outside the app; drop the stale row.
+            viewModel.deleteSubtitleDownload(row.id)
+        }
+
+        val downloadsDir = File(context.filesDir, "downloads")
+        for (ext in SUBTITLE_EXTENSIONS) {
+            val direct = File(downloadsDir, "$activeId$ext")
+            if (direct.exists() && direct.length() > 0L) return direct
+        }
+        val standaloneDir = File(context.filesDir, "standalone_subtitles")
+        return standaloneDir.listFiles()?.firstOrNull { candidate ->
+            candidate.isFile && candidate.length() > 0L &&
+                candidate.name.startsWith(activeId) &&
+                SUBTITLE_EXTENSIONS.any { candidate.name.lowercase().endsWith(it) }
+        }
+    }
+
     var selectedSeason by remember(activeId) {
         mutableIntStateOf(currentSeason)
     }
@@ -271,7 +306,7 @@ fun OfflinePlayerScreen(
     val tmdbSeasonState = seasonDetailsMap[tmdbKey]
 
     val episodesList: List<PlayerEpisodeItem> = remember(
-        isTv, parentTmdbId, selectedSeason, tmdbSeasonState, seriesEpisodes
+        isTv, parentTmdbId, selectedSeason, tmdbSeasonState, seriesEpisodes, subtitleDownloads
     ) {
         if (!isTv) emptyList()
         else if (tmdbSeasonState is RequestState.Success && !tmdbSeasonState.data.episodes.isNullOrEmpty()) {
@@ -280,8 +315,8 @@ fun OfflinePlayerScreen(
                 val epNum = ep.episodeNumber ?: 1
                 val epId = "$parentTmdbId-s$selectedSeason-e$epNum"
                 val dl = seriesEpisodes.find { it.id == epId }
-                val srtFile = File(context.filesDir, "downloads/$epId.srt")
-                val vttFile = File(context.filesDir, "downloads/$epId.vtt")
+                val hasSub = SUBTITLE_EXTENSIONS.any { File(context.filesDir, "downloads/$epId$it").exists() } ||
+                    subtitleDownloads.any { it.mediaId == epId && File(it.localFilePath).exists() }
                 PlayerEpisodeItem(
                     id = epId,
                     season = selectedSeason,
@@ -292,7 +327,7 @@ fun OfflinePlayerScreen(
                     localFilePath = dl?.localFilePath ?: "",
                     streamUrl = "",
                     isDownloaded = dl != null,
-                    hasSubtitle = srtFile.exists() || vttFile.exists()
+                    hasSubtitle = hasSub
                 )
             }
         } else if (seriesEpisodes.isNotEmpty()) {
@@ -300,8 +335,8 @@ fun OfflinePlayerScreen(
                 .filter { it.season == selectedSeason || selectedSeason == 0 }
                 .sortedBy { it.episode }
                 .map { dl ->
-                    val srtFile = File(context.filesDir, "downloads/${dl.id}.srt")
-                    val vttFile = File(context.filesDir, "downloads/${dl.id}.vtt")
+                    val hasSub = SUBTITLE_EXTENSIONS.any { File(context.filesDir, "downloads/${dl.id}$it").exists() } ||
+                        subtitleDownloads.any { it.mediaId == dl.id && File(it.localFilePath).exists() }
                     PlayerEpisodeItem(
                         id = dl.id,
                         season = dl.season,
@@ -310,7 +345,7 @@ fun OfflinePlayerScreen(
                         localFilePath = dl.localFilePath,
                         streamUrl = "",
                         isDownloaded = true,
-                        hasSubtitle = srtFile.exists() || vttFile.exists()
+                        hasSubtitle = hasSub
                     )
                 }
         } else {
@@ -325,19 +360,28 @@ fun OfflinePlayerScreen(
         }
     }
 
+    // Selected subtitle row for this episode (Room is the source of truth)
+    val activeSubtitleRow = remember(subtitleDownloads, activeId, parentTmdbId, currentSeason, currentEpisode) {
+        subtitleDownloads.firstOrNull {
+            it.isSelected && (
+                it.mediaId == activeId ||
+                    (it.tmdbId == parentTmdbId && it.season == currentSeason && it.episode == currentEpisode)
+                )
+        } ?: subtitleDownloads.firstOrNull { it.mediaId == activeId }
+    }
+
     // Subtitle status info text
-    val subtitleStatusText = remember(parsedSubtitles, activeId, context) {
-        val episodeSubFile = File(context.filesDir, "downloads/$activeId.srt")
-        val episodeVttFile = File(context.filesDir, "downloads/$activeId.vtt")
-        val episodeExists = episodeSubFile.exists() || episodeVttFile.exists()
+    val subtitleStatusText = remember(parsedSubtitles, activeId, activeSubtitleRow, subtitleDownloads) {
+        val episodeExists = activeSubtitleRow?.let { File(it.localFilePath).exists() } == true ||
+            SUBTITLE_EXTENSIONS.any { File(context.filesDir, "downloads/$activeId$it").exists() }
 
         // Check if full series subtitle folder exists
         val baseIdOnly = activeId.substringBefore("-s")
-        val seriesFolder = File(context.filesDir, "downloads")
-        val seriesSubFiles = seriesFolder.listFiles()?.filter {
-            it.name.startsWith(baseIdOnly) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
-        } ?: emptyList()
-        val seriesSubCount = seriesSubFiles.size
+        val seriesSubCount = File(context.filesDir, "downloads").listFiles()
+            ?.count { file ->
+                file.name.startsWith(baseIdOnly) &&
+                    SUBTITLE_EXTENSIONS.any { ext -> file.name.lowercase().endsWith(ext) }
+            } ?: 0
 
         buildString {
             if (parsedSubtitles.isNotEmpty() && episodeExists) {
@@ -526,14 +570,11 @@ fun OfflinePlayerScreen(
                     mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
                 }
 
-                val srtFile = File(context.filesDir, "downloads/$activeId.srt")
-                val vttFile = File(context.filesDir, "downloads/$activeId.vtt")
-                if (srtFile.exists()) {
-                    parsedSubtitles = SubtitleParser.parseBlock(srtFile)
-                } else if (vttFile.exists()) {
-                    parsedSubtitles = SubtitleParser.parseBlock(vttFile)
+                val resolvedSubtitle = resolveActiveSubtitleFile()
+                parsedSubtitles = if (resolvedSubtitle != null) {
+                    SubtitleParser.parseBlock(resolvedSubtitle)
                 } else {
-                    parsedSubtitles = emptyList()
+                    emptyList()
                 }
 
                 exoPlayer.setMediaItem(mediaItemBuilder.build())
@@ -545,29 +586,18 @@ fun OfflinePlayerScreen(
 
                 // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
-                    val standaloneDir = File(context.filesDir, "standalone_subtitles")
-                    val autoFiles = standaloneDir.listFiles()?.filter {
-                        it.name.startsWith(activeId) && (it.name.endsWith(".srt") || it.name.endsWith(".vtt"))
-                    }
-                    val autoSub = autoFiles?.firstOrNull()
-                    if (autoSub != null && autoSub.exists()) {
-                        parsedSubtitles = SubtitleParser.parseBlock(autoSub)
-                        val playerExt = if (autoSub.name.endsWith(".vtt")) ".vtt" else ".srt"
-                        autoSub.copyTo(File(context.filesDir, "downloads/$activeId$playerExt"), overwrite = true)
-                    } else {
-                        launch(Dispatchers.IO) {
-                            val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
-                            val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                            val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
-                            val subFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
-                                context, tmdbIdStr, isTv, seasonSub, episodeSub,
-                                activeTitle, activeId
-                            )
-                            if (subFile != null) {
-                                parsedSubtitles = SubtitleParser.parseBlock(subFile)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "✓ تم تحميل الترجمة العربية", Toast.LENGTH_SHORT).show()
-                                }
+                    launch(Dispatchers.IO) {
+                        val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                        val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
+                        val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                        val subFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
+                            context, tmdbIdStr, isTv, seasonSub, episodeSub,
+                            activeTitle, activeId
+                        )
+                        if (subFile != null) {
+                            parsedSubtitles = SubtitleParser.parseBlock(subFile)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "✓ تم تحميل الترجمة العربية", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -612,19 +642,17 @@ fun OfflinePlayerScreen(
                     playStreamFile(chosenQuality, seekPos = if (lastPos > 0) lastPos else -1L)
 
                     // Auto-fetch Arabic subtitle for online stream
-                    val srtFile = File(context.filesDir, "downloads/$activeId.srt")
-                    val vttFile = File(context.filesDir, "downloads/$activeId.vtt")
-                    if (srtFile.exists()) {
-                        parsedSubtitles = SubtitleParser.parseBlock(srtFile)
-                    } else if (vttFile.exists()) {
-                        parsedSubtitles = SubtitleParser.parseBlock(vttFile)
+                    val resolvedStreamSubtitle = resolveActiveSubtitleFile()
+                    parsedSubtitles = if (resolvedStreamSubtitle != null) {
+                        SubtitleParser.parseBlock(resolvedStreamSubtitle)
                     } else {
-                        parsedSubtitles = emptyList()
+                        emptyList()
                     }
 
                     if (parsedSubtitles.isEmpty()) {
                         launch(Dispatchers.IO) {
                             var downloadedSubFile: File? = null
+                            var registeredByHelper = false
                             if (chosenQuality.hasArabicSubtitle && chosenQuality.arabicSubtitleUrl != null) {
                                 downloadedSubFile = SubtitleHelper.downloadAndExtractSubtitle(context, chosenQuality.arabicSubtitleUrl, activeId)
                             } else if (chosenQuality.allSubtitles.isNotEmpty()) {
@@ -644,9 +672,28 @@ fun OfflinePlayerScreen(
                                 downloadedSubFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                                     context, tmdbIdStr, isTv, startSeason, startEpisode, activeTitle, activeId
                                 )
+                                registeredByHelper = downloadedSubFile != null
                             }
 
                             if (downloadedSubFile != null && downloadedSubFile.exists()) {
+                                if (!registeredByHelper) {
+                                    SubtitleHelper.registerDownloadedSubtitle(
+                                        context = context,
+                                        file = downloadedSubFile,
+                                        tmdbId = if (isTv) activeId.substringBefore("-s") else activeId,
+                                        mediaId = activeId,
+                                        title = activeTitle,
+                                        mediaType = if (isTv) "tv" else "movie",
+                                        season = startSeason,
+                                        episode = startEpisode,
+                                        language = "العربية",
+                                        languageCode = "ar",
+                                        source = "MovieBox",
+                                        fileName = downloadedSubFile.name,
+                                        releaseName = activeTitle,
+                                        batchId = "auto_$activeId"
+                                    )
+                                }
                                 parsedSubtitles = SubtitleParser.parseBlock(downloadedSubFile)
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(context, "✓ تم تحميل الترجمة العربية تلقائياً", Toast.LENGTH_SHORT).show()
@@ -2032,7 +2079,29 @@ fun OfflinePlayerScreen(
                                                                     try {
                                                                         val subs = SubtitleHelper.fetchSubtitles(parentTmdbId, true, ep.season, ep.episode, activeTitle.substringBefore(" - "))
                                                                         val arSub = subs.firstOrNull { it.lang.contains("AR", ignoreCase = true) } ?: subs.firstOrNull()
-                                                                        if (arSub != null) SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, ep.id)
+                                                                        if (arSub != null) {
+                                                                            val subFile = SubtitleHelper.downloadAndExtractSubtitle(context, arSub.url, ep.id)
+                                                                            if (subFile != null) {
+                                                                                SubtitleHelper.registerDownloadedSubtitle(
+                                                                                    context = context,
+                                                                                    file = subFile,
+                                                                                    tmdbId = parentTmdbId,
+                                                                                    mediaId = ep.id,
+                                                                                    title = ep.title,
+                                                                                    mediaType = "tv",
+                                                                                    season = ep.season,
+                                                                                    episode = ep.episode,
+                                                                                    language = arSub.lang,
+                                                                                    languageCode = arSub.langCode,
+                                                                                    source = arSub.source,
+                                                                                    fileName = arSub.name,
+                                                                                    releaseName = arSub.releaseName,
+                                                                                    fps = arSub.fps,
+                                                                                    originalUrl = arSub.url,
+                                                                                    batchId = "series_$activeId"
+                                                                                )
+                                                                            }
+                                                                        }
                                                                     } catch (_: Exception) { }
                                                                 }
                                                                 isDownloadingSub = false
@@ -2144,8 +2213,26 @@ fun OfflinePlayerScreen(
                                             titleFallback = activeTitle,
                                             initialPage = page,
                                             onNavigateBack = { subtitlePage = 0 },
-                                            onSubtitleLoaded = { file, _, _, _, _, _, _ ->
+                                            onSubtitleLoaded = { file, language, langCode, source, name, matchedEpisode, batchId ->
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
+                                                viewModel.saveSubtitleDownload(
+                                                    tmdbId = parentTmdbId,
+                                                    title = activeTitle,
+                                                    posterPath = "",
+                                                    language = language,
+                                                    languageCode = langCode,
+                                                    source = source,
+                                                    localFilePath = file.absolutePath,
+                                                    mediaType = if (isTv) "tv" else "movie",
+                                                    season = currentSeason,
+                                                    episode = if (matchedEpisode > 0) matchedEpisode else currentEpisode,
+                                                    fileName = name,
+                                                    batchId = batchId,
+                                                    mediaId = activeId,
+                                                    releaseName = name,
+                                                    format = SubtitleHelper.detectSubtitleFormat(file),
+                                                    isSelected = true
+                                                )
                                                 showSubtitleDrawer = false
                                             },
                                             customDownload = { downloadUrl, onError ->
@@ -2177,13 +2264,14 @@ fun OfflinePlayerScreen(
                                             onSelectActive = { item ->
                                                 val file = File(item.localFilePath)
                                                 if (file.exists()) {
+                                                    viewModel.selectSubtitleDownload(item.id)
                                                     parsedSubtitles = SubtitleParser.parseBlock(file)
                                                     showSubtitleDrawer = false
                                                     subtitlePage = 0
                                                     Toast.makeText(context, "تم تفعيل ترجمة ${item.language}", Toast.LENGTH_SHORT).show()
                                                 }
                                             },
-                                            activeFilePath = null
+                                            activeFilePath = activeSubtitleRow?.localFilePath
                                         )
                                     }
 
@@ -2238,6 +2326,7 @@ fun OfflinePlayerScreen(
                                                             val item = batch.items[index]
                                                             val file = File(item.localFilePath)
                                                             if (file.exists()) {
+                                                                viewModel.selectSubtitleDownload(item.id)
                                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
                                                                 showSubtitleDrawer = false
                                                                 subtitlePage = 0
