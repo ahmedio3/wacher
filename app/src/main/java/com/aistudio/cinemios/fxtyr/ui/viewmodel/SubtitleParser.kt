@@ -33,7 +33,7 @@ object SubtitleParser {
     private val VTT_TIME = Regex("""(?:(\d{1,3}):)?(\d{2}):(\d{2})[.,](\d{1,3})""")
     private val ASS_TIME = Regex("""(\d+):(\d{2}):(\d{2})[.:](\d{1,3})""")
     private val HTML_TAG = Regex("""<[^>]*>""")
-    private val ASS_TAG = Regex("""\{[^}]*}""")
+    private val ASS_TAG = Regex("""\{[^}]*\}""")
     private val BLANK_LINES = Regex("""\n{2,}""")
 
     fun parseBlock(file: File): List<SubtitleLine> {
