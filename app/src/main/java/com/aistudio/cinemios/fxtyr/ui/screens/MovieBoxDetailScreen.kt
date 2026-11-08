@@ -54,7 +54,7 @@ fun MovieBoxDetailScreen(
     posterParams: String = "",
     viewModel: MovieViewModel,
     onBackClick: () -> Unit,
-    onPlayClick: (String, String) -> Unit
+    onPlayClick: (String, String, Int, Int) -> Unit
 ) {
     val appContext = LocalContext.current.applicationContext as android.app.Application
     val movieBoxViewModel: MovieBoxViewModel = viewModel(factory = ViewModelFactory(appContext))
@@ -68,6 +68,15 @@ fun MovieBoxDetailScreen(
     var itemDetail by remember { mutableStateOf<ItemDetailResult?>(null) }
     var videoLinks by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
     val mbWatchlistId = "mb_$subjectId"
+
+    // Season selection is shared by the top "watch now" button and the episode
+    // list, so both always refer to the same season.
+    val availableSeasons = remember(videoLinks) {
+        videoLinks.map { it.season }.distinct().sorted()
+    }
+    var selectedSeason by remember(videoLinks) {
+        mutableIntStateOf(availableSeasons.firstOrNull() ?: 1)
+    }
 
     var showSubtitleSheet by remember { mutableStateOf(false) }
     var subtitleFiles by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
@@ -321,15 +330,30 @@ fun MovieBoxDetailScreen(
                             if (isTv) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Button(
                                         onClick = {
-                                            pendingDownloadSeason = 0
-                                            pendingDownloadEpisode = 0
-                                            showMovieBoxSheet = true
+                                            val firstEpisode = videoLinks
+                                                .filter { it.season == selectedSeason }
+                                                .minByOrNull { it.episode }?.episode
+                                                ?: videoLinks.minByOrNull { it.episode }?.episode
+                                            if (firstEpisode != null) {
+                                                onPlayClick(
+                                                    subjectId,
+                                                    displayTitle,
+                                                    selectedSeason,
+                                                    firstEpisode
+                                                )
+                                            } else {
+                                                Toast.makeText(
+                                                    appContext,
+                                                    "لا توجد حلقات للمشاهدة",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
                                         },
-                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        modifier = Modifier.weight(1.5f).height(52.dp),
                                         shape = RoundedCornerShape(14.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                     ) {
@@ -337,9 +361,24 @@ fun MovieBoxDetailScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Icon(imageVector = Icons.Default.Download, contentDescription = null, tint = Color.White)
-                                            Text("تحميل المسلسل كاملًا", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                                            Text("مشاهدة الآن", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                         }
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            pendingDownloadSeason = 0
+                                            pendingDownloadEpisode = 0
+                                            showMovieBoxSheet = true
+                                        },
+                                        modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "تحميل المسلسل كاملًا",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                     }
 
                                     Box(
@@ -348,16 +387,16 @@ fun MovieBoxDetailScreen(
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                                             .combinedClickable(
-                                onClick = {
-                                    viewModel.toggleWatchlist(
-                                        id = mbWatchlistId, title = displayTitle,
-                                        posterPath = displayPoster,
-                                        mediaType = "tv",
-                                        rating = itemDetail?.rating ?: 0.0
-                                    )
-                                },
-                                onLongClick = {}
-                            ),
+                                                onClick = {
+                                                    viewModel.toggleWatchlist(
+                                                        id = mbWatchlistId, title = displayTitle,
+                                                        posterPath = displayPoster,
+                                                        mediaType = "tv",
+                                                        rating = itemDetail?.rating ?: 0.0
+                                                    )
+                                                },
+                                                onLongClick = {}
+                                            ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -374,7 +413,7 @@ fun MovieBoxDetailScreen(
                                 ) {
                                     Button(
                                         onClick = {
-                                            if (videoLinks.isNotEmpty()) onPlayClick(subjectId, displayTitle)
+                                            if (videoLinks.isNotEmpty()) onPlayClick(subjectId, displayTitle, 0, 0)
                                             else Toast.makeText(appContext, "لا توجد روابط للمشاهدة", Toast.LENGTH_SHORT).show()
                                         },
                                         modifier = Modifier.weight(1.5f).height(52.dp),
@@ -454,9 +493,6 @@ fun MovieBoxDetailScreen(
                             }
 
                             if (isTv && videoLinks.isNotEmpty()) {
-                                val availableSeasons = remember(videoLinks) { videoLinks.map { it.season }.distinct().sorted() }
-                                var selectedSeason by remember { mutableIntStateOf(availableSeasons.firstOrNull() ?: 1) }
-
                                 Text(
                                     text = "الحلقات والمواسم",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -511,6 +547,14 @@ fun MovieBoxDetailScreen(
                                                 pendingDownloadSeason = selectedSeason
                                                 pendingDownloadEpisode = episodeNum
                                                 showMovieBoxSheet = true
+                                            },
+                                            onPlayClick = {
+                                                onPlayClick(
+                                                    subjectId,
+                                                    "$displayTitle - S${selectedSeason}E$episodeNum",
+                                                    selectedSeason,
+                                                    episodeNum
+                                                )
                                             },
                                             onLongClick = {
                                                 val allSubs = videoLinks.flatMap { it.allSubtitles }.distinctBy { it.languageCode }
@@ -605,6 +649,7 @@ private fun MovieBoxEpisodeRowCard(
     episodeNumber: Int,
     hasSubtitle: Boolean = false,
     onClick: () -> Unit,
+    onPlayClick: (() -> Unit)? = null,
     onLongClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -662,9 +707,29 @@ private fun MovieBoxEpisodeRowCard(
             Spacer(modifier = Modifier.width(6.dp))
         }
 
+        if (onPlayClick != null) {
+            Button(
+                onClick = onPlayClick,
+                modifier = Modifier.height(36.dp).width(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "تشغيل الحلقة",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
         Button(
             onClick = onClick,
-            modifier = Modifier.height(36.dp).width(72.dp),
+            modifier = Modifier.height(36.dp).width(56.dp),
             shape = RoundedCornerShape(12.dp),
             contentPadding = PaddingValues(0.dp),
             colors = ButtonDefaults.buttonColors(

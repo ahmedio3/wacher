@@ -95,6 +95,18 @@ class MovieRepository(private val movieDao: MovieDao) {
         movieDao.backfillSubtitleMediaId(id, mediaId)
     }
 
+    suspend fun getSubtitleDownload(id: String): SubtitleDownloadEntity? {
+        return movieDao.getSubtitleDownloadById(id)
+    }
+
+    suspend fun countSubtitlesForMedia(mediaId: String): Int {
+        return movieDao.countSubtitlesForMedia(mediaId)
+    }
+
+    suspend fun countSubtitleRowsByPath(path: String): Int {
+        return movieDao.countSubtitleRowsByPath(path)
+    }
+
     suspend fun removeSubtitleDownload(id: String) {
         movieDao.deleteSubtitleDownload(id)
     }

@@ -1262,8 +1262,59 @@ class MovieViewModel(
 
     fun deleteSubtitleDownload(id: String) {
         viewModelScope.launch {
+            val row = repository.getSubtitleDownload(id) ?: return@launch
             repository.removeSubtitleDownload(id)
+
+            // Delete the row's own file when no other row references it. Only
+            // app-private storage is touched, so a legacy/bad path can never
+            // remove user files outside the app sandbox.
+            if (row.localFilePath.isNotBlank() &&
+                repository.countSubtitleRowsByPath(row.localFilePath) == 0
+            ) {
+                deleteAppPrivateFile(row.localFilePath)
+            }
+
+            val mediaId = row.mediaId.ifBlank {
+                if (row.mediaType == "tv") "${row.tmdbId}-s${row.season}-e${row.episode}" else row.tmdbId
+            }
+            val remainingForMedia =
+                if (mediaId.isBlank()) 0 else repository.countSubtitlesForMedia(mediaId)
+
+            if (remainingForMedia == 0) {
+                // No rows left: also remove the canonical copy, otherwise the
+                // player's legacy file scan would keep showing a deleted subtitle.
+                withContext(Dispatchers.IO) {
+                    SubtitleHelper.deleteCanonicalPlayerSubtitles(getApplication<Application>(), mediaId)
+                }
+            } else if (row.isSelected) {
+                // Promote the newest remaining row and refresh the canonical copy
+                // the player reads, so deleting the active subtitle switches cleanly.
+                val replacement =
+                    repository.getPlayableSubtitle(mediaId, row.tmdbId, row.season, row.episode)
+                if (replacement != null) {
+                    repository.selectSubtitleDownload(replacement.id)
+                    val replacementFile = File(replacement.localFilePath)
+                    if (replacementFile.isFile) {
+                        SubtitleHelper.copyToCanonicalPlayerPath(
+                            getApplication<Application>(),
+                            replacementFile,
+                            mediaId
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    /** Removes a file only when it lives inside the app's private files directory. */
+    private fun deleteAppPrivateFile(path: String) {
+        try {
+            val root = getApplication<Application>().filesDir.canonicalFile
+            val file = File(path).canonicalFile
+            if (file.path.startsWith(root.path + File.separator) && file.isFile) {
+                file.delete()
+            }
+        } catch (_: Exception) { }
     }
 
     // Process the queue: start the oldest queued download if nothing is running

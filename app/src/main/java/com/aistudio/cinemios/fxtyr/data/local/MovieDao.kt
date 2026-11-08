@@ -65,6 +65,12 @@ interface MovieDao {
     @Query("SELECT * FROM subtitle_downloads WHERE tmdbId = :tmdbId AND season = :season AND episode = :episode AND localFilePath != '' ORDER BY downloadedAt DESC LIMIT 1")
     suspend fun getLatestSubtitleForEpisode(tmdbId: String, season: Int, episode: Int): SubtitleDownloadEntity?
 
+    @Query("SELECT COUNT(*) FROM subtitle_downloads WHERE mediaId = :mediaId")
+    suspend fun countSubtitlesForMedia(mediaId: String): Int
+
+    @Query("SELECT COUNT(*) FROM subtitle_downloads WHERE localFilePath = :path")
+    suspend fun countSubtitleRowsByPath(path: String): Int
+
     @Query("UPDATE subtitle_downloads SET isSelected = 0 WHERE mediaId = :mediaId OR (tmdbId = :tmdbId AND season = :season AND episode = :episode)")
     suspend fun clearSubtitleSelection(mediaId: String, tmdbId: String, season: Int, episode: Int)
 

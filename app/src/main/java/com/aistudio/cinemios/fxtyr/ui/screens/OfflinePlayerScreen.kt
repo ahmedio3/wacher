@@ -227,11 +227,9 @@ fun OfflinePlayerScreen(
     // Subtitle Custom Variables
     var subtitleYOffset by remember { mutableFloatStateOf(prefs.getFloat("sub_y", 0f)) }
     var subtitleSize by remember { mutableFloatStateOf(prefs.getFloat("sub_size", 16f)) }
-    var subtitleTimeOffsetMs by remember { mutableLongStateOf(0L) }
     var parsedSubtitles by remember { mutableStateOf<List<SubtitleLine>>(emptyList()) }
     var activeSubtitleText by remember { mutableStateOf("") }
     var isDownloadingSub by remember { mutableStateOf(false) }
-    var isSubtitleHidden by remember { mutableStateOf(false) }
     
     // Subtitle sources page
     var subtitlePage by remember { mutableIntStateOf(0) }
@@ -247,6 +245,21 @@ fun OfflinePlayerScreen(
     val latestActiveId by rememberUpdatedState(activeId)
     val latestActiveTitle by rememberUpdatedState(activeTitle)
     val latestLoadedMediaId by rememberUpdatedState(loadedMediaId)
+
+    // Offset/hidden are per-media UI state: restored for this episode and
+    // persisted so they survive player restarts and episode switches.
+    var subtitleTimeOffsetMs by remember(activeId) {
+        mutableLongStateOf(prefs.getLong("sub_offset_$activeId", 0L))
+    }
+    var isSubtitleHidden by remember(activeId) {
+        mutableStateOf(prefs.getBoolean("sub_hidden_$activeId", false))
+    }
+    LaunchedEffect(activeId, subtitleTimeOffsetMs) {
+        prefs.edit().putLong("sub_offset_$activeId", subtitleTimeOffsetMs).apply()
+    }
+    LaunchedEffect(activeId, isSubtitleHidden) {
+        prefs.edit().putBoolean("sub_hidden_$activeId", isSubtitleHidden).apply()
+    }
 
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
@@ -399,7 +412,8 @@ fun OfflinePlayerScreen(
 
     // Update active subtitle
     LaunchedEffect(currentPosition, subtitleTimeOffsetMs, parsedSubtitles) {
-        val effectiveTime = currentPosition + subtitleTimeOffsetMs
+        // Positive offset means "تأخير": show each line later in the video.
+        val effectiveTime = currentPosition - subtitleTimeOffsetMs
         val currentSub = parsedSubtitles.find { effectiveTime in it.startTime..it.endTime }
         activeSubtitleText = currentSub?.text ?: ""
     }
@@ -2259,7 +2273,12 @@ fun OfflinePlayerScreen(
                                                 } catch (_: Exception) { }
                                             },
                                             onDeleteFile = { item ->
+                                                val wasActive = activeSubtitleRow?.id == item.id
                                                 viewModel.deleteSubtitleDownload(item.id)
+                                                if (wasActive) {
+                                                    parsedSubtitles = emptyList()
+                                                    activeSubtitleText = ""
+                                                }
                                             },
                                             onSelectActive = { item ->
                                                 val file = File(item.localFilePath)
@@ -2306,7 +2325,12 @@ fun OfflinePlayerScreen(
                                                             Toast.makeText(context, "تم نسخ ${batch.items.size} ترجمة", Toast.LENGTH_SHORT).show()
                                                         },
                                                         onDeleteAll = {
+                                                            val deletesActive = batch.items.any { it.id == activeSubtitleRow?.id }
                                                             batch.items.forEach { viewModel.deleteSubtitleDownload(it.id) }
+                                                            if (deletesActive) {
+                                                                parsedSubtitles = emptyList()
+                                                                activeSubtitleText = ""
+                                                            }
                                                         },
                                                         onExportOne = { index ->
                                                             val item = batch.items[index]
@@ -2320,7 +2344,12 @@ fun OfflinePlayerScreen(
                                                             } catch (_: Exception) { }
                                                         },
                                                         onDeleteOne = { index ->
-                                                            viewModel.deleteSubtitleDownload(batch.items[index].id)
+                                                            val item = batch.items[index]
+                                                            if (item.id == activeSubtitleRow?.id) {
+                                                                parsedSubtitles = emptyList()
+                                                                activeSubtitleText = ""
+                                                            }
+                                                            viewModel.deleteSubtitleDownload(item.id)
                                                         },
                                                         onClickOne = { index ->
                                                             val item = batch.items[index]

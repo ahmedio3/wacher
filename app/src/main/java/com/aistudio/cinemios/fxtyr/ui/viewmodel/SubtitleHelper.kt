@@ -202,6 +202,31 @@ object SubtitleHelper {
     }
 
     /**
+     * Canonical player subtitle files stored under `downloads/` for this media id.
+     * Used by deletion so removing a Room row also removes the legacy fallback.
+     */
+    fun canonicalSubtitleFiles(context: Context, mediaId: String): List<File> {
+        if (mediaId.isBlank()) return emptyList()
+        val dir = File(context.filesDir, "downloads")
+        if (!dir.isDirectory) return emptyList()
+        val key = safeMediaKey(mediaId)
+        return dir.listFiles()?.filter { file ->
+            file.isFile && file.nameWithoutExtension == key && supportedExtension(file.name) != null
+        } ?: emptyList()
+    }
+
+    /** Deletes canonical player copies for a media id (app storage only). */
+    fun deleteCanonicalPlayerSubtitles(context: Context, mediaId: String): Int {
+        var deleted = 0
+        for (file in canonicalSubtitleFiles(context, mediaId)) {
+            try {
+                if (file.delete()) deleted++
+            } catch (_: Exception) { }
+        }
+        return deleted
+    }
+
+    /**
      * Copies a downloaded subtitle to the canonical player path
      * (`downloads/<mediaId>.<ext>`) and verifies it is parseable.
      */
