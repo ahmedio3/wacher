@@ -513,13 +513,12 @@ class MovieViewModel(
         if (mediaId.isBlank() || positionMs <= 0L || durationMs <= 0L) return
         if (positionMs < 5_000L) return
 
-        val isTv = mediaId.contains("-s") && mediaId.contains("-e")
-        val parentId = if (isTv) mediaId.substringBefore("-s") else mediaId
+        val tvInfo = SubtitleHelper.parseTvMediaId(mediaId)
+        val isTv = tvInfo != null
+        val parentId = tvInfo?.parentId ?: mediaId
         val parentInt = parentId.toIntOrNull() ?: return
-        val season = if (isTv) {
-            mediaId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 0
-        } else 0
-        val episode = if (isTv) mediaId.substringAfter("-e").toIntOrNull() ?: 0 else 0
+        val season = tvInfo?.season ?: 0
+        val episode = tvInfo?.episode ?: 0
 
         val progress = positionMs.toFloat() / durationMs.toFloat()
         val current = _continueWatching.value

@@ -263,14 +263,21 @@ fun OfflinePlayerScreen(
 
     val downloadsList by viewModel.downloads.collectAsState(initial = emptyList())
     val subtitleDownloads by viewModel.subtitleDownloads.collectAsState(initial = emptyList())
-    val parentTmdbId = if (activeId.contains("-s")) activeId.substringBefore("-s") else activeId
+    // Local file used for hash/FPS/release matching in the subtitle sources.
+    val resolvedLocalVideoPath = remember(activeId, activeLocalFilePath, downloadsList) {
+        activeLocalFilePath.ifBlank {
+            downloadsList.find { it.id == activeId && it.status == "completed" }?.localFilePath.orEmpty()
+        }
+    }
+    val activeTvInfo = remember(activeId) { SubtitleHelper.parseTvMediaId(activeId) }
+    val parentTmdbId = activeTvInfo?.parentId ?: activeId
     val seriesEpisodes = remember(downloadsList, parentTmdbId) {
         downloadsList.filter { it.mediaId == parentTmdbId && it.status == "completed" }
     }
 
-    val isTv = activeId.contains("-s")
-    val currentSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 1
-    val currentEpisode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 1
+    val isTv = activeTvInfo != null
+    val currentSeason = activeTvInfo?.season ?: 1
+    val currentEpisode = activeTvInfo?.episode ?: 1
 
     // Room-first subtitle resolver. Explicit selection wins, then the newest
     // matching row, then legacy files in the canonical/standalone dirs.
@@ -389,7 +396,7 @@ fun OfflinePlayerScreen(
             SUBTITLE_EXTENSIONS.any { File(context.filesDir, "downloads/$activeId$it").exists() }
 
         // Check if full series subtitle folder exists
-        val baseIdOnly = activeId.substringBefore("-s")
+        val baseIdOnly = parentTmdbId
         val seriesSubCount = File(context.filesDir, "downloads").listFiles()
             ?.count { file ->
                 file.name.startsWith(baseIdOnly) &&
@@ -601,9 +608,9 @@ fun OfflinePlayerScreen(
                 // Auto-download Arabic subtitle if not already present
                 if (parsedSubtitles.isEmpty()) {
                     launch(Dispatchers.IO) {
-                        val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
-                        val seasonSub = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                        val episodeSub = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                        val tmdbIdStr = parentTmdbId
+                        val seasonSub = if (isTv) currentSeason else 0
+                        val episodeSub = if (isTv) currentEpisode else 0
                         val subFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                             context, tmdbIdStr, isTv, seasonSub, episodeSub,
                             activeTitle, activeId
@@ -621,8 +628,8 @@ fun OfflinePlayerScreen(
             // Online Stream playback
             isStreamLoading = true
             try {
-                val startSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                val startEpisode = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                val startSeason = if (isTv) currentSeason else 0
+                val startEpisode = if (isTv) currentEpisode else 0
                 val isTmdb = parentTmdbId.length < 10 && parentTmdbId.toLongOrNull() != null
 
                 val subjectId: String = if (isTmdb) {
@@ -682,7 +689,7 @@ fun OfflinePlayerScreen(
                             }
 
                             if (downloadedSubFile == null) {
-                                val tmdbIdStr = if (isTv) activeId.substringBefore("-s") else activeId
+                                val tmdbIdStr = parentTmdbId
                                 downloadedSubFile = SubtitleHelper.fetchAndSaveMovieBoxSubtitle(
                                     context, tmdbIdStr, isTv, startSeason, startEpisode, activeTitle, activeId
                                 )
@@ -694,7 +701,7 @@ fun OfflinePlayerScreen(
                                     SubtitleHelper.registerDownloadedSubtitle(
                                         context = context,
                                         file = downloadedSubFile,
-                                        tmdbId = if (isTv) activeId.substringBefore("-s") else activeId,
+                                        tmdbId = parentTmdbId,
                                         mediaId = activeId,
                                         title = activeTitle,
                                         mediaType = if (isTv) "tv" else "movie",
@@ -1435,8 +1442,8 @@ fun OfflinePlayerScreen(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             if (isTv) {
-                                val sNum = activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1
-                                val eNum = activeId.substringAfter("-e").toIntOrNull() ?: 1
+                                val sNum = currentSeason
+                                val eNum = currentEpisode
                                 Text(
                                     text = activeTitle.substringBefore(" - "),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -1826,9 +1833,9 @@ fun OfflinePlayerScreen(
 
                                 // Next episode (only for TV series)
                                 if (isTv && seriesEpisodes.isNotEmpty()) {
-                                    val currentEpisodeNum = activeId.substringAfter("-e").toIntOrNull() ?: 0
+                                    val currentEpisodeNum = currentEpisode
                                     val nextEp = seriesEpisodes
-                                        .filter { it.episode > currentEpisodeNum && it.season == (activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1) }
+                                        .filter { it.episode > currentEpisodeNum && it.season == currentSeason }
                                         .minByOrNull { it.episode }
                                     if (nextEp != null) {
                                         IconButton(
@@ -2216,8 +2223,8 @@ fun OfflinePlayerScreen(
 
                                     // ===== PAGES 1, 2, 3: SubtitleSourceSheet (shared component) =====
                                     1, 2, 3 -> {
-                                        val seasonNum = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 0
-                                        val episodeNum = if (isTv) activeId.substringAfter("-e").toIntOrNull() ?: 1 else 0
+                                        val seasonNum = if (isTv) currentSeason else 0
+                                        val episodeNum = if (isTv) currentEpisode else 0
 
                                         SubtitleSourceSheet(
                                             tmdbId = parentTmdbId,
@@ -2226,6 +2233,8 @@ fun OfflinePlayerScreen(
                                             episode = episodeNum,
                                             titleFallback = activeTitle,
                                             initialPage = page,
+                                            videoFilePath = resolvedLocalVideoPath,
+                                            videoFileName = resolvedLocalVideoPath.substringAfterLast('/'),
                                             onNavigateBack = { subtitlePage = 0 },
                                             onSubtitleLoaded = { file, language, langCode, source, name, matchedEpisode, batchId ->
                                                 parsedSubtitles = SubtitleParser.parseBlock(file)
@@ -2597,15 +2606,15 @@ fun OfflinePlayerScreen(
                         shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                     ) {
-                        val currentSeason = if (isTv) activeId.substringAfter("-s").substringBefore("-e").toIntOrNull() ?: 1 else 1
-                        var selectedSeason by remember { mutableStateOf(currentSeason) }
+                        val drawerSeason = if (isTv) currentSeason else 1
+                        var selectedSeason by remember { mutableStateOf(drawerSeason) }
                         // Open the drawer on the season of the episode currently being watched
                         LaunchedEffect(showEpisodesDrawer) {
-                            if (showEpisodesDrawer) selectedSeason = currentSeason
+                            if (showEpisodesDrawer) selectedSeason = drawerSeason
                         }
                         // Keep the selection synced when the played episode changes
                         LaunchedEffect(activeId) {
-                            selectedSeason = currentSeason
+                            selectedSeason = drawerSeason
                         }
 
                         val availableSeasons = remember(seriesEpisodes) {

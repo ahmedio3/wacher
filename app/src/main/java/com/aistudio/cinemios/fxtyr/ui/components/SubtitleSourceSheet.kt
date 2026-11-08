@@ -47,6 +47,9 @@ fun SubtitleSourceSheet(
     episode: Int = 0,
     titleFallback: String = "",
     initialPage: Int = 0,
+    videoFilePath: String = "",
+    videoFileName: String = "",
+    videoFps: Double? = null,
     context: Context = LocalContext.current,
     onNavigateBack: () -> Unit = {},
     onSubtitleLoaded: (file: File, language: String, languageCode: String, source: String, name: String, matchedEpisode: Int, batchId: String) -> Unit = { _, _, _, _, _, _, _ -> },
@@ -74,6 +77,32 @@ fun SubtitleSourceSheet(
         SubtitleHelper.downloadSubtitleStandalone(context, url, UUID.randomUUID().toString(), onError)
     }
     val downloadFn = customDownload ?: defaultDownload
+
+    val effectiveVideoFileName =
+        videoFileName.ifBlank { videoFilePath.substringAfterLast('/') }
+
+    // Hash/FPS are computed only for local files. The hash attempt is cheap
+    // (first/last 64 KiB), and the result is used for exact provider matching.
+    suspend fun loadOpenSubtitles(
+        onError: (SubtitleHelper.SubtitleError) -> Unit
+    ): List<SubtitleHelper.SubtitleItem> {
+        val fingerprint = withContext(Dispatchers.IO) {
+            SubtitleHelper.buildVideoFingerprint(context, videoFilePath)
+        }
+        return withContext(Dispatchers.IO) {
+            SubtitleHelper.fetchOpenSubtitles(
+                tmdbId = tmdbId,
+                isTv = isTv,
+                season = season,
+                episode = episode,
+                videoFileName = fingerprint?.fileName ?: effectiveVideoFileName,
+                videoFps = videoFps ?: fingerprint?.fps,
+                movieHash = fingerprint?.movieHash,
+                movieFileSize = fingerprint?.fileSize,
+                onError = onError
+            )
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
     // Header with navigation
@@ -306,9 +335,15 @@ fun SubtitleSourceSheet(
                     subdlError = null
                     var fetchError: String? = null
                     val result = withContext(Dispatchers.IO) {
-                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode) { error ->
-                            fetchError = error.userMessage
-                        }
+                        SubtitleHelper.fetchSubdlSubtitles(
+                            tmdbId = tmdbId,
+                            isTv = isTv,
+                            season = season,
+                            episode = episode,
+                            videoFileName = effectiveVideoFileName,
+                            videoFps = videoFps,
+                            onError = { error -> fetchError = error.userMessage }
+                        )
                     }
                     subdlSources = result
                     subdlError = fetchError
@@ -326,9 +361,15 @@ fun SubtitleSourceSheet(
                                     subdlError = null
                                     var fetchError: String? = null
                                     val result = withContext(Dispatchers.IO) {
-                                        SubtitleHelper.fetchSubdlSubtitles(tmdbId, isTv, season, episode) { error ->
-                                            fetchError = error.userMessage
-                                        }
+                                        SubtitleHelper.fetchSubdlSubtitles(
+                                            tmdbId = tmdbId,
+                                            isTv = isTv,
+                                            season = season,
+                                            episode = episode,
+                                            videoFileName = effectiveVideoFileName,
+                                            videoFps = videoFps,
+                                            onError = { error -> fetchError = error.userMessage }
+                                        )
                                     }
                                     subdlSources = result
                                     subdlError = fetchError
@@ -404,15 +445,13 @@ fun SubtitleSourceSheet(
 
             // ===== PAGE 3: OpenSubtitles Results =====
             3 -> {
-                LaunchedEffect(Unit) {
+                LaunchedEffect(tmdbId, isTv, season, episode, videoFilePath) {
                     isLoadingSources = true
                     openSubSources = null
                     openSubError = null
                     var fetchError: String? = null
-                    val result = withContext(Dispatchers.IO) {
-                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode) { error ->
-                            fetchError = error.userMessage
-                        }
+                    val result = loadOpenSubtitles { error ->
+                        fetchError = error.userMessage
                     }
                     openSubSources = result
                     openSubError = fetchError
@@ -429,10 +468,8 @@ fun SubtitleSourceSheet(
                                     openSubSources = null
                                     openSubError = null
                                     var fetchError: String? = null
-                                    val result = withContext(Dispatchers.IO) {
-                                        SubtitleHelper.fetchOpenSubtitles(tmdbId, isTv, season, episode) { error ->
-                                            fetchError = error.userMessage
-                                        }
+                                    val result = loadOpenSubtitles { error ->
+                                        fetchError = error.userMessage
                                     }
                                     openSubSources = result
                                     openSubError = fetchError

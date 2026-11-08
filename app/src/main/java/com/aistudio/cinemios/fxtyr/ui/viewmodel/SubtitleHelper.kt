@@ -1,6 +1,9 @@
 package com.aistudio.cinemios.fxtyr.ui.viewmodel
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.aistudio.cinemios.fxtyr.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -8,13 +11,17 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
+import kotlin.math.abs
 
 object SubtitleHelper {
     private const val USER_AGENT = "Cinemios v1.0 (Android)"
@@ -51,8 +58,309 @@ object SubtitleHelper {
         val downloadCount: Int = 0,
         val releaseName: String = "",
         val fps: Double? = null,
-        val format: String = ""
+        val format: String = "",
+        val hashMatch: Boolean = false
     )
+
+    /** Parsed `<parent>-s<season>-e<episode>` id for TV episodes. */
+    data class TvMediaInfo(val parentId: String, val season: Int, val episode: Int)
+
+    // Strict on purpose: local file paths/content URIs often contain "-s" in
+    // their own names and must stay movies unless they end exactly like an
+    // episode id.
+    private val TV_MEDIA_ID_REGEX = Regex("""^(.+)-s(\d+)-e(\d+)$""", RegexOption.IGNORE_CASE)
+
+    /** Returns TV info only for ids shaped exactly like `<parent>-s<season>-e<episode>`. */
+    fun parseTvMediaId(mediaId: String): TvMediaInfo? {
+        val match = TV_MEDIA_ID_REGEX.matchEntire(mediaId) ?: return null
+        val parent = match.groupValues[1]
+        val season = match.groupValues[2].toIntOrNull() ?: return null
+        val episode = match.groupValues[3].toIntOrNull() ?: return null
+        if (parent.isBlank()) return null
+        return TvMediaInfo(parent, season, episode)
+    }
+
+    fun isTvMediaId(mediaId: String): Boolean = parseTvMediaId(mediaId) != null
+
+    /**
+     * Metadata used to rank subtitles for a local video: release name, exact
+     * OpenSubtitles hash, and the real video frame rate.
+     */
+    data class VideoFingerprint(
+        val fileName: String,
+        val fileSize: Long,
+        val movieHash: String?,
+        val fps: Double?
+    )
+
+    private const val HASH_CHUNK = 64 * 1024
+    private const val MIN_HASH_FILE_SIZE = 128L * 1024
+    private const val MAX_SANE_FPS = 240.0
+
+    private val RESOLUTION_REGEX =
+        Regex("""(?i)\b(2160p|1080p|720p|480p|4k)\b""")
+    private val FPS_TOKEN_REGEX =
+        Regex("""(?i)(\d{2}(?:\.\d{1,3})?)\s*(?:fps|framerate)""")
+    private val BRACKET_GROUP_REGEX =
+        Regex("""[\[(]([^\])]{2,30})[\])]\s*$""")
+    private val RELEASE_NOISE = setOf(
+        "the", "and", "for", "with", "from",
+        "2160p", "1080p", "720p", "480p", "4k", "uhd", "hdr", "dv",
+        "web", "webdl", "webrip", "bluray", "brrip", "bdrip", "hdrip",
+        "dvdrip", "remux", "proper", "repack", "extended", "uncut",
+        "x264", "x265", "h264", "h265", "hevc", "avc", "10bit",
+        "aac", "ac3", "dts", "ddp", "atmos", "truehd",
+        "multi", "dual", "subs", "sub"
+    )
+
+    /**
+     * Builds smart-matching metadata for a local video. Supports both plain
+     * file paths and content:// URIs. Hash extraction reads only the first and
+     * last 64 KiB, so it is cheap even for multi-gigabyte files.
+     */
+    suspend fun buildVideoFingerprint(
+        context: Context,
+        path: String
+    ): VideoFingerprint? = withContext(Dispatchers.IO) {
+        if (path.isBlank()) return@withContext null
+        try {
+            val uri = if (path.startsWith("content://")) Uri.parse(path) else null
+            val fileName = if (uri != null) {
+                contentDisplayName(context, uri) ?: path.substringAfterLast('/')
+            } else {
+                File(path).name
+            }
+            val hashPair = if (uri != null) {
+                readOpenSubtitlesHash(context, uri)
+            } else {
+                readOpenSubtitlesHash(File(path))
+            }
+            VideoFingerprint(
+                fileName = fileName,
+                fileSize = hashPair?.first ?: if (uri == null) File(path).length() else 0L,
+                movieHash = hashPair?.second,
+                fps = readVideoFps(context, path)
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun contentDisplayName(context: Context, uri: Uri): String? {
+        return try {
+            context.contentResolver
+                .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readVideoFps(context: Context, path: String): Double? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            if (path.startsWith("content://")) {
+                retriever.setDataSource(context, Uri.parse(path))
+            } else {
+                retriever.setDataSource(path)
+            }
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
+                ?.toDoubleOrNull()
+                ?.takeIf { it in 1.0..MAX_SANE_FPS }
+                ?: run {
+                    val frames = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
+                        ?.toLongOrNull()
+                    val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()
+                    if (frames != null && frames > 0 && durationMs != null && durationMs > 0) {
+                        (frames * 1000.0 / durationMs).takeIf { it in 1.0..MAX_SANE_FPS }
+                    } else {
+                        null
+                    }
+                }
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { retriever.release() } catch (_: Exception) { }
+        }
+    }
+
+    private fun readOpenSubtitlesHash(file: File): Pair<Long, String>? {
+        return try {
+            val size = file.length()
+            if (!file.isFile || size < MIN_HASH_FILE_SIZE) return null
+            RandomAccessFile(file, "r").use { raf ->
+                val buffer = ByteArray(HASH_CHUNK)
+                var hash = size
+                for (start in longArrayOf(0L, size - HASH_CHUNK)) {
+                    raf.seek(start)
+                    var read = 0
+                    while (read < HASH_CHUNK) {
+                        val count = raf.read(buffer, read, HASH_CHUNK - read)
+                        if (count <= 0) return null
+                        read += count
+                    }
+                    hash = addHashChunk(hash, buffer)
+                }
+                size to "%016x".format(hash)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readOpenSubtitlesHash(context: Context, uri: Uri): Pair<Long, String>? {
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                val size = descriptor.statSize
+                if (size < MIN_HASH_FILE_SIZE) return null
+                FileInputStream(descriptor.fileDescriptor).use { stream ->
+                    val channel = stream.channel
+                    val buffer = ByteArray(HASH_CHUNK)
+                    var hash = size
+                    for (start in longArrayOf(0L, size - HASH_CHUNK)) {
+                        channel.position(start)
+                        val target = ByteBuffer.wrap(buffer)
+                        var read = 0
+                        while (read < HASH_CHUNK) {
+                            target.position(read)
+                            target.limit(HASH_CHUNK)
+                            val count = channel.read(target)
+                            if (count <= 0) return null
+                            read += count
+                        }
+                        hash = addHashChunk(hash, buffer)
+                    }
+                    size to "%016x".format(hash)
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun addHashChunk(hash: Long, buffer: ByteArray): Long {
+        var result = hash
+        var index = 0
+        while (index + 8 <= buffer.size) {
+            var word = 0L
+            for (byteIndex in 7 downTo 0) {
+                word = (word shl 8) or (buffer[index + byteIndex].toLong() and 0xFFL)
+            }
+            result += word
+            index += 8
+        }
+        return result
+    }
+
+    fun parseFpsFromRelease(name: String): Double? {
+        if (name.isBlank()) return null
+        FPS_TOKEN_REGEX.find(name)?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.let { return it }
+        return when {
+            name.contains("23.976") -> 23.976
+            name.contains("29.970") || name.contains("29.97") -> 29.97
+            name.contains("59.940") || name.contains("59.94") -> 59.94
+            else -> null
+        }
+    }
+
+    private fun releaseTokens(name: String): Set<String> {
+        if (name.isBlank()) return emptySet()
+        return name.substringBeforeLast('.', name)
+            .lowercase()
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .asSequence()
+            .filter { it.length >= 3 && it !in RELEASE_NOISE }
+            .toSet()
+    }
+
+    private fun resolutionOf(name: String): String? =
+        RESOLUTION_REGEX.find(name)?.groupValues?.getOrNull(1)?.lowercase()
+            ?.replace("4k", "2160p")
+
+    private fun releaseGroupOf(name: String): String? {
+        if (name.isBlank()) return null
+        val base = name.substringBeforeLast('.', name)
+        BRACKET_GROUP_REGEX.find(base)?.groupValues?.getOrNull(1)
+            ?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val dash = base.substringAfterLast('-', "")
+        return dash.lowercase().takeIf { candidate ->
+            candidate.length in 2..30 && candidate.all { it.isLetter() }
+        }
+    }
+
+    private fun matchScore(item: SubtitleItem, videoFileName: String, videoFps: Double?): Int {
+        if (videoFileName.isBlank() && videoFps == null) return 0
+        val release = item.releaseName.ifBlank { item.name }
+        var score = 0
+
+        val videoTokens = releaseTokens(videoFileName)
+        if (videoTokens.isNotEmpty()) {
+            val subTokens = releaseTokens(release)
+            for (token in videoTokens.intersect(subTokens)) {
+                score += if (token.length >= 5) 3 else 1
+            }
+        }
+
+        val videoResolution = resolutionOf(videoFileName)
+        val subResolution = resolutionOf(release)
+        if (videoResolution != null && subResolution != null) {
+            score += if (videoResolution == subResolution) 6 else -4
+        }
+
+        val videoGroup = releaseGroupOf(videoFileName)
+        val subGroup = releaseGroupOf(release)
+        if (!videoGroup.isNullOrBlank() && videoGroup == subGroup) score += 4
+
+        val subFps = item.fps ?: parseFpsFromRelease(release)
+        if (videoFps != null && subFps != null) {
+            score += if (abs(videoFps - subFps) <= 0.1) 5 else -3
+        }
+
+        if (item.hashMatch) score += 100
+        return score
+    }
+
+    /**
+     * Ranks provider results by release-name similarity, resolution, release
+     * group, FPS, and exact OpenSubtitles hash matches. Download count remains
+     * the tiebreaker so popular releases stay visible.
+     */
+    fun rankSubtitleItems(
+        items: List<SubtitleItem>,
+        videoFileName: String = "",
+        videoFps: Double? = null
+    ): List<SubtitleItem> {
+        if (items.isEmpty()) return items
+        if (videoFileName.isBlank() && videoFps == null) {
+            return items.sortedByDescending { it.downloadCount }
+        }
+        return items
+            .map { item -> item to matchScore(item, videoFileName, videoFps) }
+            .sortedWith(
+                compareByDescending<Pair<SubtitleItem, Int>> { it.second }
+                    .thenByDescending { it.first.downloadCount }
+                    .thenByDescending { it.first.releaseName.length }
+            )
+            .map { it.first }
+    }
+
+    private fun cleanVideoSearchName(fileName: String): String {
+        val base = fileName.substringBeforeLast('.', fileName)
+        if (base.isBlank()) return ""
+        return base
+            .replace(Regex("[._]+"), " ")
+            .replace(
+                Regex(
+                    """(?i)\b(2160p|1080p|720p|480p|4k|uhd|hdr|web[- ]?dl|webrip|bluray|brrip|bdrip|hdrip|dvdrip|remux|x264|x265|h264|h265|hevc|aac|ac3|dts|ddp|atmos|10bit)\b"""
+                ),
+                " "
+            )
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
     
     suspend fun fetchSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, searchTitle: String? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
@@ -490,10 +798,11 @@ object SubtitleHelper {
             val downloadsDir = File(context.filesDir, "downloads")
             if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
-            val isTv = mediaId.contains("-s") && mediaId.contains("-e")
-            val tmdbIdString = if (isTv) mediaId.substringBefore("-s") else mediaId
-            val seasonString = if (isTv) mediaId.substringAfter("-s").substringBefore("-e") else "1"
-            val episodeNumber = if (isTv) mediaId.substringAfter("-e").toIntOrNull() ?: -1 else -1
+            val tvInfo = parseTvMediaId(mediaId)
+            val isTv = tvInfo != null
+            val tmdbIdString = tvInfo?.parentId ?: mediaId
+            val seasonString = tvInfo?.season?.toString() ?: "1"
+            val episodeNumber = tvInfo?.episode ?: -1
 
             // ── GZIP: decompress first, then save as a raw subtitle ──
             if (isGzip(body)) {
@@ -698,7 +1007,15 @@ object SubtitleHelper {
     }
 
     // ===== NEW: Direct Subdl API =====
-    suspend fun fetchSubdlSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, onError: ((SubtitleError) -> Unit)? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchSubdlSubtitles(
+        tmdbId: String,
+        isTv: Boolean,
+        season: Int = 0,
+        episode: Int = 0,
+        videoFileName: String = "",
+        videoFps: Double? = null,
+        onError: ((SubtitleError) -> Unit)? = null
+    ): List<SubtitleItem> = withContext(Dispatchers.IO) {
         val list = mutableListOf<SubtitleItem>()
         var conn: HttpURLConnection? = null
         try {
@@ -707,10 +1024,23 @@ object SubtitleHelper {
                 return@withContext emptyList()
             }
 
+            val numericTmdbId = tmdbId.toLongOrNull() != null
+            val searchName = cleanVideoSearchName(videoFileName)
+            if (!numericTmdbId && searchName.isBlank()) {
+                reportError(onError, SubtitleError.NoResults)
+                return@withContext emptyList()
+            }
+
             val url = StringBuilder("https://api.subdl.com/api/v1/subtitles")
                 .append("?api_key=").append(BuildConfig.SUBDL_API_KEY)
-                .append("&tmdb_id=").append(tmdbId)
-                .append("&type=").append(if (isTv) "tv" else "movie")
+            if (numericTmdbId) {
+                url.append("&tmdb_id=").append(tmdbId)
+            } else {
+                // Local files have no TMDB id; search by the cleaned release name.
+                url.append("&film_name=")
+                    .append(java.net.URLEncoder.encode(searchName, "UTF-8"))
+            }
+            url.append("&type=").append(if (isTv) "tv" else "movie")
                 .append("&languages=AR")
                 .append("&unpack=1")
                 .append("&subs_per_page=30")
@@ -815,97 +1145,140 @@ object SubtitleHelper {
         } finally {
             try { conn?.disconnect() } catch (_: Exception) { }
         }
-        list.distinctBy { it.url }
+        rankSubtitleItems(list.distinctBy { it.url }, videoFileName, videoFps)
     }
 
     // ===== NEW: OpenSubtitles API =====
-    suspend fun fetchOpenSubtitles(tmdbId: String, isTv: Boolean, season: Int = 0, episode: Int = 0, onError: ((SubtitleError) -> Unit)? = null): List<SubtitleItem> = withContext(Dispatchers.IO) {
-        val list = mutableListOf<SubtitleItem>()
-        var conn: HttpURLConnection? = null
-        try {
-            if (BuildConfig.OPENSUBTITLES_API_KEY.isBlank()) {
-                reportError(onError, SubtitleError.MissingKey)
-                return@withContext emptyList()
-            }
+    suspend fun fetchOpenSubtitles(
+        tmdbId: String,
+        isTv: Boolean,
+        season: Int = 0,
+        episode: Int = 0,
+        videoFileName: String = "",
+        videoFps: Double? = null,
+        movieHash: String? = null,
+        movieFileSize: Long? = null,
+        onError: ((SubtitleError) -> Unit)? = null
+    ): List<SubtitleItem> = withContext(Dispatchers.IO) {
+        if (BuildConfig.OPENSUBTITLES_API_KEY.isBlank()) {
+            reportError(onError, SubtitleError.MissingKey)
+            return@withContext emptyList()
+        }
 
-            val url = StringBuilder("https://api.opensubtitles.com/api/v1/subtitles?languages=ar&order_by=download_count")
-            if (isTv) {
-                url.append("&parent_tmdb_id=$tmdbId&type=episode")
-                if (season > 0) url.append("&season_number=$season")
-                if (episode > 0) url.append("&episode_number=$episode")
+        fun buildUrl(useHash: Boolean): String {
+            val url = StringBuilder(
+                "https://api.opensubtitles.com/api/v1/subtitles?languages=ar&order_by=download_count"
+            )
+            if (useHash && !movieHash.isNullOrBlank()) {
+                url.append("&moviehash=").append(movieHash)
+                if (movieFileSize != null && movieFileSize > 0L) {
+                    url.append("&moviebytesize=").append(movieFileSize)
+                }
+            } else if (isTv) {
+                url.append("&parent_tmdb_id=").append(tmdbId).append("&type=episode")
+                if (season > 0) url.append("&season_number=").append(season)
+                if (episode > 0) url.append("&episode_number=").append(episode)
             } else {
-                url.append("&tmdb_id=$tmdbId&type=movie")
+                url.append("&tmdb_id=").append(tmdbId).append("&type=movie")
             }
+            return url.toString()
+        }
 
-            conn = URL(url.toString()).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
-            conn.setRequestProperty("User-Agent", USER_AGENT)
-            conn.setRequestProperty("Accept", "application/json")
-            conn.connectTimeout = 15000
-            conn.readTimeout = 20000
-            conn.connect()
-
-            if (conn.responseCode != 200) {
-                reportError(onError, mapHttpError(conn.responseCode, conn.getHeaderField("Retry-After")))
-                return@withContext emptyList()
-            }
-
-            val json = JSONObject(conn.inputStream.bufferedReader().readText())
-            val data = json.optJSONArray("data")
-            if (data != null) {
-                for (i in 0 until data.length()) {
-                    val item = data.getJSONObject(i)
-                    val attrs = item.optJSONObject("attributes") ?: continue
-                    val lang = attrs.optString("language", "")
-                    val subId = attrs.optString("subtitle_id", "")
-                    val downloadCount = attrs.optInt("download_count", 0)
-                    val release = attrs.optString("release", "")
-                    val subFormat = attrs.optString("format", "")
-                    val fps = attrs.optDouble("fps", 0.0).takeIf { it > 0.0 }
-                    val featureTitle = attrs.optJSONObject("feature_details")
-                        ?.optString("title", "")
-                        .orEmpty()
-                    val files = attrs.optJSONArray("files")
-                    if (files != null && files.length() > 0) {
-                        for (j in 0 until files.length()) {
-                            val file = files.getJSONObject(j)
-                            val fileId = file.optInt("file_id", 0)
-                            val fileName = file.optString("file_name", "")
-                            if (fileId > 0) {
-                                list.add(SubtitleItem(
-                                    name = fileName.ifEmpty { "OpenSubtitles #$subId" },
-                                    lang = localizedLanguageName(lang),
-                                    url = "",
-                                    langCode = when (lang.uppercase()) {
-                                        "ARABIC" -> "ar"
-                                        "ENGLISH" -> "en"
-                                        else -> lang.lowercase().take(2)
-                                    },
-                                    source = "OpenSubtitles",
-                                    fileId = fileId.toString(),
-                                    downloadCount = downloadCount,
-                                    releaseName = release.ifEmpty { featureTitle },
-                                    fps = fps,
-                                    format = subFormat
-                                ))
-                            }
-                        }
+        fun parseItems(json: JSONObject): List<SubtitleItem> {
+            val parsed = mutableListOf<SubtitleItem>()
+            val data = json.optJSONArray("data") ?: return parsed
+            for (i in 0 until data.length()) {
+                val item = data.getJSONObject(i)
+                val attrs = item.optJSONObject("attributes") ?: continue
+                val lang = attrs.optString("language", "")
+                val subId = attrs.optString("subtitle_id", "")
+                val downloadCount = attrs.optInt("download_count", 0)
+                val release = attrs.optString("release", "")
+                val subFormat = attrs.optString("format", "")
+                val fps = attrs.optDouble("fps", 0.0).takeIf { it > 0.0 }
+                val hashMatch = attrs.optBoolean("moviehash_match", false)
+                val featureTitle = attrs.optJSONObject("feature_details")
+                    ?.optString("title", "")
+                    .orEmpty()
+                val files = attrs.optJSONArray("files") ?: continue
+                for (j in 0 until files.length()) {
+                    val file = files.getJSONObject(j)
+                    val fileId = file.optInt("file_id", 0)
+                    val fileName = file.optString("file_name", "")
+                    if (fileId > 0) {
+                        parsed.add(
+                            SubtitleItem(
+                                name = fileName.ifEmpty { "OpenSubtitles #$subId" },
+                                lang = localizedLanguageName(lang),
+                                url = "",
+                                langCode = when (lang.uppercase()) {
+                                    "ARABIC" -> "ar"
+                                    "ENGLISH" -> "en"
+                                    else -> lang.lowercase().take(2)
+                                },
+                                source = "OpenSubtitles",
+                                fileId = fileId.toString(),
+                                downloadCount = downloadCount,
+                                releaseName = release.ifEmpty { featureTitle },
+                                fps = fps,
+                                format = subFormat,
+                                hashMatch = hashMatch
+                            )
+                        )
                     }
                 }
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            e.printStackTrace()
-            reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
-        } finally {
-            try { conn?.disconnect() } catch (_: Exception) { }
+            return parsed
         }
-        // Most downloaded releases first; the UI also shows FPS/release so the
-        // user can pick the version that matches the video.
-        list.sortedWith(
-            compareByDescending<SubtitleItem> { it.downloadCount }
-                .thenByDescending { it.releaseName.length }
+
+        fun requestItems(url: String, reportFailure: Boolean): List<SubtitleItem>? {
+            var conn: HttpURLConnection? = null
+            return try {
+                conn = URL(url).openConnection() as HttpURLConnection
+                conn.setRequestProperty("Api-Key", BuildConfig.OPENSUBTITLES_API_KEY)
+                conn.setRequestProperty("User-Agent", USER_AGENT)
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 15000
+                conn.readTimeout = 20000
+                conn.connect()
+
+                if (conn.responseCode != 200) {
+                    if (reportFailure) {
+                        reportError(onError, mapHttpError(conn.responseCode, conn.getHeaderField("Retry-After")))
+                    }
+                    null
+                } else {
+                    parseItems(JSONObject(conn.inputStream.bufferedReader().readText()))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (reportFailure) {
+                    e.printStackTrace()
+                    reportError(onError, SubtitleError.Network(e.message ?: "خطأ غير متوقع"))
+                }
+                null
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) { }
+            }
+        }
+
+        val collected = mutableListOf<SubtitleItem>()
+        // Exact hash search is the most accurate path, but only when the local
+        // video is available. Failures fall back silently to the TMDB search.
+        if (!movieHash.isNullOrBlank()) {
+            collected += requestItems(buildUrl(useHash = true), reportFailure = false).orEmpty()
+        }
+        if (collected.isEmpty() && tmdbId.toLongOrNull() != null) {
+            collected += requestItems(buildUrl(useHash = false), reportFailure = true).orEmpty()
+        }
+        if (collected.isEmpty()) {
+            reportError(onError, SubtitleError.NoResults)
+        }
+        rankSubtitleItems(
+            collected.distinctBy { it.fileId ?: it.url },
+            videoFileName,
+            videoFps
         )
     }
 
