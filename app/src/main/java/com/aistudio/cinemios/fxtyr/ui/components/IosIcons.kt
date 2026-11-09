@@ -436,4 +436,80 @@ object IosIcons {
             }
         }.build()
     }
+
+    val Sparkle: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosSparkle",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(12f, 2.5f)
+                curveTo(12.3f, 7.8f, 16.2f, 11.7f, 21.5f, 12f)
+                curveTo(16.2f, 12.3f, 12.3f, 16.2f, 12f, 21.5f)
+                curveTo(11.7f, 16.2f, 7.8f, 12.3f, 2.5f, 12f)
+                curveTo(7.8f, 11.7f, 11.7f, 7.8f, 12f, 2.5f)
+                close()
+            }
+        }.build()
+    }
+
+    val Sparkles: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosSparkles",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                // Primary sparkle
+                moveTo(10f, 3.5f)
+                curveTo(10.3f, 7.8f, 14.2f, 11.7f, 18.5f, 12f)
+                curveTo(14.2f, 12.3f, 10.3f, 16.2f, 10f, 20.5f)
+                curveTo(9.7f, 16.2f, 5.8f, 12.3f, 1.5f, 12f)
+                curveTo(5.8f, 11.7f, 9.7f, 7.8f, 10f, 3.5f)
+                close()
+
+                // Secondary sparkle at top-right
+                moveTo(18.5f, 3f)
+                curveTo(18.7f, 4.6f, 19.9f, 5.8f, 21.5f, 6f)
+                curveTo(19.9f, 6.2f, 18.7f, 7.4f, 18.5f, 9f)
+                curveTo(18.3f, 7.4f, 17.1f, 6.2f, 15.5f, 6f)
+                curveTo(17.1f, 5.8f, 18.3f, 4.6f, 18.5f, 3f)
+                close()
+            }
+        }.build()
+    }
+
+    val Crown: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosCrown",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(3.5f, 18.5f)
+                curveTo(3.5f, 19.3f, 4.2f, 20f, 5f, 20f)
+                lineTo(19f, 20f)
+                curveTo(19.8f, 20f, 20.5f, 19.3f, 20.5f, 18.5f)
+                lineTo(20.5f, 17f)
+                lineTo(3.5f, 17f)
+                close()
+
+                moveTo(4f, 15.5f)
+                lineTo(20f, 15.5f)
+                lineTo(18.5f, 9.5f)
+                lineTo(14f, 13f)
+                lineTo(12f, 6f)
+                lineTo(10f, 13f)
+                lineTo(5.5f, 9.5f)
+                close()
+            }
+        }.build()
+    }
 }

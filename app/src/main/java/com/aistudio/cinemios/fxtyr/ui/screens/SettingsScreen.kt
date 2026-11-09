@@ -37,6 +37,7 @@ import com.aistudio.cinemios.fxtyr.auth.AuthManager
 import com.aistudio.cinemios.fxtyr.subscription.formatSubscriptionDate
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.ProfileAvatar
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusChip
+import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusColors
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusSettingsCard
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
@@ -94,12 +95,29 @@ fun SettingsScreen(
         if (user != null) {
             Spacer(modifier = Modifier.height(14.dp))
 
-            SeePlusSettingsCard(
-                isPremium = isPremium,
-                planTitle = subscription.plan?.title,
-                expiryLabel = formatSubscriptionDate(subscription.expiresAt),
-                onClick = onNavigateToSubscription
-            )
+            if (isPremium) {
+                SectionLabel(text = "الاشتراك")
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsGroup {
+                    SettingsRow(
+                        icon = IosIcons.Sparkle,
+                        iconTint = SeePlusColors.DeepGold,
+                        iconBackground = SeePlusColors.Gold.copy(alpha = 0.16f),
+                        title = "إدارة الاشتراك",
+                        subtitle = subscription.plan?.let {
+                            "خطة seePlus ${it.title} • ساري حتى ${formatSubscriptionDate(subscription.expiresAt)}"
+                        } ?: "عرض وتعديل تفاصيل باقتك",
+                        onClick = onNavigateToSubscription
+                    )
+                }
+            } else {
+                SeePlusSettingsCard(
+                    isPremium = false,
+                    planTitle = null,
+                    expiryLabel = "",
+                    onClick = onNavigateToSubscription
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(22.dp))
@@ -341,6 +359,8 @@ private fun SettingsRow(
     title: String,
     subtitle: String? = null,
     value: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.secondary,
+    iconBackground: Color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f),
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null
 ) {
@@ -362,13 +382,13 @@ private fun SettingsRow(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(11.dp))
-                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)),
+                .background(iconBackground),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
+                tint = iconTint,
                 modifier = Modifier.size(19.dp)
             )
         }

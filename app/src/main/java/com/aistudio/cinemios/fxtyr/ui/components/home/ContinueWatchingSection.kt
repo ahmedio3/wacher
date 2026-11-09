@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,24 +20,24 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.local.ContinueWatchingItem
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import java.util.Locale
 
@@ -98,7 +98,7 @@ private fun ContinueWatchingCard(
 
     Column(
         modifier = Modifier
-            .width(272.dp)
+            .width(210.dp)
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
     ) {
@@ -122,10 +122,10 @@ private fun ContinueWatchingCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow,
+                        imageVector = IosIcons.Play,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
@@ -149,59 +149,72 @@ private fun ContinueWatchingCard(
             // Small resume affordance
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(10.dp)
+                    .align(Alignment.Center)
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                    .background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    imageVector = IosIcons.Play,
                     contentDescription = "متابعة",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier
+                        .size(14.dp)
+                        .offset(x = 1.dp)
+                )
+            }
+
+            // YouTube-style duration badge on thumbnail bottom-right
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.8f),
+                modifier = Modifier
+                    .align(AbsoluteAlignment.BottomRight)
+                    .padding(bottom = 7.dp, end = 7.dp)
+            ) {
+                Text(
+                    text = if (item.durationMs > 0L) {
+                        "${formatWatchTime(item.positionMs)} / ${formatWatchTime(item.durationMs)}"
+                    } else {
+                        formatWatchTime(item.positionMs)
+                    },
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = JetBrainsMonoFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = Color.White
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(7.dp))
 
-        Row(
-            modifier = Modifier.padding(horizontal = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = item.title,
-                modifier = Modifier.weight(1f, fill = false),
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = JetBrainsMonoFontFamily
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = "${formatWatchTime(item.positionMs)} / ${formatWatchTime(item.durationMs)}",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = JetBrainsMonoFontFamily,
-                    textDirection = TextDirection.Ltr,
-                    fontSize = 11.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
-                maxLines = 1
-            )
-        }
+        Text(
+            text = item.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp),
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontFamily = JetBrainsMonoFontFamily,
+                fontSize = 13.sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
 
         Spacer(modifier = Modifier.height(2.dp))
 
         Text(
             text = meta,
-            modifier = Modifier.padding(horizontal = 2.dp),
-            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

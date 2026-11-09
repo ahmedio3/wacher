@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,6 +38,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteSuccess
 
@@ -63,10 +62,10 @@ fun SeePlusWordmark(
 
     Text(
         text = buildAnnotatedString {
-            withStyle(SpanStyle(color = seeColor, fontStyle = FontStyle.Italic)) {
+            withStyle(SpanStyle(color = seeColor)) {
                 append("see")
             }
-            withStyle(SpanStyle(color = plusColor)) {
+            withStyle(SpanStyle(color = plusColor, fontStyle = FontStyle.Italic)) {
                 append("Plus")
             }
         },
@@ -88,12 +87,12 @@ fun SeePlusChip(modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f))
-            .padding(horizontal = 5.dp, vertical = 2.dp),
+            .padding(horizontal = 6.dp, vertical = 2.5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.5.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.WorkspacePremium,
+            imageVector = IosIcons.Sparkle,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.tertiary,
             modifier = Modifier.size(10.dp)
@@ -113,7 +112,8 @@ fun ProfileAvatar(
     isPremium: Boolean,
     showOnlineDot: Boolean,
     modifier: Modifier = Modifier,
-    size: Dp = 62.dp
+    size: Dp = 62.dp,
+    onClick: (() -> Unit)? = null
 ) {
     val scale = size.value / 62f
     val gapSize = 56.dp * scale
@@ -122,9 +122,19 @@ fun ProfileAvatar(
     val iconSize = 28.dp * scale
     val onlineDotSize = 15.dp * scale
     val onlineDotPadding = 3.dp * scale
-    val badgeSize = 22.dp * scale
+    val badgeSize = 20.dp * scale
 
-    Box(modifier = modifier.size(size)) {
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .then(clickModifier)
+    ) {
         if (isPremium) {
             val transition = rememberInfiniteTransition(label = "seeplus_ring")
             val rotation by transition.animateFloat(
@@ -245,17 +255,17 @@ private fun PremiumBadge(modifier: Modifier = Modifier, size: Dp = 22.dp) {
                 )
             )
             .border(
-                width = 2.dp * scale,
+                width = 1.8.dp * scale,
                 color = MaterialTheme.colorScheme.surface,
                 shape = CircleShape
             ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Default.WorkspacePremium,
+            imageVector = IosIcons.Sparkle,
             contentDescription = "عضو seePlus",
             tint = SeePlusColors.Espresso,
-            modifier = Modifier.size(13.dp * scale)
+            modifier = Modifier.size(11.dp * scale)
         )
     }
 }
@@ -294,13 +304,13 @@ fun SeePlusSettingsCard(
             .clickable(onClick = onClick)
     ) {
         Icon(
-            imageVector = Icons.Default.WorkspacePremium,
+            imageVector = IosIcons.Sparkles,
             contentDescription = null,
-            tint = SeePlusColors.Gold.copy(alpha = 0.07f),
+            tint = SeePlusColors.Gold.copy(alpha = 0.08f),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset(x = 36.dp, y = (-36).dp)
-                .size(150.dp)
+                .offset(x = 24.dp, y = (-24).dp)
+                .size(140.dp)
         )
 
         Box(
@@ -322,7 +332,7 @@ fun SeePlusSettingsCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -330,28 +340,29 @@ fun SeePlusSettingsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SeePlusWordmark(fontSize = 24.sp, onDark = true)
-                StatusPill(
-                    text = if (isPremium) "PREMIUM" else "جديد",
-                    active = isPremium
-                )
+                if (isPremium) {
+                    StatusPill(text = "PREMIUM", active = true)
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = if (isPremium) "أنت عضو seePlus" else "ارتقِ بتجربتك مع seePlus",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SeePlusColors.Cream
-                )
+                if (isPremium) {
+                    Text(
+                        text = "أنت عضو seePlus",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SeePlusColors.Cream
+                    )
+                }
                 Text(
                     text = if (isPremium && planTitle != null) {
                         "خطة $planTitle • ساري حتى $expiryLabel"
                     } else {
                         "تحميل بلا حدود، جودة أعلى، وتجربة مشاهدة بلا إعلانات."
                     },
-                    fontSize = 11.sp,
-                    lineHeight = 16.sp,
-                    color = SeePlusColors.Cream.copy(alpha = 0.65f)
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = SeePlusColors.Cream.copy(alpha = 0.75f)
                 )
             }
 
@@ -438,7 +449,7 @@ private fun CtaPill(text: String) {
                 fontWeight = FontWeight.Bold
             )
             Icon(
-                imageVector = Icons.Default.ChevronLeft,
+                imageVector = IosIcons.ChevronLeft,
                 contentDescription = null,
                 modifier = Modifier.size(13.dp)
             )

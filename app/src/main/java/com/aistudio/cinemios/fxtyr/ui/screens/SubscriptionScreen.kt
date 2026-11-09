@@ -95,19 +95,10 @@ fun SubscriptionScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
                     .padding(
-                        top = 8.dp,
+                        top = 12.dp,
                         bottom = if (subscription.isActive) 28.dp else 116.dp
                     )
             ) {
-                SeePlusHero(
-                    isPremium = subscription.isActive,
-                    planTitle = subscription.plan?.title,
-                    expiryLabel = formatSubscriptionDate(subscription.expiresAt),
-                    daysRemaining = subscription.daysRemaining()
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
                 if (subscription.isActive) {
                     SectionTitle(text = "تفاصيل العضوية")
                     Spacer(modifier = Modifier.height(10.dp))
@@ -223,26 +214,6 @@ private fun SubscriptionTopBar(onBackClick: () -> Unit) {
             modifier = Modifier.align(Alignment.Center),
             fontSize = 22.sp
         )
-
-        Row(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.WorkspacePremium,
-                contentDescription = null,
-                tint = SeePlusColors.DeepGold,
-                modifier = Modifier.size(14.dp)
-            )
-            Text(
-                text = "PREMIUM",
-                fontSize = 8.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.6.sp,
-                color = SeePlusColors.DeepGold
-            )
-        }
     }
 }
 
@@ -317,162 +288,6 @@ private fun SignInRequiredSubscription(onBackClick: () -> Unit) {
                         text = "العودة إلى الإعدادات",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SeePlusHero(
-    isPremium: Boolean,
-    planTitle: String?,
-    expiryLabel: String,
-    daysRemaining: Int
-) {
-    val shape = RoundedCornerShape(28.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        SeePlusColors.EspressoSoft,
-                        SeePlusColors.Espresso,
-                        Color(0xFF3A2A1C)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                color = SeePlusColors.Gold.copy(alpha = 0.35f),
-                shape = shape
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 70.dp, y = (-100).dp)
-                .size(230.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            SeePlusColors.Gold.copy(alpha = 0.25f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Icon(
-            imageVector = Icons.Default.WorkspacePremium,
-            contentDescription = null,
-            tint = SeePlusColors.Gold.copy(alpha = 0.07f),
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset(x = (-30).dp, y = 30.dp)
-                .size(160.dp)
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = SeePlusColors.Gold.copy(alpha = 0.14f),
-                    contentColor = SeePlusColors.Gold,
-                    border = BorderStroke(1.dp, SeePlusColors.Gold.copy(alpha = 0.35f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WorkspacePremium,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = if (isPremium) "عضوية seePlus" else "seePlus PREMIUM",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp
-                        )
-                    }
-                }
-
-                if (isPremium) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(PaletteSuccess)
-                        )
-                        Text(
-                            text = "نشط",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PaletteSuccess
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = if (isPremium) "مرحبًا بك في عالم seePlus" else "سينما بلا حدود.",
-                fontSize = 26.sp,
-                lineHeight = 32.sp,
-                fontWeight = FontWeight.Black,
-                color = SeePlusColors.Cream
-            )
-
-            Spacer(modifier = Modifier.height(7.dp))
-
-            Text(
-                text = if (isPremium && planTitle != null) {
-                    "خطة $planTitle سارية حتى $expiryLabel • متبقي $daysRemaining يومًا"
-                } else {
-                    "استمتع بأفضل الأفلام والمسلسلات بجودة استثنائية، وتحميل بلا قيود، وتجربة مصممة لك بالكامل."
-                },
-                fontSize = 12.sp,
-                lineHeight = 19.sp,
-                color = SeePlusColors.Cream.copy(alpha = 0.65f)
-            )
-
-            if (!isPremium) {
-                Spacer(modifier = Modifier.height(15.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    repeat(5) {
-                        Icon(
-                            imageVector = AppIcons.Star,
-                            contentDescription = null,
-                            tint = SeePlusColors.Gold,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "4.9 • أكثر من 120 ألف عضو",
-                        fontSize = 10.sp,
-                        color = SeePlusColors.Cream.copy(alpha = 0.6f)
                     )
                 }
             }
@@ -966,16 +781,21 @@ private fun PaymentSheet(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = {
             if (!isProcessing) onDismiss()
         },
+        sheetState = sheetState,
+        modifier = Modifier.fillMaxHeight(),
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .navigationBarsPadding()
@@ -1317,7 +1137,7 @@ private fun PaymentSuccessDialog(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.WorkspacePremium,
+                    imageVector = IosIcons.Sparkle,
                     contentDescription = null,
                     tint = SeePlusColors.Espresso,
                     modifier = Modifier.size(32.dp)
