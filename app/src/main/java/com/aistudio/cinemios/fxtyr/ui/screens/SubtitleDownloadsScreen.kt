@@ -3,24 +3,29 @@ package com.aistudio.cinemios.fxtyr.ui.screens
 import android.net.Uri
 import android.os.Environment
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleDownloadViewType
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubtitleDownloadsScreen(
     viewModel: MovieViewModel,
@@ -28,38 +33,80 @@ fun SubtitleDownloadsScreen(
 ) {
     val subtitleBatchGroups by viewModel.subtitleBatchGroups.collectAsState(initial = emptyList())
     val context = LocalContext.current
+    val totalFiles = remember(subtitleBatchGroups) {
+        subtitleBatchGroups.sumOf { it.items.size }
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("الترجمات المحملة", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, "رجوع")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
-            )
-        }
-    ) { paddingValues ->
-        Box(
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
         ) {
-            DownloadedSubtitleBrowser(
-                batchGroups = subtitleBatchGroups,
-                viewType = SubtitleDownloadViewType.DEFAULT,
-                onExportFile = { item ->
-                    exportSubtitleToDownloads(context, item)
-                },
-                onDeleteFile = { item ->
-                    viewModel.deleteSubtitleDownload(item.id)
+            // iOS Custom Top Bar with Chevron
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            shape = CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = IosIcons.ChevronRight,
+                        contentDescription = "رجوع",
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
-            )
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "الترجمات المحملة",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (totalFiles > 0) {
+                        Text(
+                            text = "$totalFiles ملف ترجمة محفوظ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                DownloadedSubtitleBrowser(
+                    batchGroups = subtitleBatchGroups,
+                    viewType = SubtitleDownloadViewType.DEFAULT,
+                    onExportFile = { item ->
+                        exportSubtitleToDownloads(context, item)
+                    },
+                    onDeleteFile = { item ->
+                        viewModel.deleteSubtitleDownload(item.id)
+                    }
+                )
+            }
         }
     }
 }

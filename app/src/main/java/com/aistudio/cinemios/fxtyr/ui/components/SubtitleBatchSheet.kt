@@ -3,8 +3,7 @@ package com.aistudio.cinemios.fxtyr.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleBatchGroup
 import java.text.SimpleDateFormat
 import java.util.*
@@ -36,10 +37,15 @@ fun SubtitleBatchSheet(
     if (batchGroup != null) {
         ModalBottomSheet(
             onDismissRequest = onDismiss,
-            sheetState = sheetState
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 36.dp)
             ) {
                 // Header
                 Row(
@@ -63,38 +69,39 @@ fun SubtitleBatchSheet(
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onExportAll) {
-                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("تصدير الكل")
-                        }
-                        FilledTonalButton(
-                            onClick = onDeleteAll,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
+                        IconButton(onClick = onExportAll, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = IosIcons.Download,
+                                contentDescription = "تصدير الكل",
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(20.dp)
                             )
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("حذف الكل")
+                        }
+                        IconButton(onClick = onDeleteAll, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = AppIcons.Trash,
+                                contentDescription = "حذف الكل",
+                                tint = PaletteMutedRed.copy(alpha = 0.8f),
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider()
+                Spacer(Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(8.dp))
 
                 LazyColumn(
-                    modifier = Modifier,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(batchGroup.items.withIndex().toList()) { (index, item) ->
                         SubtitleDownloadEpisodeRow(
                             item = item,
                             onExport = { onExportOne(index) },
                             onDelete = { onDeleteOne(index) },
-                            onClick = { onClickOne?.invoke(index) }
+                            onClick = if (onClickOne != null) { { onClickOne(index) } } else null
                         )
                     }
                 }

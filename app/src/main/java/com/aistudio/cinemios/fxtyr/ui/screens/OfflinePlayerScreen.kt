@@ -73,6 +73,7 @@ import com.aistudio.cinemios.fxtyr.MainActivity
 import com.aistudio.cinemios.fxtyr.data.local.DownloadEntity
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.VideoFile
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.RequestState
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.components.DownloadedSubtitleBrowser
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleBatchCard
 import com.aistudio.cinemios.fxtyr.ui.components.SubtitleDownloadViewType
@@ -2794,32 +2795,34 @@ fun SourceSubtitleCard(
     isDownloading: Boolean,
     onDownload: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 11.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Source badge
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
                     .background(
                         when (item.source) {
                             "Subdl" -> Color(0xFF4A90D9).copy(alpha = 0.15f)
                             "OpenSubtitles" -> Color(0xFF7CB342).copy(alpha = 0.15f)
-                            else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         }
                     )
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
                     item.source,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = when (item.source) {
                         "Subdl" -> Color(0xFF4A90D9)
@@ -2828,14 +2831,14 @@ fun SourceSubtitleCard(
                     }
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     item.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 12.sp
+                    fontSize = 13.sp
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -2846,8 +2849,13 @@ fun SourceSubtitleCard(
                     )
                     if (item.downloadCount > 0) {
                         Spacer(modifier = Modifier.width(8.dp))
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = IosIcons.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(11.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             "${item.downloadCount}",
                             style = MaterialTheme.typography.labelSmall,
@@ -2860,8 +2868,13 @@ fun SourceSubtitleCard(
             if (isDownloading) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                IconButton(onClick = onDownload, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Download, "تحميل", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                IconButton(onClick = onDownload, modifier = Modifier.size(34.dp)) {
+                    Icon(
+                        imageVector = IosIcons.Download,
+                        contentDescription = "تحميل",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(19.dp)
+                    )
                 }
             }
         }

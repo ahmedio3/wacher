@@ -59,6 +59,7 @@ import com.aistudio.cinemios.fxtyr.ui.navigation.slideIn
 import com.aistudio.cinemios.fxtyr.ui.navigation.slideOut
 import androidx.activity.compose.BackHandler
 import com.aistudio.cinemios.fxtyr.ui.screens.*
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.components.downloads.DownloadItemRow
 import com.aistudio.cinemios.fxtyr.ui.components.downloads.SeriesDetailPage
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingBottomNavBar
@@ -282,7 +283,10 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     
                     FloatingActionButton(
                         onClick = { showActiveDownloadsSheet = true },
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
                         modifier = Modifier
                             .padding(bottom = if (shouldShowBottomBar) 0.dp else 16.dp)
                             .offset(x = fabOffsetX.dp, y = fabOffsetY.dp)
@@ -302,18 +306,22 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                                 }
                             }
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.ArrowCircleDown, 
-                                contentDescription = "التحميلات", 
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(56.dp)
+                        ) {
                             CircularProgressIndicator(
                                 progress = { overallProgress },
-                                modifier = Modifier.size(52.dp),
-                                color = MaterialTheme.colorScheme.tertiary,
-                                strokeWidth = 3.dp
+                                modifier = Modifier.size(50.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                strokeWidth = 2.5.dp
+                            )
+                            Icon(
+                                imageVector = IosIcons.Download,
+                                contentDescription = "التحميلات",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
