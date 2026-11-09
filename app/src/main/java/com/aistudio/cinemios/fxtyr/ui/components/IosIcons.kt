@@ -512,4 +512,161 @@ object IosIcons {
             }
         }.build()
     }
+
+    val TrendingUp: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosTrendingUp",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(4f, 17.2f)
+                lineTo(9.2f, 12f)
+                lineTo(13f, 15.8f)
+                lineTo(20f, 7.4f)
+
+                moveTo(15.5f, 7.4f)
+                lineTo(20f, 7.4f)
+                lineTo(20f, 11.9f)
+            }
+        }.build()
+    }
+
+    val Lock: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosLock",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(7f, 10.5f)
+                lineTo(17f, 10.5f)
+                curveTo(18.1f, 10.5f, 19f, 11.4f, 19f, 12.5f)
+                lineTo(19f, 19f)
+                curveTo(19f, 20.1f, 18.1f, 21f, 17f, 21f)
+                lineTo(7f, 21f)
+                curveTo(5.9f, 21f, 5f, 20.1f, 5f, 19f)
+                lineTo(5f, 12.5f)
+                curveTo(5f, 11.4f, 5.9f, 10.5f, 7f, 10.5f)
+                close()
+
+                moveTo(8.5f, 10.5f)
+                lineTo(8.5f, 7.5f)
+                curveTo(8.5f, 5.57f, 10.07f, 4f, 12f, 4f)
+                curveTo(13.93f, 4f, 15.5f, 5.57f, 15.5f, 7.5f)
+                lineTo(15.5f, 10.5f)
+            }
+        }.build()
+    }
+
+    val Filter: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosFilter",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(4f, 5.8f)
+                lineTo(20f, 5.8f)
+                lineTo(14f, 12.8f)
+                lineTo(14f, 19f)
+                lineTo(10f, 17.2f)
+                lineTo(10f, 12.8f)
+                close()
+            }
+        }.build()
+    }
+
+    val Tag: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosTag",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(4.5f, 12.5f)
+                lineTo(4.5f, 5.5f)
+                curveTo(4.5f, 4.95f, 4.95f, 4.5f, 5.5f, 4.5f)
+                lineTo(12.5f, 4.5f)
+                curveTo(12.77f, 4.5f, 13.03f, 4.61f, 13.23f, 4.8f)
+                lineTo(20.2f, 11.77f)
+                curveTo(20.6f, 12.17f, 20.6f, 12.83f, 20.2f, 13.23f)
+                lineTo(13.23f, 20.2f)
+                curveTo(12.83f, 20.6f, 12.17f, 20.6f, 11.77f, 20.2f)
+                lineTo(4.8f, 13.23f)
+                curveTo(4.61f, 13.03f, 4.5f, 12.77f, 4.5f, 12.5f)
+                close()
+            }
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(8.5f, 7f)
+                curveTo(9.33f, 7f, 10f, 7.67f, 10f, 8.5f)
+                curveTo(10f, 9.33f, 9.33f, 10f, 8.5f, 10f)
+                curveTo(7.67f, 10f, 7f, 9.33f, 7f, 8.5f)
+                curveTo(7f, 7.67f, 7.67f, 7f, 8.5f, 7f)
+                close()
+            }
+        }.build()
+    }
+
+    val Sort: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosSort",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.9f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(7.5f, 18.5f)
+                lineTo(7.5f, 6f)
+                moveTo(4.5f, 9f)
+                lineTo(7.5f, 6f)
+                lineTo(10.5f, 9f)
+
+                moveTo(16.5f, 5.5f)
+                lineTo(16.5f, 18f)
+                moveTo(13.5f, 15f)
+                lineTo(16.5f, 18f)
+                lineTo(19.5f, 15f)
+            }
+        }.build()
+    }
 }

@@ -68,6 +68,7 @@ import com.aistudio.cinemios.fxtyr.ui.components.navigation.FloatingSearchOverla
 import com.aistudio.cinemios.fxtyr.ui.components.navigation.NavigationTabItem
 import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.MyApplicationTheme
+import com.aistudio.cinemios.fxtyr.ui.viewmodel.ExploreViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.ViewModelFactory
 
@@ -445,7 +446,37 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     viewModel = movieViewModel,
                     onNavigateToWatchlist = { navController.navigate("watchlist") },
                     onNavigateToSubtitleDownloads = { navController.navigate("subtitle-downloads") },
-                    onNavigateToSubscription = { navController.navigate("subscription") }
+                    onNavigateToSubscription = { navController.navigate("subscription") },
+                    onNavigateToExplore = { navController.navigate("explore") },
+                    onNavigateToAdult = { navController.navigate("adult") }
+                )
+            }
+
+            composable("explore") {
+                val appContext = LocalContext.current.applicationContext as android.app.Application
+                val exploreViewModel: ExploreViewModel = viewModel(factory = ViewModelFactory(appContext))
+                ExploreScreen(
+                    viewModel = exploreViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
+                    }
+                )
+            }
+
+            composable("adult") {
+                val appContext = LocalContext.current.applicationContext as android.app.Application
+                val exploreViewModel: ExploreViewModel = viewModel(factory = ViewModelFactory(appContext))
+                AdultScreen(
+                    viewModel = exploreViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
+                    }
                 )
             }
 

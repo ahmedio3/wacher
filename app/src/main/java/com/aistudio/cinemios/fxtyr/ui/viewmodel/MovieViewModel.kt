@@ -1523,6 +1523,10 @@ class ViewModelFactory(private val application: Application) : ViewModelProvider
             @Suppress("UNCHECKED_CAST")
             return com.aistudio.cinemios.fxtyr.data.remote.moviebox.viewmodel.MovieBoxViewModel(repository) as T
         }
+        if (modelClass.isAssignableFrom(ExploreViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ExploreViewModel(repository) as T
+        }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

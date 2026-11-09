@@ -21,8 +21,10 @@ interface MovieBoxRepository {
     ): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
     suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
-    suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
+    suspend fun trending(tab: String?, page: Int, safeMode: Boolean = true, limit: Int, forceRefresh: Boolean = false): Result<List<SearchResult>>
     suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>>
+    suspend fun adultKeywords(): Result<List<String>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
 }
 
@@ -38,6 +40,8 @@ class MovieBoxRepositoryImpl(
     )
     private val linkCache = ConcurrentHashMap<String, CachedDownloadLinks>()
     private val LINK_CACHE_TTL_MS = 15 * 60 * 1000L // 15 minutes TTL for in-memory links
+    @Volatile
+    private var adultKeywordsCache: List<String>? = null
     private val tag = "MovieBoxRepo"
 
     init {
@@ -94,13 +98,26 @@ class MovieBoxRepositoryImpl(
         }
     }
 
-    override suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>> {
-        val cacheKey = "trending_${genre}_${page}_$limit"
-        searchCache[cacheKey]?.let { return Result.success(it) }
+    override suspend fun trending(tab: String?, page: Int, safeMode: Boolean, limit: Int, forceRefresh: Boolean): Result<List<SearchResult>> {
+        val cacheKey = "trending_${tab}_${safeMode}_${page}_$limit"
+        if (!forceRefresh) {
+            searchCache[cacheKey]?.let { return Result.success(it) }
+        }
 
-        return api.trending(genre, page, limit).onSuccess {
+        return api.trending(tab, page, safeMode, limit).onSuccess {
             searchCache[cacheKey] = it
         }
+    }
+
+    override suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>> {
+        // Adult discovery is intentionally not cached: random sorting is meant to
+        // surface a fresh mix every time the user refreshes.
+        return api.adult(type, queries, sort, limit)
+    }
+
+    override suspend fun adultKeywords(): Result<List<String>> {
+        adultKeywordsCache?.let { return Result.success(it) }
+        return api.adultKeywords().onSuccess { adultKeywordsCache = it }
     }
 
     override suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>> {

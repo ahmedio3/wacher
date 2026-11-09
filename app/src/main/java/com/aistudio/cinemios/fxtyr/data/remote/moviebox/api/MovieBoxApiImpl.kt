@@ -20,8 +20,10 @@ interface MovieBoxApi {
     ): Result<List<VideoFile>>
     suspend fun getSubtitles(subjectId: String, resourceId: String): Result<SubtitleResponse>
     suspend fun browse(genre: String?, type: String?, sort: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
-    suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>>
+    suspend fun trending(tab: String?, page: Int, safeMode: Boolean, limit: Int): Result<List<SearchResult>>
     suspend fun randomContent(type: String?, safeMode: Boolean?, limit: Int): Result<List<SearchResult>>
+    suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>>
+    suspend fun adultKeywords(): Result<List<String>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
 }
 
@@ -320,13 +322,14 @@ class MovieBoxApiImpl : MovieBoxApi {
         }
     }
 
-    override suspend fun trending(genre: String?, page: Int, limit: Int): Result<List<SearchResult>> {
+    override suspend fun trending(tab: String?, page: Int, safeMode: Boolean, limit: Int): Result<List<SearchResult>> {
         return withContext(Dispatchers.IO) {
             try {
                 val urlBuilder = "$baseUrl/trending".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    if (tab != null) addQueryParameter("tab", tab)
                     addQueryParameter("page", page.toString())
+                    addQueryParameter("safe_mode", safeMode.toString())
                     addQueryParameter("limit", limit.toString())
-                    if (genre != null) addQueryParameter("genre", genre)
                 } ?: return@withContext Result.failure(Exception("Invalid URL"))
 
                 val request = Request.Builder().url(urlBuilder.build()).get().build()
@@ -342,30 +345,68 @@ class MovieBoxApiImpl : MovieBoxApi {
                     return@withContext Result.failure(Exception("API returned error: $bodyStr"))
                 }
 
-                val resultsArray = rootJson.optJSONArray("results")
-                val list = mutableListOf<SearchResult>()
-                if (resultsArray != null) {
-                    for (i in 0 until resultsArray.length()) {
-                        val item = resultsArray.optJSONObject(i) ?: continue
-                        list.add(
-                            SearchResult(
-                                subjectId = item.optString("subject_id"),
-                                title = item.optString("title"),
-                                type = item.optString("type"),
-                                posterUrl = item.optString("poster"),
-                                year = item.optString("year"),
-                                hasResource = item.optBoolean("has_resource", false),
-                                rating = item.optDouble("rating", 0.0),
-                                seasons = item.optInt("seasons", 0),
-                                country = item.optString("country"),
-                                description = item.optString("description"),
-                                durationSeconds = item.optInt("duration_seconds", 0)
-                            ).withParsedLanguages(item.optJSONArray("languages"))
-                             .withParsedGenre(item.optJSONArray("genre"))
-                        )
-                    }
+                Result.success(rootJson.parseSearchResults())
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/adult".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    if (type != null) addQueryParameter("type", type)
+                    if (!queries.isNullOrBlank()) addQueryParameter("queries", queries)
+                    addQueryParameter("sort", sort)
+                    addQueryParameter("limit", limit.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
                 }
-                Result.success(list)
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                Result.success(rootJson.parseSearchResults())
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun adultKeywords(): Result<List<String>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url("$baseUrl/adult_keywords").get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val bodyStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(bodyStr)
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error: $bodyStr"))
+                }
+
+                val array = rootJson.optJSONArray("keywords")
+                val keywords = if (array != null) {
+                    (0 until array.length()).mapNotNull { index ->
+                        array.optString(index).takeIf { it.isNotBlank() }
+                    }
+                } else {
+                    emptyList()
+                }
+                Result.success(keywords)
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -513,6 +554,31 @@ class MovieBoxApiImpl : MovieBoxApi {
 /**
  * Helper to copy a SearchResult with parsed languages array from JSON.
  */
+private fun JSONObject.parseSearchResults(): List<SearchResult> {
+    val resultsArray = optJSONArray("results") ?: return emptyList()
+    val list = mutableListOf<SearchResult>()
+    for (i in 0 until resultsArray.length()) {
+        val item = resultsArray.optJSONObject(i) ?: continue
+        list.add(
+            SearchResult(
+                subjectId = item.optString("subject_id"),
+                title = item.optString("title"),
+                type = item.optString("type"),
+                posterUrl = item.optString("poster"),
+                year = item.optString("year"),
+                hasResource = item.optBoolean("has_resource", false),
+                rating = item.optDouble("rating", 0.0),
+                seasons = item.optInt("seasons", 0),
+                country = item.optString("country"),
+                description = item.optString("description"),
+                durationSeconds = item.optInt("duration_seconds", 0)
+            ).withParsedLanguages(item.optJSONArray("languages"))
+                .withParsedGenre(item.optJSONArray("genre"))
+        )
+    }
+    return list
+}
+
 private fun SearchResult.withParsedLanguages(arr: org.json.JSONArray?): SearchResult {
     if (arr == null) return this
     val list = (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotEmpty() } }

@@ -165,12 +165,12 @@ class MovieBoxViewModel(private val repository: MovieBoxRepository) : ViewModel(
         }
     }
 
-    fun trending(genre: String? = null, page: Int = 1, limit: Int = 12) {
+    fun trending(tab: String = "all", page: Int = 1, safeMode: Boolean = true, limit: Int = 12) {
         viewModelScope.launch {
             _trendingResults.value = MovieBoxState.Loading
             try {
                 val result = withTimeout(30_000L) {
-                    repository.trending(genre, page, limit)
+                    repository.trending(tab, page, safeMode, limit)
                 }
                 result
                     .onSuccess { _trendingResults.value = MovieBoxState.Success(it) }

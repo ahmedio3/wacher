@@ -51,6 +51,8 @@ fun SettingsScreen(
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToSubtitleDownloads: () -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
+    onNavigateToExplore: () -> Unit = {},
+    onNavigateToAdult: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
@@ -118,6 +120,30 @@ fun SettingsScreen(
                     onClick = onNavigateToSubscription
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        SectionLabel(text = "استكشف")
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsGroup {
+            SettingsRow(
+                icon = IosIcons.TrendingUp,
+                title = "الرائج الآن",
+                subtitle = "أفلام ومسلسلات وأنمي مختارة من MovieBox",
+                onClick = onNavigateToExplore
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = IosIcons.Lock,
+                iconTint = PaletteMutedRed,
+                iconBackground = PaletteMutedRed.copy(alpha = 0.13f),
+                title = "محتوى +18",
+                subtitle = "تصفح البالغين حسب الكلمات المفتاحية",
+                value = "18+",
+                valueColor = PaletteMutedRed,
+                onClick = onNavigateToAdult
+            )
         }
 
         Spacer(modifier = Modifier.height(22.dp))
@@ -359,6 +385,7 @@ private fun SettingsRow(
     title: String,
     subtitle: String? = null,
     value: String? = null,
+    valueColor: Color = MaterialTheme.colorScheme.primary,
     iconTint: Color = MaterialTheme.colorScheme.secondary,
     iconBackground: Color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f),
     onClick: (() -> Unit)? = null,
@@ -427,7 +454,7 @@ private fun SettingsRow(
                         text = value,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = valueColor
                     )
                     Icon(
                         imageVector = IosIcons.ChevronLeft,
