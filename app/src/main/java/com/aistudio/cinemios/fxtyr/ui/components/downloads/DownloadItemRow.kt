@@ -1,5 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.components.downloads
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import java.io.File
 import kotlinx.coroutines.launch
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.SubtitleHelper
@@ -356,7 +358,7 @@ fun DownloadItemRow(
                     } else if (hasSubtitle) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            imageVector = Icons.Default.ClosedCaption,
+                            imageVector = IosIcons.ClosedCaptions,
                             contentDescription = "ترجمة",
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(14.dp)
@@ -389,7 +391,7 @@ fun DownloadItemRow(
                             android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
-                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(IosIcons.Play, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل") },
@@ -398,7 +400,7 @@ fun DownloadItemRow(
                         if (isPaused) viewModel.resumeDownload(item.id)
                         else viewModel.pauseDownload(item.id)
                     },
-                    leadingIcon = { Icon(if (isPaused) Icons.Default.FileDownload else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(if (isPaused) IosIcons.Download else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
             if (isCompleted) {
@@ -421,7 +423,7 @@ fun DownloadItemRow(
                             android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                         }
                     },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(IosIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
             DropdownMenuItem(
@@ -448,7 +450,7 @@ fun DownloadItemRow(
                     if (isDownloadingSubtitle) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(IosIcons.ClosedCaptions, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                 }
             )
@@ -458,7 +460,7 @@ fun DownloadItemRow(
                     showContextMenu = false
                     viewModel.deleteDownload(item.id)
                 },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(AppIcons.Trash, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
             )
         }
     }

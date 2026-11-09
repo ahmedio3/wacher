@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.detail
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -237,7 +238,7 @@ fun ShowsHorizontalCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.Star,
+                            imageVector = AppIcons.Star,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(8.dp)

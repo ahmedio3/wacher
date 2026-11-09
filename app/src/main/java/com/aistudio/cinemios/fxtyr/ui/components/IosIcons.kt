@@ -285,4 +285,155 @@ object IosIcons {
             }
         }.build()
     }
+
+    val Bookmark: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosBookmark",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(6.5f, 4f)
+                lineTo(17.5f, 4f)
+                curveTo(18.6f, 4f, 19.5f, 4.9f, 19.5f, 6f)
+                lineTo(19.5f, 20.5f)
+                lineTo(12f, 16.5f)
+                lineTo(4.5f, 20.5f)
+                lineTo(4.5f, 6f)
+                curveTo(4.5f, 4.9f, 5.4f, 4f, 6.5f, 4f)
+                close()
+            }
+        }.build()
+    }
+
+    val BookmarkFilled: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosBookmarkFilled",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(6.5f, 4f)
+                lineTo(17.5f, 4f)
+                curveTo(18.6f, 4f, 19.5f, 4.9f, 19.5f, 6f)
+                lineTo(19.5f, 20.5f)
+                lineTo(12f, 16.5f)
+                lineTo(4.5f, 20.5f)
+                lineTo(4.5f, 6f)
+                curveTo(4.5f, 4.9f, 5.4f, 4f, 6.5f, 4f)
+                close()
+            }
+        }.build()
+    }
+
+    val Checkmark: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosCheckmark",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 2.0f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(5f, 12.5f)
+                lineTo(10f, 17f)
+                lineTo(19.5f, 7f)
+            }
+        }.build()
+    }
+
+    val CheckmarkCircle: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosCheckmarkCircle",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(12f, 3f)
+                curveTo(7.03f, 3f, 3f, 7.03f, 3f, 12f)
+                curveTo(3f, 16.97f, 7.03f, 21f, 12f, 21f)
+                curveTo(16.97f, 21f, 21f, 16.97f, 21f, 12f)
+                curveTo(21f, 7.03f, 16.97f, 3f, 12f, 3f)
+                close()
+
+                moveTo(8f, 12f)
+                lineTo(11f, 15f)
+                lineTo(16.5f, 9.5f)
+            }
+        }.build()
+    }
+
+    val Play: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosPlay",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(8.5f, 5.8f)
+                curveTo(7.8f, 5.3f, 7f, 5.8f, 7f, 6.7f)
+                lineTo(7f, 17.3f)
+                curveTo(7f, 18.2f, 7.8f, 18.7f, 8.5f, 18.2f)
+                lineTo(18f, 12.9f)
+                curveTo(18.7f, 12.5f, 18.7f, 11.5f, 18f, 11.1f)
+                close()
+            }
+        }.build()
+    }
+
+    val PlayCircle: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "IosPlayCircle",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                moveTo(12f, 3f)
+                curveTo(7.03f, 3f, 3f, 7.03f, 3f, 12f)
+                curveTo(3f, 16.97f, 7.03f, 21f, 12f, 21f)
+                curveTo(16.97f, 21f, 21f, 16.97f, 21f, 12f)
+                curveTo(21f, 7.03f, 16.97f, 3f, 12f, 3f)
+                close()
+
+                moveTo(10f, 8.5f)
+                lineTo(16f, 12f)
+                lineTo(10f, 15.5f)
+                close()
+            }
+        }.build()
+    }
 }

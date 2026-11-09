@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import android.content.Context
 import android.widget.Toast
 import android.content.Intent
@@ -1439,7 +1440,7 @@ fun OfflinePlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = Color.White)
+                                Icon(IosIcons.ChevronRight, contentDescription = "رجوع", tint = Color.White)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             if (isTv) {
@@ -1501,7 +1502,7 @@ fun OfflinePlayerScreen(
                                         .clip(CircleShape)
                                         .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f))
                                 ) {
-                                    Icon(Icons.Default.ArrowCircleDown, contentDescription = "التحميلات النشطة", tint = MaterialTheme.colorScheme.tertiary)
+                                    Icon(IosIcons.ArrowDownCircle, contentDescription = "التحميلات النشطة", tint = MaterialTheme.colorScheme.tertiary)
                                 }
 
                                 if (showActiveDlSheet) {
@@ -1537,7 +1538,7 @@ fun OfflinePlayerScreen(
                                     .clip(CircleShape)
                                     .background(if (showSubtitleDrawer) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f))
                             ) {
-                                Icon(Icons.Default.Subtitles, contentDescription = "ترجمة", tint = Color.White)
+                                Icon(IosIcons.ClosedCaptions, contentDescription = "ترجمة", tint = Color.White)
                             }
 
                             // Quality Selector in Landscape (for online streams)
@@ -1981,7 +1982,7 @@ fun OfflinePlayerScreen(
                                             folderNavStack = emptyList()
                                         }
                                     }) {
-                                        Icon(Icons.Default.ArrowBack, "رجوع")
+                                        Icon(IosIcons.ChevronRight, "رجوع")
                                     }
                                 }
                                     Text(
@@ -1999,7 +2000,7 @@ fun OfflinePlayerScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 IconButton(onClick = { showSubtitleDrawer = false }) {
-                                    Icon(Icons.Default.Close, "إغلاق")
+                                    Icon(AppIcons.Close, "إغلاق")
                                 }
                             }
 
@@ -2087,7 +2088,7 @@ fun OfflinePlayerScreen(
                                                     onClick = { subtitlePage = 1 },
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Icon(AppIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text("بحث MovieBox", fontSize = 11.sp, maxLines = 1)
                                                 }
@@ -2135,7 +2136,7 @@ fun OfflinePlayerScreen(
                                                         if (isDownloadingSub) {
                                                             CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                                                         } else {
-                                                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                            Icon(IosIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                             Text("تحميل المسلسل", fontSize = 11.sp, maxLines = 1)
                                                         }
@@ -2177,7 +2178,7 @@ fun OfflinePlayerScreen(
                                                 onClick = { subtitlePage = 2 },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF4A90D9))
+                                                Icon(IosIcons.ClosedCaptions, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF4A90D9))
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text("Subdl", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A90D9))
                                             }
@@ -2189,7 +2190,7 @@ fun OfflinePlayerScreen(
                                                 onClick = { subtitlePage = 3 },
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.Subtitles, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF7CB342))
+                                                Icon(IosIcons.ClosedCaptions, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF7CB342))
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text("OpenSubtitles", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7CB342))
                                             }
@@ -2644,7 +2645,7 @@ fun OfflinePlayerScreen(
                             ) {
                                 Text("الحلقات المحمّلة", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                                 IconButton(onClick = { showEpisodesDrawer = false }) {
-                                    Icon(Icons.Default.Close, "إغلاق")
+                                    Icon(AppIcons.Close, "إغلاق")
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
@@ -2701,7 +2702,7 @@ fun OfflinePlayerScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isPlayingThis) {
-                                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                                    Icon(IosIcons.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                                                 } else {
                                                     Text("${ep.episode}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                                                 }
@@ -2722,7 +2723,7 @@ fun OfflinePlayerScreen(
                                             if (epHasSubtitle) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Icon(
-                                                    imageVector = Icons.Default.ClosedCaption,
+                                                    imageVector = IosIcons.ClosedCaptions,
                                                     contentDescription = "ترجمة",
                                                     tint = MaterialTheme.colorScheme.tertiary,
                                                     modifier = Modifier.size(16.dp)

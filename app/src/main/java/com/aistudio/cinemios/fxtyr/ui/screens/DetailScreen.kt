@@ -251,7 +251,7 @@ fun DetailScreen(
                             )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
+                            imageVector = IosIcons.ChevronRight,
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
@@ -289,13 +289,13 @@ fun DetailScreen(
                             }
                         )
                         DetailCapsuleAction(
-                            icon = Icons.Default.Subtitles,
+                            icon = IosIcons.ClosedCaptions,
                             contentDescription = "تحميل ترجمة",
                             tint = MaterialTheme.colorScheme.onBackground,
                             onClick = openSubtitleSheet
                         )
                         DetailCapsuleAction(
-                            icon = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                            icon = if (isFavorited) IosIcons.BookmarkFilled else IosIcons.Bookmark,
                             contentDescription = "قائمة المشاهدة",
                             tint = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                             onClick = {

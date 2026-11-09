@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -107,14 +108,14 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
         SettingsGroup {
             SettingsRow(
-                icon = Icons.Default.Bookmark,
+                icon = IosIcons.BookmarkFilled,
                 title = "قائمة المشاهدة والمفضلات",
                 subtitle = "عرض وتصفح أعمالك المحفوظة",
                 onClick = onNavigateToWatchlist
             )
             SettingsDivider()
             SettingsRow(
-                icon = Icons.Default.ClosedCaption,
+                icon = IosIcons.ClosedCaptions,
                 title = "الترجمات المحملة",
                 subtitle = "عرض وإدارة ملفات الترجمة المحفوظة",
                 onClick = onNavigateToSubtitleDownloads
@@ -297,7 +298,7 @@ private fun ProfileCard(
 
                 if (user == null) {
                     Icon(
-                        imageVector = Icons.Default.ChevronLeft,
+                        imageVector = IosIcons.ChevronLeft,
                         contentDescription = "تسجيل الدخول",
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(20.dp)
@@ -409,7 +410,7 @@ private fun SettingsRow(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Icon(
-                        imageVector = Icons.Default.ChevronLeft,
+                        imageVector = IosIcons.ChevronLeft,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
                         modifier = Modifier.size(18.dp)
@@ -418,7 +419,7 @@ private fun SettingsRow(
             }
             onClick != null -> {
                 Icon(
-                    imageVector = Icons.Default.ChevronLeft,
+                    imageVector = IosIcons.ChevronLeft,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
                     modifier = Modifier.size(18.dp)
@@ -576,7 +577,7 @@ private fun LanguageOption(
 
             if (selected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = IosIcons.CheckmarkCircle,
                     contentDescription = "محدد",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)

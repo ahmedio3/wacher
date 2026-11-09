@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.downloads
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -293,7 +294,7 @@ fun LocalFilesTab(
                             }
                             // Remove button
                             IconButton(onClick = { removeFile(video.id) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "إزالة", tint = MaterialTheme.colorScheme.error)
+                                Icon(AppIcons.Trash, contentDescription = "إزالة", tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }

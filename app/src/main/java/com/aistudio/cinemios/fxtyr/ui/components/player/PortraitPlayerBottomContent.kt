@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.player
 
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -249,7 +250,7 @@ fun PortraitPlayerBottomContent(
                                         if (q == selectedQuality) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                imageVector = IosIcons.Checkmark,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(16.dp)
@@ -276,7 +277,7 @@ fun PortraitPlayerBottomContent(
 
             if (onDownloadClick != null) {
                 ActionPillButton(
-                    icon = Icons.Default.Download,
+                    icon = IosIcons.Download,
                     label = "تنزيل",
                     onClick = onDownloadClick,
                     modifier = Modifier.weight(1f)
@@ -383,7 +384,7 @@ fun PortraitPlayerBottomContent(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Subtitles,
+                                    imageVector = IosIcons.ClosedCaptions,
                                     contentDescription = null,
                                     tint = if (selectedTab == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
@@ -498,7 +499,7 @@ fun PortraitPlayerBottomContent(
                                     ) {
                                         if (isPlayingThis) {
                                             Icon(
-                                                imageVector = Icons.Default.PlayArrow,
+                                                imageVector = IosIcons.Play,
                                                 contentDescription = null,
                                                 tint = Color.White,
                                                 modifier = Modifier.size(22.dp)
@@ -743,7 +744,7 @@ fun PortraitPlayerBottomContent(
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("البحث عن ترجمات إضافية (SubDL / OpenSubtitles)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }

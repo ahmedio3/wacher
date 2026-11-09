@@ -1,5 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -211,7 +213,7 @@ private fun SubscriptionTopBar(onBackClick: () -> Unit) {
                 )
         ) {
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = IosIcons.ChevronRight,
                 contentDescription = "رجوع",
                 tint = MaterialTheme.colorScheme.onBackground
             )
@@ -460,7 +462,7 @@ private fun SeePlusHero(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     repeat(5) {
                         Icon(
-                            imageVector = Icons.Default.Star,
+                            imageVector = AppIcons.Star,
                             contentDescription = null,
                             tint = SeePlusColors.Gold,
                             modifier = Modifier.size(13.dp)
@@ -561,7 +563,7 @@ private fun BenefitRow(feature: PremiumFeature) {
         }
 
         Icon(
-            imageVector = Icons.Default.CheckCircle,
+            imageVector = IosIcons.CheckmarkCircle,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.tertiary,
             modifier = Modifier.size(18.dp)
@@ -570,10 +572,10 @@ private fun BenefitRow(feature: PremiumFeature) {
 }
 
 private fun featureIcon(feature: PremiumFeature): ImageVector = when (feature) {
-    PremiumFeature.OFFLINE_DOWNLOADS -> Icons.Default.Download
-    PremiumFeature.EXCLUSIVE_SUBTITLES -> Icons.Default.ClosedCaption
-    PremiumFeature.HIGH_QUALITY_PLAYBACK -> Icons.Default.Star
-    PremiumFeature.WATCHLIST_SYNC -> Icons.Default.Refresh
+    PremiumFeature.OFFLINE_DOWNLOADS -> IosIcons.Download
+    PremiumFeature.EXCLUSIVE_SUBTITLES -> IosIcons.ClosedCaptions
+    PremiumFeature.HIGH_QUALITY_PLAYBACK -> AppIcons.Star
+    PremiumFeature.WATCHLIST_SYNC -> IosIcons.Refresh
     else -> Icons.Default.Star
 }
 
@@ -919,7 +921,7 @@ private fun CancelSubscriptionRow(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = AppIcons.Close,
                 contentDescription = null,
                 tint = PaletteMutedRed,
                 modifier = Modifier.size(16.dp)

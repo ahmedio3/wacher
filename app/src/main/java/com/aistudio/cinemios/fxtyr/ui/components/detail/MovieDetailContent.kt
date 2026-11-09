@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.detail
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -121,7 +122,7 @@ fun MovieDetailContent(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Star,
+                        imageVector = AppIcons.Star,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(16.dp)
@@ -194,7 +195,7 @@ fun MovieDetailContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                        Icon(imageVector = IosIcons.PlayCircle, contentDescription = null, tint = Color.White)
                         Text("مشاهدة الآن", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }

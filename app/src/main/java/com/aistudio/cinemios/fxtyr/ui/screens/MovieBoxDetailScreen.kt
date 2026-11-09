@@ -1,5 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.screens
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -147,7 +149,7 @@ fun MovieBoxDetailScreen(
                             .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ChevronRight,
+                            imageVector = IosIcons.ChevronRight,
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onBackground
                         )
@@ -259,7 +261,7 @@ fun MovieBoxDetailScreen(
                                 )
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Star,
+                                        imageVector = AppIcons.Star,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.size(16.dp)
@@ -361,7 +363,7 @@ fun MovieBoxDetailScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                                            Icon(imageVector = IosIcons.PlayCircle, contentDescription = null, tint = Color.White)
                                             Text("مشاهدة الآن", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                         }
                                     }
@@ -375,7 +377,7 @@ fun MovieBoxDetailScreen(
                                         modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Download,
+                                            imageVector = IosIcons.Download,
                                             contentDescription = "تحميل المسلسل كاملًا",
                                             tint = MaterialTheme.colorScheme.primary
                                         )
@@ -400,7 +402,7 @@ fun MovieBoxDetailScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            imageVector = if (isFavorited) IosIcons.BookmarkFilled else IosIcons.Bookmark,
                                             contentDescription = "قائمة المشاهدة",
                                             tint = if (isFavorited) Color.White else MaterialTheme.colorScheme.onBackground
                                         )
@@ -424,7 +426,7 @@ fun MovieBoxDetailScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color.White)
+                                            Icon(imageVector = IosIcons.PlayCircle, contentDescription = null, tint = Color.White)
                                             Text("مشاهدة الآن", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                         }
                                     }
@@ -448,7 +450,7 @@ fun MovieBoxDetailScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isFavorited) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            imageVector = if (isFavorited) IosIcons.BookmarkFilled else IosIcons.Bookmark,
                                             contentDescription = "قائمة المشاهدة",
                                             tint = if (isFavorited) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
                                         )
@@ -462,7 +464,7 @@ fun MovieBoxDetailScreen(
                                         },
                                         modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
-                                        Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل المشاهدة أوفلاين", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(imageVector = IosIcons.ArrowDownCircle, contentDescription = "تحميل المشاهدة أوفلاين", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
                             }
@@ -737,7 +739,7 @@ private fun MovieBoxEpisodeRowCard(
                 contentColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Icon(imageVector = Icons.Default.ArrowCircleDown, contentDescription = "تحميل حلقة", modifier = Modifier.size(18.dp))
+            Icon(imageVector = IosIcons.ArrowDownCircle, contentDescription = "تحميل حلقة", modifier = Modifier.size(18.dp))
         }
     }
 }

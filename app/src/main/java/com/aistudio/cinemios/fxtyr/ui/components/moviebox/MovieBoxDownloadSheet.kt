@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components.moviebox
 
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.crypto.MovieBoxSigner
 import android.content.Context
 import android.net.Uri
@@ -405,7 +406,7 @@ fun MovieBoxDownloadSheet(
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                                     ) {
-                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                                        Icon(IosIcons.Download, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                                         Text("تحميل المحدد (${validSelectedIds.size} / ${episodeIds.size})")
                                     }
                                 }
@@ -516,7 +517,7 @@ fun MovieBoxDownloadSheet(
                                                     )
                                                     if (isDownloadedHere) {
                                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Icon(Icons.Default.CheckCircle, "تم التحميل", tint = PaletteSuccess, modifier = Modifier.size(18.dp))
+                                                            Icon(IosIcons.CheckmarkCircle, "تم التحميل", tint = PaletteSuccess, modifier = Modifier.size(18.dp))
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                             Text("تم التحميل", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                                                         }
@@ -536,7 +537,7 @@ fun MovieBoxDownloadSheet(
                                                             },
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
-                                                            Icon(Icons.Default.Download, "تحميل", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                                            Icon(IosIcons.Download, "تحميل", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                                         }
                                                     } else {
                                                         Text(
@@ -721,7 +722,7 @@ private fun QualityItem(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp)
         ) {
-            Icon(Icons.Default.Download, contentDescription = "تحميل", modifier = Modifier.padding(end = 8.dp))
+            Icon(IosIcons.Download, contentDescription = "تحميل", modifier = Modifier.padding(end = 8.dp))
             Text("تحميل الفيلم")
         }
     }

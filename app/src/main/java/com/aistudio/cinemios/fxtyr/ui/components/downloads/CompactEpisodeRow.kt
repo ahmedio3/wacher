@@ -1,5 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.components.downloads
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -363,7 +365,7 @@ fun CompactEpisodeRow(
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            imageVector = if (isPaused) IosIcons.Play else Icons.Default.Pause,
                             contentDescription = if (isPaused) "استئناف" else "إيقاف مؤقت",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
@@ -400,7 +402,7 @@ fun CompactEpisodeRow(
                             android.widget.Toast.makeText(context, "الملف غير جاهز بعد", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
-                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(IosIcons.Play, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
                 DropdownMenuItem(
                     text = { Text(if (isPaused) "استئناف التحميل" else "إيقاف التحميل") },
@@ -409,7 +411,7 @@ fun CompactEpisodeRow(
                         if (isPaused) viewModel.resumeDownload(item.id)
                         else viewModel.pauseDownload(item.id)
                     },
-                    leadingIcon = { Icon(if (isPaused) Icons.Default.FileDownload else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(if (isPaused) IosIcons.Download else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
             if (isCompleted) {
@@ -432,7 +434,7 @@ fun CompactEpisodeRow(
                             android.widget.Toast.makeText(context, "خطأ أثناء الحفظ: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                         }
                     },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    leadingIcon = { Icon(IosIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
             DropdownMenuItem(
@@ -460,7 +462,7 @@ fun CompactEpisodeRow(
                     if (isDownloadingSubtitle) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.ClosedCaption, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(IosIcons.ClosedCaptions, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                 }
             )
@@ -470,7 +472,7 @@ fun CompactEpisodeRow(
                     onDismissContextMenu()
                     viewModel.deleteDownload(item.id)
                 },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(AppIcons.Trash, contentDescription = null, tint = PaletteMutedRed, modifier = Modifier.size(18.dp)) }
             )
             HorizontalDivider()
             DropdownMenuItem(
@@ -478,7 +480,7 @@ fun CompactEpisodeRow(
                 onClick = {
                     onEnterMultiSelect()
                 },
-                leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
+                leadingIcon = { Icon(IosIcons.CheckmarkCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) }
             )
         }
     }

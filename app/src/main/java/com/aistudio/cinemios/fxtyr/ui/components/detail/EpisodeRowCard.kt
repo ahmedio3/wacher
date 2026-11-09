@@ -81,7 +81,7 @@ fun EpisodeRowCard(
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(imageVector = IosIcons.Play, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }

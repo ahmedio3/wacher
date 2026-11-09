@@ -1,5 +1,7 @@
 package com.aistudio.cinemios.fxtyr.ui.components
 
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -96,7 +98,7 @@ fun ShowCardContextMenu(
             onClick = { onDismiss(); onToggleMyList() },
             leadingIcon = {
                 Icon(
-                    if (isInMyList) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    if (isInMyList) IosIcons.BookmarkFilled else IosIcons.Bookmark,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )
@@ -107,7 +109,7 @@ fun ShowCardContextMenu(
             onClick = { onDismiss(); onShare() },
             leadingIcon = {
                 Icon(
-                    Icons.Default.Share,
+                    IosIcons.Share,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )
@@ -146,9 +148,9 @@ fun WatchlistPosterCard(
     var menuExpanded by remember { mutableStateOf(false) }
 
     val (statusIcon, statusColor) = when (item.status) {
-        "WATCHING" -> Pair(Icons.Default.PlayCircle, MaterialTheme.colorScheme.tertiary)
-        "COMPLETED" -> Pair(Icons.Default.CheckCircle, Color(0xFF32A852))
-        else -> Pair(Icons.Default.Bookmark, MaterialTheme.colorScheme.primary)
+        "WATCHING" -> Pair(IosIcons.PlayCircle, MaterialTheme.colorScheme.tertiary)
+        "COMPLETED" -> Pair(IosIcons.CheckmarkCircle, Color(0xFF32A852))
+        else -> Pair(IosIcons.BookmarkFilled, MaterialTheme.colorScheme.primary)
     }
 
     Column(
@@ -242,7 +244,7 @@ fun WatchlistPosterCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Star,
+                        imageVector = AppIcons.Star,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(10.dp)

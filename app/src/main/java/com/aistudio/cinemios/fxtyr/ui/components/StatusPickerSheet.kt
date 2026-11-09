@@ -1,5 +1,6 @@
 package com.aistudio.cinemios.fxtyr.ui.components
 
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,7 +45,7 @@ fun StatusPickerSheet(
             StatusOption(
                 label = "انوي مشاهدته",
                 subtitle = "أضفته للقائمة ولم تبدأ بعد",
-                icon = Icons.Default.Bookmark,
+                icon = IosIcons.BookmarkFilled,
                 color = MaterialTheme.colorScheme.primary,
                 isDefault = currentDefault == "PLAN_TO_WATCH",
                 onClick = { onStatusSelected("PLAN_TO_WATCH") }
@@ -53,7 +54,7 @@ fun StatusPickerSheet(
             StatusOption(
                 label = "أشاهده",
                 subtitle = "بدأت المشاهدة ولم تنتهِ بعد",
-                icon = Icons.Default.PlayCircle,
+                icon = IosIcons.PlayCircle,
                 color = MaterialTheme.colorScheme.tertiary,
                 isDefault = currentDefault == "WATCHING",
                 onClick = { onStatusSelected("WATCHING") }
@@ -62,7 +63,7 @@ fun StatusPickerSheet(
             StatusOption(
                 label = "تم",
                 subtitle = "شاهدته بالكامل",
-                icon = Icons.Default.CheckCircle,
+                icon = IosIcons.CheckmarkCircle,
                 color = Color(0xFF32A852),
                 isDefault = currentDefault == "COMPLETED",
                 onClick = { onStatusSelected("COMPLETED") }
