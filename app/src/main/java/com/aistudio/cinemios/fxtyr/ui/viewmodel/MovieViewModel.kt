@@ -248,6 +248,37 @@ class MovieViewModel(
         _showDownloadErrorDialog.value = false
     }
 
+    // MovieBox feature state. These MUST be initialized before the `init`
+    // block below, because `fetchHomeContent()` launches immediately and
+    // writes to `_homeSections` before the first suspension point.
+    private val _isMovieBoxSearchMode = MutableStateFlow(false)
+    val isMovieBoxSearchMode: StateFlow<Boolean> = _isMovieBoxSearchMode.asStateFlow()
+
+    private val _movieBoxSearchResults = MutableStateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>>(RequestState.Idle)
+    val movieBoxSearchResults: StateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>> = _movieBoxSearchResults.asStateFlow()
+
+    // Autocomplete suggestions from MovieBox `/suggest`
+    private val _searchSuggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
+    val searchSuggestions: StateFlow<List<SearchSuggestion>> = _searchSuggestions.asStateFlow()
+
+    // Tabs and selected tab for the advanced MovieBox search (`/search_v2`)
+    private val _searchV2Tabs = MutableStateFlow<List<SearchV2Tab>>(emptyList())
+    val searchV2Tabs: StateFlow<List<SearchV2Tab>> = _searchV2Tabs.asStateFlow()
+
+    private val _selectedSearchTab = MutableStateFlow("all")
+    val selectedSearchTab: StateFlow<String> = _selectedSearchTab.asStateFlow()
+
+    private val _searchV2Groups = MutableStateFlow<List<SearchV2Group>>(emptyList())
+    val searchV2Groups: StateFlow<List<SearchV2Group>> = _searchV2Groups.asStateFlow()
+
+    // Popular searches + hot rails shown on the empty search screen
+    private val _popularSearches = MutableStateFlow<RequestState<PopularSearches>>(RequestState.Idle)
+    val popularSearches: StateFlow<RequestState<PopularSearches>> = _popularSearches.asStateFlow()
+
+    // Curated MovieBox homepage rails
+    private val _homeSections = MutableStateFlow<RequestState<List<HomeSection>>>(RequestState.Idle)
+    val homeSections: StateFlow<RequestState<List<HomeSection>>> = _homeSections.asStateFlow()
+
     init {
         val database = MovieDatabase.getDatabase(application)
         repository = MovieRepository(database.movieDao)
@@ -313,34 +344,6 @@ class MovieViewModel(
         FirebaseAuth.getInstance().removeAuthStateListener(subscriptionAuthListener)
         super.onCleared()
     }
-
-    private val _isMovieBoxSearchMode = MutableStateFlow(false)
-    val isMovieBoxSearchMode: StateFlow<Boolean> = _isMovieBoxSearchMode.asStateFlow()
-
-    private val _movieBoxSearchResults = MutableStateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>>(RequestState.Idle)
-    val movieBoxSearchResults: StateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>> = _movieBoxSearchResults.asStateFlow()
-
-    // Autocomplete suggestions from MovieBox `/suggest`
-    private val _searchSuggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
-    val searchSuggestions: StateFlow<List<SearchSuggestion>> = _searchSuggestions.asStateFlow()
-
-    // Tabs and selected tab for the advanced MovieBox search (`/search_v2`)
-    private val _searchV2Tabs = MutableStateFlow<List<SearchV2Tab>>(emptyList())
-    val searchV2Tabs: StateFlow<List<SearchV2Tab>> = _searchV2Tabs.asStateFlow()
-
-    private val _selectedSearchTab = MutableStateFlow("all")
-    val selectedSearchTab: StateFlow<String> = _selectedSearchTab.asStateFlow()
-
-    private val _searchV2Groups = MutableStateFlow<List<SearchV2Group>>(emptyList())
-    val searchV2Groups: StateFlow<List<SearchV2Group>> = _searchV2Groups.asStateFlow()
-
-    // Popular searches + hot rails shown on the empty search screen
-    private val _popularSearches = MutableStateFlow<RequestState<PopularSearches>>(RequestState.Idle)
-    val popularSearches: StateFlow<RequestState<PopularSearches>> = _popularSearches.asStateFlow()
-
-    // Curated MovieBox homepage rails
-    private val _homeSections = MutableStateFlow<RequestState<List<HomeSection>>>(RequestState.Idle)
-    val homeSections: StateFlow<RequestState<List<HomeSection>>> = _homeSections.asStateFlow()
 
     // Floating search active state
     private val _isSearchActive = MutableStateFlow(false)
