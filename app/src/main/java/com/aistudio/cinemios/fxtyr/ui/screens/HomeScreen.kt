@@ -43,6 +43,7 @@ fun HomeScreen(
     val trendingMoviesState by viewModel.trendingMovies.collectAsState()
     val trendingTvState by viewModel.trendingTv.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
+    val homeSectionsState by viewModel.homeSections.collectAsState()
     val subscription by viewModel.subscriptionState.collectAsState()
     val context = LocalContext.current
 
@@ -131,7 +132,52 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(28.dp))
         }
 
-        // 4. Watchlist Section (قائمتي) — shown if not empty
+        // 4. MovieBox curated rails (from `/home`)
+        when (val homeState = homeSectionsState) {
+            is RequestState.Success -> {
+                val sections = remember(homeState.data) {
+                    homeState.data
+                        .filter { it.items.isNotEmpty() }
+                        .distinctBy { it.title }
+                        .take(8)
+                        .map { it.copy(items = it.items.take(12)) }
+                }
+                if (sections.isNotEmpty()) {
+                    MovieBoxRailsHeader()
+                    sections.forEach { section ->
+                        MovieBoxHomeRail(
+                            section = section,
+                            onItemClick = { item ->
+                                val mediaType = if (item.type == "series") "tv" else "movie"
+                                viewModel.recordRecentView(
+                                    RecentViewedItem(
+                                        id = item.subjectId,
+                                        title = item.title,
+                                        posterPath = item.posterUrl,
+                                        mediaType = mediaType,
+                                        year = item.year,
+                                        rating = item.rating,
+                                        isMovieBox = true
+                                    )
+                                )
+                                onNavigateToMovieBoxDetails(
+                                    item.subjectId,
+                                    mediaType,
+                                    item.title,
+                                    item.posterUrl
+                                )
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
+            RequestState.Loading -> MovieBoxHomeRailsSkeleton()
+            else -> Unit
+        }
+
+        // 5. Watchlist Section (قائمتي) — shown if not empty
         if (watchlistItems.isNotEmpty()) {
             Row(
                 modifier = Modifier

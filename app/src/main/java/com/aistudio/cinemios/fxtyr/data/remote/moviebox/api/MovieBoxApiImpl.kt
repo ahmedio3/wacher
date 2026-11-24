@@ -25,6 +25,11 @@ interface MovieBoxApi {
     suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>>
     suspend fun adultKeywords(): Result<List<String>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
+    suspend fun suggest(query: String, limit: Int = 10): Result<List<SearchSuggestion>>
+    suspend fun recommend(subjectId: String, page: Int = 1, limit: Int = 12): Result<List<SearchResult>>
+    suspend fun home(page: Int = 1, limitPerSection: Int = 20): Result<List<HomeSection>>
+    suspend fun popularSearches(limit: Int = 10): Result<PopularSearches>
+    suspend fun searchV2(query: String, tab: String = "all", page: Int = 1, limit: Int = 15): Result<SearchV2Result>
 }
 
 class MovieBoxApiImpl : MovieBoxApi {
@@ -518,6 +523,264 @@ class MovieBoxApiImpl : MovieBoxApi {
         }
     }
 
+    override suspend fun suggest(query: String, limit: Int): Result<List<SearchSuggestion>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/suggest".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("query", query)
+                    addQueryParameter("limit", limit.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val rootJson = JSONObject(response.body?.string() ?: "")
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error"))
+                }
+
+                val array = rootJson.optJSONArray("suggestions") ?: org.json.JSONArray()
+                val suggestions = mutableListOf<SearchSuggestion>()
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val text = item.optString("text")
+                    if (text.isNotBlank()) {
+                        suggestions.add(
+                            SearchSuggestion(
+                                text = text,
+                                type = item.optInt("type", 0)
+                            )
+                        )
+                    }
+                }
+                Result.success(suggestions)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun recommend(subjectId: String, page: Int, limit: Int): Result<List<SearchResult>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/recommend".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("subject_id", subjectId)
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("limit", limit.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val rootJson = JSONObject(response.body?.string() ?: "")
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error"))
+                }
+
+                Result.success(rootJson.parseSearchResults())
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun home(page: Int, limitPerSection: Int): Result<List<HomeSection>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/home".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("limit_per_section", limitPerSection.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val rootJson = JSONObject(response.body?.string() ?: "")
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error"))
+                }
+
+                val sectionsArray = rootJson.optJSONArray("sections") ?: org.json.JSONArray()
+                val sections = mutableListOf<HomeSection>()
+                for (i in 0 until sectionsArray.length()) {
+                    val sectionObj = sectionsArray.optJSONObject(i) ?: continue
+
+                    val groupsArray = sectionObj.optJSONArray("groups")
+                    val groups = mutableListOf<HomeSectionGroup>()
+                    if (groupsArray != null) {
+                        for (j in 0 until groupsArray.length()) {
+                            val groupObj = groupsArray.optJSONObject(j) ?: continue
+                            val groupItems = groupObj.optJSONArray("results")?.toSearchResultList() ?: emptyList()
+                            if (groupItems.isNotEmpty()) {
+                                groups.add(
+                                    HomeSectionGroup(
+                                        title = groupObj.optString("title"),
+                                        results = groupItems
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    val items = sectionObj.optJSONArray("items")?.toSearchResultList() ?: emptyList()
+                    if (items.isEmpty() && groups.isEmpty()) continue
+
+                    sections.add(
+                        HomeSection(
+                            title = sectionObj.optString("title"),
+                            type = sectionObj.optString("type"),
+                            items = items,
+                            groups = groups
+                        )
+                    )
+                }
+                Result.success(sections)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun popularSearches(limit: Int): Result<PopularSearches> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/popular_searches".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("limit", limit.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val rootJson = JSONObject(response.body?.string() ?: "")
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error"))
+                }
+
+                val everyoneArray = rootJson.optJSONArray("everyone_search")
+                val everyone = mutableListOf<String>()
+                if (everyoneArray != null) {
+                    for (i in 0 until everyoneArray.length()) {
+                        val title = everyoneArray.optString(i)
+                        if (title.isNotBlank()) everyone.add(title)
+                    }
+                }
+
+                val hotArray = rootJson.optJSONArray("hot")
+                val hot = mutableListOf<PopularSearchCategory>()
+                if (hotArray != null) {
+                    for (i in 0 until hotArray.length()) {
+                        val categoryObj = hotArray.optJSONObject(i) ?: continue
+                        val results = categoryObj.optJSONArray("results")?.toSearchResultList() ?: emptyList()
+                        if (results.isEmpty()) continue
+                        hot.add(
+                            PopularSearchCategory(
+                                category = categoryObj.optString("category"),
+                                name = categoryObj.optString("name"),
+                                results = results
+                            )
+                        )
+                    }
+                }
+
+                Result.success(PopularSearches(everyoneSearch = everyone, hot = hot))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun searchV2(query: String, tab: String, page: Int, limit: Int): Result<SearchV2Result> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val urlBuilder = "$baseUrl/search_v2".toHttpUrlOrNull()?.newBuilder()?.apply {
+                    addQueryParameter("query", query)
+                    addQueryParameter("tab", tab)
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("limit", limit.toString())
+                } ?: return@withContext Result.failure(Exception("Invalid URL"))
+
+                val request = Request.Builder().url(urlBuilder.build()).get().build()
+                val response = httpClient.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error: ${response.code}"))
+                }
+
+                val rootJson = JSONObject(response.body?.string() ?: "")
+                if (rootJson.optString("status") != "success") {
+                    return@withContext Result.failure(Exception("API returned error"))
+                }
+
+                val tabsArray = rootJson.optJSONArray("tabs")
+                val tabs = mutableListOf<SearchV2Tab>()
+                if (tabsArray != null) {
+                    for (i in 0 until tabsArray.length()) {
+                        val tabObj = tabsArray.optJSONObject(i) ?: continue
+                        val id = tabObj.optString("id")
+                        if (id.isBlank()) continue
+                        tabs.add(
+                            SearchV2Tab(
+                                id = id,
+                                name = tabObj.optString("name").ifBlank { id },
+                                parentId = tabObj.optString("parent_id")
+                            )
+                        )
+                    }
+                }
+
+                val groupsArray = rootJson.optJSONArray("groups")
+                val groups = mutableListOf<SearchV2Group>()
+                if (groupsArray != null) {
+                    for (i in 0 until groupsArray.length()) {
+                        val groupObj = groupsArray.optJSONObject(i) ?: continue
+                        val results = groupObj.optJSONArray("results")?.toSearchResultList() ?: emptyList()
+                        if (results.isEmpty()) continue
+                        groups.add(
+                            SearchV2Group(
+                                title = groupObj.optString("title"),
+                                topicType = groupObj.optString("topic_type"),
+                                results = results
+                            )
+                        )
+                    }
+                }
+
+                // Prefer the primary `main` bucket: the flat top-level `results`
+                // also merges the related groups, which we render separately.
+                val results = rootJson.optJSONObject("main")?.optJSONArray("results")?.toSearchResultList()
+                    ?: rootJson.optJSONArray("results")?.toSearchResultList()
+                    ?: emptyList()
+
+                Result.success(
+                    SearchV2Result(
+                        tabs = tabs,
+                        groups = groups,
+                        results = results,
+                        totalResults = rootJson.optInt("total_results", results.size)
+                    )
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     /**
      * Parses size strings like "1.2GB", "850MB", "1.5KB" into bytes.
      * Also handles plain number strings like "2414667149" (bytes).
@@ -555,13 +818,22 @@ class MovieBoxApiImpl : MovieBoxApi {
  * Helper to copy a SearchResult with parsed languages array from JSON.
  */
 private fun JSONObject.parseSearchResults(): List<SearchResult> {
-    val resultsArray = optJSONArray("results") ?: return emptyList()
+    return optJSONArray("results")?.toSearchResultList() ?: emptyList()
+}
+
+/**
+ * Parses an array of MovieBox subjects into [SearchResult]s.
+ * Entries without a subject id are skipped so the UI never renders dead cards.
+ */
+private fun org.json.JSONArray.toSearchResultList(): List<SearchResult> {
     val list = mutableListOf<SearchResult>()
-    for (i in 0 until resultsArray.length()) {
-        val item = resultsArray.optJSONObject(i) ?: continue
+    for (i in 0 until length()) {
+        val item = optJSONObject(i) ?: continue
+        val subjectId = item.optString("subject_id")
+        if (subjectId.isBlank()) continue
         list.add(
             SearchResult(
-                subjectId = item.optString("subject_id"),
+                subjectId = subjectId,
                 title = item.optString("title"),
                 type = item.optString("type"),
                 posterUrl = item.optString("poster"),

@@ -15,6 +15,7 @@ import com.aistudio.cinemios.fxtyr.data.local.SubtitleDownloadEntity
 import com.aistudio.cinemios.fxtyr.data.local.WatchlistEntity
 import com.aistudio.cinemios.fxtyr.data.remote.*
 import com.aistudio.cinemios.fxtyr.data.repository.MovieRepository
+import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.*
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.repository.MovieBoxRepository
 import com.aistudio.cinemios.fxtyr.subscription.PremiumFeature
 import com.aistudio.cinemios.fxtyr.subscription.PremiumFeatureAccess
@@ -291,6 +292,21 @@ class MovieViewModel(
                     performSearch(query.trim(), saveToHistory = false)
                 }
         }
+
+        // Fast autocomplete for MovieBox: 250ms debounce, min 2 chars
+        viewModelScope.launch {
+            _searchQuery
+                .debounce(250)
+                .map { it.trim() }
+                .distinctUntilChanged()
+                .collect { query ->
+                    if (query.length >= 2 && _isMovieBoxSearchMode.value) {
+                        fetchSuggestions(query)
+                    } else if (query.length < 2) {
+                        _searchSuggestions.value = emptyList()
+                    }
+                }
+        }
     }
 
     override fun onCleared() {
@@ -304,12 +320,36 @@ class MovieViewModel(
     private val _movieBoxSearchResults = MutableStateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>>(RequestState.Idle)
     val movieBoxSearchResults: StateFlow<RequestState<List<com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult>>> = _movieBoxSearchResults.asStateFlow()
 
+    // Autocomplete suggestions from MovieBox `/suggest`
+    private val _searchSuggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
+    val searchSuggestions: StateFlow<List<SearchSuggestion>> = _searchSuggestions.asStateFlow()
+
+    // Tabs and selected tab for the advanced MovieBox search (`/search_v2`)
+    private val _searchV2Tabs = MutableStateFlow<List<SearchV2Tab>>(emptyList())
+    val searchV2Tabs: StateFlow<List<SearchV2Tab>> = _searchV2Tabs.asStateFlow()
+
+    private val _selectedSearchTab = MutableStateFlow("all")
+    val selectedSearchTab: StateFlow<String> = _selectedSearchTab.asStateFlow()
+
+    private val _searchV2Groups = MutableStateFlow<List<SearchV2Group>>(emptyList())
+    val searchV2Groups: StateFlow<List<SearchV2Group>> = _searchV2Groups.asStateFlow()
+
+    // Popular searches + hot rails shown on the empty search screen
+    private val _popularSearches = MutableStateFlow<RequestState<PopularSearches>>(RequestState.Idle)
+    val popularSearches: StateFlow<RequestState<PopularSearches>> = _popularSearches.asStateFlow()
+
+    // Curated MovieBox homepage rails
+    private val _homeSections = MutableStateFlow<RequestState<List<HomeSection>>>(RequestState.Idle)
+    val homeSections: StateFlow<RequestState<List<HomeSection>>> = _homeSections.asStateFlow()
+
     // Floating search active state
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
 
     fun openSearch() {
         _isSearchActive.value = true
+        // No-op when already loaded; retries automatically after an error.
+        fetchPopularSearches()
     }
 
     fun closeSearch() {
@@ -632,10 +672,22 @@ class MovieViewModel(
     }
 
     private var activeSearchJob: Job? = null
+    private var suggestionsJob: Job? = null
+    // Set when the user submits a suggestion/popular term so the debounce does
+    // not immediately re-open the suggestion chips for that same text.
+    private var suppressSuggestionQuery: String? = null
 
     fun updateSearchMode(isMovieBox: Boolean) {
         _isMovieBoxSearchMode.value = isMovieBox
+        _searchV2Tabs.value = emptyList()
+        _searchV2Groups.value = emptyList()
+        _selectedSearchTab.value = "all"
         val q = _searchQuery.value.trim()
+        if (isMovieBox && q.length >= 2) {
+            fetchSuggestions(q)
+        } else {
+            _searchSuggestions.value = emptyList()
+        }
         if (q.length >= 2) {
             performSearch(q, saveToHistory = false)
         }
@@ -643,14 +695,71 @@ class MovieViewModel(
 
     fun setSearchQueryOnly(query: String) {
         _searchQuery.value = query
+        if (query.trim() != suppressSuggestionQuery) {
+            suppressSuggestionQuery = null
+        }
         if (query.trim().isEmpty()) {
             activeSearchJob?.cancel()
+            suggestionsJob?.cancel()
             _searchResults.value = RequestState.Idle
             _movieBoxSearchResults.value = RequestState.Idle
+            _searchSuggestions.value = emptyList()
+            _searchV2Tabs.value = emptyList()
+            _searchV2Groups.value = emptyList()
+            _selectedSearchTab.value = "all"
         }
     }
 
     fun onSearchQueryChange(query: String) = setSearchQueryOnly(query)
+
+    /** Called when the user taps an autocomplete chip. */
+    fun applySearchSuggestion(text: String) {
+        val suggestion = text.trim()
+        if (suggestion.isEmpty()) return
+        suppressSuggestionQuery = suggestion
+        _searchQuery.value = suggestion
+        _searchSuggestions.value = emptyList()
+        performSearch(suggestion, saveToHistory = true)
+    }
+
+    /** Called when the user switches between `/search_v2` tabs. */
+    fun selectSearchTab(tabKey: String) {
+        if (_selectedSearchTab.value == tabKey) return
+        _selectedSearchTab.value = tabKey
+        val q = _searchQuery.value.trim()
+        if (q.length >= 2) {
+            performSearch(q, saveToHistory = false, preserveTab = true)
+        }
+    }
+
+    fun fetchPopularSearches(force: Boolean = false) {
+        if (!force && _popularSearches.value is RequestState.Success) return
+        viewModelScope.launch {
+            _popularSearches.value = RequestState.Loading
+            movieBoxRepository.popularSearches(limit = 12)
+                .onSuccess { _popularSearches.value = RequestState.Success(it) }
+                .onFailure {
+                    if (_popularSearches.value !is RequestState.Success) {
+                        _popularSearches.value = RequestState.Error(
+                            it.localizedMessage ?: "تعذر تحميل عمليات البحث الشائعة"
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun fetchSuggestions(query: String) {
+        if (query == suppressSuggestionQuery) {
+            _searchSuggestions.value = emptyList()
+            return
+        }
+        suggestionsJob?.cancel()
+        suggestionsJob = viewModelScope.launch {
+            val response = movieBoxRepository.suggest(query, limit = 8)
+            if (_searchQuery.value.trim() != query) return@launch
+            response.onSuccess { _searchSuggestions.value = it }
+        }
+    }
 
     fun logActivity(action: String, title: String) {
         android.util.Log.d("MovieViewModel", "Activity: $action - $title")
@@ -659,35 +768,61 @@ class MovieViewModel(
     fun triggerSearch() {
         val query = _searchQuery.value.trim()
         if (query.isEmpty()) return
+        suppressSuggestionQuery = query
+        _searchSuggestions.value = emptyList()
         performSearch(query, saveToHistory = true)
     }
 
-    fun performSearch(query: String, saveToHistory: Boolean = false) {
+    fun performSearch(
+        query: String,
+        saveToHistory: Boolean = false,
+        preserveTab: Boolean = false
+    ) {
         val q = query.trim()
         if (q.length < 2) {
             activeSearchJob?.cancel()
             _searchResults.value = RequestState.Idle
             _movieBoxSearchResults.value = RequestState.Idle
+            _searchSuggestions.value = emptyList()
+            _searchV2Groups.value = emptyList()
             return
         }
         if (saveToHistory) {
             addRecentSearch(q)
         }
+        if (!preserveTab) {
+            _selectedSearchTab.value = "all"
+        }
         activeSearchJob?.cancel()
         activeSearchJob = viewModelScope.launch {
             _searchResults.value = RequestState.Loading
             _movieBoxSearchResults.value = RequestState.Loading
+            _searchV2Groups.value = emptyList()
             if (_isMovieBoxSearchMode.value) {
                 try {
-                    val response = movieBoxRepository.search(q)
+                    val response = movieBoxRepository.searchV2(
+                        query = q,
+                        tab = _selectedSearchTab.value
+                    )
                     if (response.isSuccess) {
-                        _movieBoxSearchResults.value = RequestState.Success(response.getOrNull() ?: emptyList())
+                        val data = response.getOrNull()
+                        if (data != null && data.tabs.isNotEmpty()) {
+                            _searchV2Tabs.value = data.tabs
+                        }
+                        _searchV2Groups.value = data?.groups ?: emptyList()
+                        _movieBoxSearchResults.value =
+                            RequestState.Success(data?.results ?: emptyList())
                     } else {
-                        _movieBoxSearchResults.value = RequestState.Error(response.exceptionOrNull()?.message ?: "Unknown error")
+                        _searchV2Groups.value = emptyList()
+                        _movieBoxSearchResults.value = RequestState.Error(
+                            response.exceptionOrNull()?.message ?: "Unknown error"
+                        )
                     }
                 } catch (e: Exception) {
                     if (e !is kotlinx.coroutines.CancellationException) {
-                        _movieBoxSearchResults.value = RequestState.Error(e.localizedMessage ?: "Unknown error")
+                        _searchV2Groups.value = emptyList()
+                        _movieBoxSearchResults.value =
+                            RequestState.Error(e.localizedMessage ?: "Unknown error")
                     }
                 }
             } else {
@@ -711,7 +846,21 @@ class MovieViewModel(
         viewModelScope.launch {
             launch { fetchTrendingMovies() }
             launch { fetchTrendingTv() }
+            launch { fetchMovieBoxHome() }
         }
+    }
+
+    private suspend fun fetchMovieBoxHome() {
+        _homeSections.value = RequestState.Loading
+        movieBoxRepository.home(page = 1, limitPerSection = 16)
+            .onSuccess { _homeSections.value = RequestState.Success(it) }
+            .onFailure {
+                if (_homeSections.value !is RequestState.Success) {
+                    _homeSections.value = RequestState.Error(
+                        it.localizedMessage ?: "تعذر تحميل أقسام MovieBox"
+                    )
+                }
+            }
     }
 
     suspend fun searchDirect(query: String) = repository.searchMulti(query, language = currentLang)

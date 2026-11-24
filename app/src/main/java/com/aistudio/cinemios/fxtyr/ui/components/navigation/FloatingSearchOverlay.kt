@@ -7,6 +7,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -30,7 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
+import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchResult
+import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.SearchV2Tab
+import com.aistudio.cinemios.fxtyr.ui.components.IosIcons
 import com.aistudio.cinemios.fxtyr.ui.components.ShowShareSheet
+import com.aistudio.cinemios.fxtyr.ui.components.explore.ExplorePosterCard
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridCard
 import com.aistudio.cinemios.fxtyr.ui.components.home.SearchGridSkeleton
 import com.aistudio.cinemios.fxtyr.ui.components.home.TmdbPosterCard
@@ -62,6 +67,30 @@ fun FloatingSearchOverlay(
 
     val searchResultsState by viewModel.searchResults.collectAsState()
     val movieBoxSearchResults by viewModel.movieBoxSearchResults.collectAsState()
+
+    val searchSuggestions by viewModel.searchSuggestions.collectAsState()
+    val searchV2Tabs by viewModel.searchV2Tabs.collectAsState()
+    val selectedSearchTab by viewModel.selectedSearchTab.collectAsState()
+    val searchV2Groups by viewModel.searchV2Groups.collectAsState()
+    val popularSearchesState by viewModel.popularSearches.collectAsState()
+
+    // Shared handler for every MovieBox result surface (grid, popular rails,
+    // related groups): records history and opens the MovieBox detail screen.
+    val openMovieBoxItem: (SearchResult) -> Unit = { item ->
+        val mediaType = if (item.type == "series") "tv" else "movie"
+        viewModel.recordRecentView(
+            RecentViewedItem(
+                id = item.subjectId,
+                title = item.title,
+                posterPath = item.posterUrl,
+                mediaType = mediaType,
+                year = item.year,
+                rating = item.rating,
+                isMovieBox = true
+            )
+        )
+        onNavigateToMovieBoxDetails(item.subjectId, mediaType, item.title, item.posterUrl)
+    }
 
     val context = LocalContext.current
     var showShareSheet by remember { mutableStateOf(false) }
@@ -133,6 +162,46 @@ fun FloatingSearchOverlay(
                 }
             }
 
+            // Autocomplete suggestions (`/suggest`) while typing in MB mode
+            if (isMovieBoxSearch && searchQuery.isNotEmpty() && searchSuggestions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(searchSuggestions) { suggestion ->
+                        Surface(
+                            shape = CircleShape,
+                            color = chipBg,
+                            border = BorderStroke(1.dp, chipBorder),
+                            modifier = Modifier.clickable {
+                                viewModel.applySearchSuggestion(suggestion.text)
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = suggestion.text,
+                                    fontSize = 13.sp,
+                                    color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Content: Empty query (History & Recent shows) OR Active Results
             if (searchQuery.isEmpty()) {
                 val scrollState = rememberScrollState()
@@ -142,6 +211,98 @@ fun FloatingSearchOverlay(
                         .verticalScroll(scrollState)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
+                    // 0. POPULAR SEARCHES (`/popular_searches`)
+                    when (val popularState = popularSearchesState) {
+                        is RequestState.Success -> {
+                            val popular = popularState.data
+                            if (popular.everyoneSearch.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = IosIcons.TrendingUp,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "الأكثر بحثاً الآن",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 2.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(popular.everyoneSearch) { query ->
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = chipBg,
+                                            border = BorderStroke(1.dp, chipBorder),
+                                            modifier = Modifier.clickable {
+                                                viewModel.applySearchSuggestion(query)
+                                            }
+                                        ) {
+                                            Text(
+                                                text = query,
+                                                fontSize = 13.sp,
+                                                color = textColor,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+
+                            popular.hot.take(3).forEach { category ->
+                                if (category.results.isNotEmpty()) {
+                                    Text(
+                                        text = category.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 2.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        items(
+                                            category.results.take(10),
+                                            key = { "${category.category}_${it.subjectId}" }
+                                        ) { item ->
+                                            Box(modifier = Modifier.width(108.dp)) {
+                                                ExplorePosterCard(
+                                                    item = item,
+                                                    onClick = { openMovieBoxItem(item) }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                }
+                            }
+                        }
+                        RequestState.Loading -> {
+                            // The popular block simply appears once the request resolves.
+                        }
+                        else -> Unit
+                    }
+
                     // 1. RECENT SEARCHES SECTION (Safe, scrollable chip list)
                     if (recentSearches.isNotEmpty()) {
                         Row(
@@ -317,66 +478,127 @@ fun FloatingSearchOverlay(
             } else {
                 // ACTIVE SEARCH RESULTS
                 if (isMovieBoxSearch) {
-                    when (val mbState = movieBoxSearchResults) {
-                        is RequestState.Success -> {
-                            val list = mbState.data
-                            if (list.isEmpty()) {
-                                EmptySearchState(message = "لم نجد نتائج في MB للبحث: $searchQuery", textColor = textColor)
-                            } else {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Fixed(3),
-                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    items(list, key = { it.subjectId }) { item ->
-                                        val posterUrl = item.posterUrl
-                                        val isTv = item.type == "series"
-                                        val mediaType = if (isTv) "tv" else "movie"
-                                        val watchlistId = "mb_${item.subjectId}"
-                                        val inList = watchlistItems.any { it.id == watchlistId }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (searchV2Tabs.isNotEmpty()) {
+                            SearchV2TabRow(
+                                tabs = searchV2Tabs,
+                                selectedTab = selectedSearchTab,
+                                onSelect = { viewModel.selectSearchTab(it) }
+                            )
+                        }
 
-                                        TmdbPosterCard(
-                                            title = item.title,
-                                            posterUrl = posterUrl,
-                                            rating = item.rating,
-                                            year = item.year,
-                                            isTv = isTv,
-                                            isInMyList = inList,
-                                            onClick = {
-                                                viewModel.recordRecentView(
-                                                    RecentViewedItem(
-                                                        id = item.subjectId,
-                                                        title = item.title,
-                                                        posterPath = posterUrl,
-                                                        mediaType = mediaType,
-                                                        year = item.year,
-                                                        rating = item.rating,
-                                                        isMovieBox = true
-                                                    )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            when (val mbState = movieBoxSearchResults) {
+                                is RequestState.Success -> {
+                                    val list = mbState.data
+                                    if (list.isEmpty() && searchV2Groups.isEmpty()) {
+                                        EmptySearchState(message = "لم نجد نتائج في MB للبحث: $searchQuery", textColor = textColor)
+                                    } else {
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Fixed(3),
+                                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            items(list, key = { it.subjectId }) { item ->
+                                                val posterUrl = item.posterUrl
+                                                val isTv = item.type == "series"
+                                                val mediaType = if (isTv) "tv" else "movie"
+                                                val watchlistId = "mb_${item.subjectId}"
+                                                val inList = watchlistItems.any { it.id == watchlistId }
+
+                                                TmdbPosterCard(
+                                                    title = item.title,
+                                                    posterUrl = posterUrl,
+                                                    rating = item.rating,
+                                                    year = item.year,
+                                                    isTv = isTv,
+                                                    isInMyList = inList,
+                                                    onClick = {
+                                                        viewModel.recordRecentView(
+                                                            RecentViewedItem(
+                                                                id = item.subjectId,
+                                                                title = item.title,
+                                                                posterPath = posterUrl,
+                                                                mediaType = mediaType,
+                                                                year = item.year,
+                                                                rating = item.rating,
+                                                                isMovieBox = true
+                                                            )
+                                                        )
+                                                        onNavigateToMovieBoxDetails(item.subjectId, mediaType, item.title, posterUrl)
+                                                    },
+                                                    onToggleMyList = {
+                                                        viewModel.toggleWatchlist(watchlistId, item.title, posterUrl, mediaType, item.rating)
+                                                    },
+                                                    onShare = {
+                                                        pendingShare = PendingShare(item.title, watchlistId, mediaType)
+                                                        showShareSheet = true
+                                                    }
                                                 )
-                                                onNavigateToMovieBoxDetails(item.subjectId, mediaType, item.title, posterUrl)
-                                            },
-                                            onToggleMyList = {
-                                                viewModel.toggleWatchlist(watchlistId, item.title, posterUrl, mediaType, item.rating)
-                                            },
-                                            onShare = {
-                                                pendingShare = PendingShare(item.title, watchlistId, mediaType)
-                                                showShareSheet = true
                                             }
-                                        )
+
+                                            // Related groups from `/search_v2` (Sports, Music, ...)
+                                            searchV2Groups.forEach { group ->
+                                                item(
+                                                    key = "group_${group.title}",
+                                                    span = { GridItemSpan(maxLineSpan) }
+                                                ) {
+                                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = IosIcons.Sparkles,
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(15.dp)
+                                                            )
+                                                            Text(
+                                                                text = group.title,
+                                                                fontSize = 14.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = textColor
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                        LazyRow(
+                                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) {
+                                                            items(
+                                                                group.results,
+                                                                key = { "${group.title}_${it.subjectId}" }
+                                                            ) { groupItem ->
+                                                                Box(modifier = Modifier.width(104.dp)) {
+                                                                    ExplorePosterCard(
+                                                                        item = groupItem,
+                                                                        onClick = { openMovieBoxItem(groupItem) }
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                is RequestState.Loading -> {
+                                    SearchGridSkeleton()
+                                }
+                                is RequestState.Error -> {
+                                    ErrorSearchState(message = "فشل البحث في MB! تأكد من اتصالك بالإنترنت.")
+                                }
+                                else -> {}
                             }
                         }
-                        is RequestState.Loading -> {
-                            SearchGridSkeleton()
-                        }
-                        is RequestState.Error -> {
-                            ErrorSearchState(message = "فشل البحث في MB! تأكد من اتصالك بالإنترنت.")
-                        }
-                        else -> {}
                     }
                 } else {
                     when (val searchState = searchResultsState) {
@@ -581,5 +803,83 @@ private fun ErrorSearchState(message: String) {
             textAlign = TextAlign.Center,
             fontSize = 14.sp
         )
+    }
+}
+
+/** Maps a `/search_v2` tab id (e.g. `MovieTV`) to the API tab key (`movie_tv`). */
+private fun searchV2TabKey(id: String): String = when (id) {
+    "All" -> "all"
+    "MovieTV" -> "movie_tv"
+    "Movie" -> "movie"
+    "TV" -> "tv"
+    "ShortTV" -> "short_tv"
+    "FightZone" -> "fightzone"
+    "Sports" -> "sports"
+    "Music" -> "music"
+    "People" -> "people"
+    "Education" -> "education"
+    else -> id.lowercase()
+}
+
+/** Arabic labels for the known MovieBox search tabs. */
+private fun searchV2TabLabel(tab: SearchV2Tab): String = when (tab.id) {
+    "All" -> "الكل"
+    "MovieTV" -> "أفلام ومسلسلات"
+    "Movie" -> "أفلام"
+    "TV" -> "مسلسلات"
+    "ShortTV" -> "قصيرة"
+    "FightZone" -> "قتال"
+    "Sports" -> "رياضة"
+    "Music" -> "موسيقى"
+    "People" -> "أشخاص"
+    "Education" -> "تعليم"
+    else -> tab.name
+}
+
+/** iOS-style pill row used to switch between `/search_v2` tabs. */
+@Composable
+private fun SearchV2TabRow(
+    tabs: List<SearchV2Tab>,
+    selectedTab: String,
+    onSelect: (String) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(tabs, key = { it.id }) { tab ->
+            val key = searchV2TabKey(tab.id)
+            val selected = key == selectedTab
+            Surface(
+                shape = CircleShape,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+                border = BorderStroke(
+                    1.dp,
+                    if (selected) {
+                        Color.Transparent
+                    } else {
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+                    }
+                ),
+                modifier = Modifier.clickable { onSelect(key) }
+            ) {
+                Text(
+                    text = searchV2TabLabel(tab),
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+        }
     }
 }

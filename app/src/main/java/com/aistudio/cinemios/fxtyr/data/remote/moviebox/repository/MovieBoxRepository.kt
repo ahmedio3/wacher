@@ -26,6 +26,11 @@ interface MovieBoxRepository {
     suspend fun adult(type: String?, queries: String?, sort: String, limit: Int): Result<List<SearchResult>>
     suspend fun adultKeywords(): Result<List<String>>
     suspend fun itemDetails(subjectId: String): Result<ItemDetailResult>
+    suspend fun suggest(query: String, limit: Int = 10): Result<List<SearchSuggestion>>
+    suspend fun recommend(subjectId: String, page: Int = 1, limit: Int = 12): Result<List<SearchResult>>
+    suspend fun home(page: Int = 1, limitPerSection: Int = 20): Result<List<HomeSection>>
+    suspend fun popularSearches(limit: Int = 10): Result<PopularSearches>
+    suspend fun searchV2(query: String, tab: String = "all", page: Int = 1, limit: Int = 15): Result<SearchV2Result>
 }
 
 class MovieBoxRepositoryImpl(
@@ -34,6 +39,11 @@ class MovieBoxRepositoryImpl(
 ) : MovieBoxRepository {
 
     private val searchCache = ConcurrentHashMap<String, List<SearchResult>>()
+    private val suggestCache = ConcurrentHashMap<String, List<SearchSuggestion>>()
+    private val searchV2Cache = ConcurrentHashMap<String, SearchV2Result>()
+    private val homeCache = ConcurrentHashMap<String, List<HomeSection>>()
+    @Volatile
+    private var popularSearchesCache: PopularSearches? = null
     private data class CachedDownloadLinks(
         val timestamp: Long,
         val files: List<VideoFile>
@@ -131,6 +141,35 @@ class MovieBoxRepositoryImpl(
 
     override suspend fun itemDetails(subjectId: String): Result<ItemDetailResult> {
         return api.itemDetails(subjectId)
+    }
+
+    override suspend fun suggest(query: String, limit: Int): Result<List<SearchSuggestion>> {
+        val cacheKey = "${query.trim().lowercase()}_$limit"
+        suggestCache[cacheKey]?.let { return Result.success(it) }
+        return api.suggest(query, limit).onSuccess { suggestCache[cacheKey] = it }
+    }
+
+    override suspend fun recommend(subjectId: String, page: Int, limit: Int): Result<List<SearchResult>> {
+        val cacheKey = "recommend_${subjectId}_${page}_$limit"
+        searchCache[cacheKey]?.let { return Result.success(it) }
+        return api.recommend(subjectId, page, limit).onSuccess { searchCache[cacheKey] = it }
+    }
+
+    override suspend fun home(page: Int, limitPerSection: Int): Result<List<HomeSection>> {
+        val cacheKey = "home_${page}_$limitPerSection"
+        homeCache[cacheKey]?.let { return Result.success(it) }
+        return api.home(page, limitPerSection).onSuccess { homeCache[cacheKey] = it }
+    }
+
+    override suspend fun popularSearches(limit: Int): Result<PopularSearches> {
+        popularSearchesCache?.let { return Result.success(it) }
+        return api.popularSearches(limit).onSuccess { popularSearchesCache = it }
+    }
+
+    override suspend fun searchV2(query: String, tab: String, page: Int, limit: Int): Result<SearchV2Result> {
+        val cacheKey = "v2_${query.trim().lowercase()}_${tab}_${page}_$limit"
+        searchV2Cache[cacheKey]?.let { return Result.success(it) }
+        return api.searchV2(query, tab, page, limit).onSuccess { searchV2Cache[cacheKey] = it }
     }
 
 }

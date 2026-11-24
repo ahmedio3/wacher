@@ -32,8 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import com.aistudio.cinemios.fxtyr.data.local.RecentViewedItem
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.models.*
 import com.aistudio.cinemios.fxtyr.data.remote.moviebox.viewmodel.MovieBoxViewModel
+import com.aistudio.cinemios.fxtyr.ui.components.home.MovieBoxSimilarRail
 import com.aistudio.cinemios.fxtyr.ui.components.moviebox.MovieBoxDownloadSheet
 import com.aistudio.cinemios.fxtyr.ui.theme.JetBrainsMonoFontFamily
 import com.aistudio.cinemios.fxtyr.utils.isLatinText
@@ -56,7 +58,8 @@ fun MovieBoxDetailScreen(
     posterParams: String = "",
     viewModel: MovieViewModel,
     onBackClick: () -> Unit,
-    onPlayClick: (String, String, Int, Int) -> Unit
+    onPlayClick: (String, String, Int, Int) -> Unit,
+    onNavigateToMovieBoxDetails: (String, String, String, String) -> Unit = { _, _, _, _ -> }
 ) {
     val appContext = LocalContext.current.applicationContext as android.app.Application
     val movieBoxViewModel: MovieBoxViewModel = viewModel(factory = ViewModelFactory(appContext))
@@ -69,6 +72,7 @@ fun MovieBoxDetailScreen(
     var retryTrigger by remember { mutableIntStateOf(0) }
     var itemDetail by remember { mutableStateOf<ItemDetailResult?>(null) }
     var videoLinks by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
+    var similarItems by remember(subjectId) { mutableStateOf<List<SearchResult>>(emptyList()) }
     val mbWatchlistId = "mb_$subjectId"
 
     // Season selection is shared by the top "watch now" button and the episode
@@ -114,6 +118,19 @@ fun MovieBoxDetailScreen(
             errorMessage = "حدث خطأ: ${e.localizedMessage ?: e.message ?: "غير معروف"}"
         } finally {
             isLoading = false
+        }
+    }
+
+    // "More like this" is optional: a failure must never block the detail page.
+    LaunchedEffect(subjectId) {
+        similarItems = emptyList()
+        val result = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+            viewModel.movieBoxRepository.recommend(subjectId, limit = 12)
+        }
+        result?.onSuccess { items ->
+            similarItems = items
+                .filterNot { it.subjectId == subjectId }
+                .distinctBy { it.subjectId }
         }
     }
 
@@ -578,6 +595,33 @@ fun MovieBoxDetailScreen(
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.fillMaxWidth().padding(32.dp)
+                                )
+                            }
+
+                            if (similarItems.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(32.dp))
+                                MovieBoxSimilarRail(
+                                    items = similarItems,
+                                    onItemClick = { item ->
+                                        val targetType = if (item.type == "series") "tv" else "movie"
+                                        viewModel.recordRecentView(
+                                            RecentViewedItem(
+                                                id = item.subjectId,
+                                                title = item.title,
+                                                posterPath = item.posterUrl,
+                                                mediaType = targetType,
+                                                year = item.year,
+                                                rating = item.rating,
+                                                isMovieBox = true
+                                            )
+                                        )
+                                        onNavigateToMovieBoxDetails(
+                                            item.subjectId,
+                                            targetType,
+                                            item.title,
+                                            item.posterUrl
+                                        )
+                                    }
                                 )
                             }
 

@@ -83,3 +83,58 @@ data class SubtitleResponse(
     val allSubtitles: List<Subtitle>,
     val totalLanguages: Int
 )
+
+/** One autocomplete entry returned by `/suggest`. */
+data class SearchSuggestion(
+    val text: String,
+    val type: Int = 0
+)
+
+/** A titled group inside a homepage section (e.g. one ranking tab). */
+data class HomeSectionGroup(
+    val title: String,
+    val results: List<SearchResult> = emptyList()
+)
+
+/** One horizontal row of the MovieBox homepage. */
+data class HomeSection(
+    val title: String,
+    val type: String,
+    val items: List<SearchResult> = emptyList(),
+    val groups: List<HomeSectionGroup> = emptyList()
+)
+
+/** One "hot" category returned by `/popular_searches`. */
+data class PopularSearchCategory(
+    val category: String,
+    val name: String,
+    val results: List<SearchResult> = emptyList()
+)
+
+/** The "everyone searches" list plus hot Movie/TV rails. */
+data class PopularSearches(
+    val everyoneSearch: List<String> = emptyList(),
+    val hot: List<PopularSearchCategory> = emptyList()
+)
+
+/** A tab offered by `/search_v2` (All, Movie, TV, Sports...). */
+data class SearchV2Tab(
+    val id: String,
+    val name: String,
+    val parentId: String = ""
+)
+
+/** A related-result group returned by `/search_v2`. */
+data class SearchV2Group(
+    val title: String,
+    val topicType: String = "",
+    val results: List<SearchResult> = emptyList()
+)
+
+/** Full payload of `/search_v2`: tabs, grouped extras, and flat results. */
+data class SearchV2Result(
+    val tabs: List<SearchV2Tab> = emptyList(),
+    val groups: List<SearchV2Group> = emptyList(),
+    val results: List<SearchResult> = emptyList(),
+    val totalResults: Int = 0
+)

@@ -570,6 +570,11 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                             if (season > 0 && episode > 0) "$id-s$season-e$episode" else id
                         val encodedTitle = java.net.URLEncoder.encode(playTitle, "UTF-8")
                         navController.navigate("player/$routedId/$encodedTitle?localFilePath=")
+                    },
+                    onNavigateToMovieBoxDetails = { id, type, itemTitle, itemPoster ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(itemTitle, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(itemPoster, "UTF-8")}"
+                        )
                     }
                 )
             }
