@@ -448,7 +448,20 @@ fun MainAppContainer(deepLinkState: androidx.compose.runtime.MutableState<String
                     onNavigateToSubtitleDownloads = { navController.navigate("subtitle-downloads") },
                     onNavigateToSubscription = { navController.navigate("subscription") },
                     onNavigateToExplore = { navController.navigate("explore") },
-                    onNavigateToAdult = { navController.navigate("adult") }
+                    onNavigateToAdult = { navController.navigate("adult") },
+                    onNavigateToMovieBoxHome = { navController.navigate("moviebox-home") }
+                )
+            }
+
+            composable("moviebox-home") {
+                MovieBoxHomeScreen(
+                    viewModel = movieViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToMovieBoxDetails = { id, type, title, posterUrl ->
+                        navController.navigate(
+                            "mb_details/$id/$type?title=${java.net.URLEncoder.encode(title, "UTF-8")}&posterUrl=${java.net.URLEncoder.encode(posterUrl, "UTF-8")}"
+                        )
+                    }
                 )
             }
 

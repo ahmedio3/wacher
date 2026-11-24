@@ -39,6 +39,7 @@ import com.aistudio.cinemios.fxtyr.ui.components.seeplus.ProfileAvatar
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusChip
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusColors
 import com.aistudio.cinemios.fxtyr.ui.components.seeplus.SeePlusSettingsCard
+import com.aistudio.cinemios.fxtyr.ui.theme.AppIcons
 import com.aistudio.cinemios.fxtyr.ui.theme.PaletteMutedRed
 import com.aistudio.cinemios.fxtyr.ui.viewmodel.MovieViewModel
 import com.google.firebase.auth.FirebaseAuth
@@ -53,6 +54,7 @@ fun SettingsScreen(
     onNavigateToSubscription: () -> Unit = {},
     onNavigateToExplore: () -> Unit = {},
     onNavigateToAdult: () -> Unit = {},
+    onNavigateToMovieBoxHome: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isArabicPosters by viewModel.isArabicPosters.collectAsState()
@@ -127,6 +129,13 @@ fun SettingsScreen(
         SectionLabel(text = "استكشف")
         Spacer(modifier = Modifier.height(8.dp))
         SettingsGroup {
+            SettingsRow(
+                icon = AppIcons.MovieBox,
+                title = "مختارات MovieBox",
+                subtitle = "أقسام منسّقة تُحمّل عند فتح الصفحة فقط",
+                onClick = onNavigateToMovieBoxHome
+            )
+            SettingsDivider()
             SettingsRow(
                 icon = IosIcons.TrendingUp,
                 title = "الرائج الآن",

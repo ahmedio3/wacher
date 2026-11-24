@@ -136,6 +136,9 @@ class MovieViewModel(
         _tvSimilar.value = emptyMap()
         _tvRecommendations.value = emptyMap()
         if (_searchQuery.value.isNotBlank()) performSearch(_searchQuery.value, saveToHistory = false)
+        // The curated MovieBox rails are language-dependent; invalidate them so
+        // the dedicated screen reloads with the new language on its next visit.
+        _homeSections.value = RequestState.Idle
         fetchHomeContent()
     }
 
@@ -248,9 +251,8 @@ class MovieViewModel(
         _showDownloadErrorDialog.value = false
     }
 
-    // MovieBox feature state. These MUST be initialized before the `init`
-    // block below, because `fetchHomeContent()` launches immediately and
-    // writes to `_homeSections` before the first suspension point.
+    // MovieBox feature state. Declared before `init` so the coroutines started
+    // from the init block always observe fully-initialized backing fields.
     private val _isMovieBoxSearchMode = MutableStateFlow(false)
     val isMovieBoxSearchMode: StateFlow<Boolean> = _isMovieBoxSearchMode.asStateFlow()
 
@@ -275,9 +277,12 @@ class MovieViewModel(
     private val _popularSearches = MutableStateFlow<RequestState<PopularSearches>>(RequestState.Idle)
     val popularSearches: StateFlow<RequestState<PopularSearches>> = _popularSearches.asStateFlow()
 
-    // Curated MovieBox homepage rails
+    // Curated MovieBox homepage rails (dedicated screen, loaded on demand)
     private val _homeSections = MutableStateFlow<RequestState<List<HomeSection>>>(RequestState.Idle)
     val homeSections: StateFlow<RequestState<List<HomeSection>>> = _homeSections.asStateFlow()
+
+    private val _isRefreshingHome = MutableStateFlow(false)
+    val isRefreshingHome: StateFlow<Boolean> = _isRefreshingHome.asStateFlow()
 
     init {
         val database = MovieDatabase.getDatabase(application)
@@ -849,21 +854,42 @@ class MovieViewModel(
         viewModelScope.launch {
             launch { fetchTrendingMovies() }
             launch { fetchTrendingTv() }
-            launch { fetchMovieBoxHome() }
         }
     }
 
-    private suspend fun fetchMovieBoxHome() {
-        _homeSections.value = RequestState.Loading
-        movieBoxRepository.home(page = 1, limitPerSection = 16)
-            .onSuccess { _homeSections.value = RequestState.Success(it) }
-            .onFailure {
-                if (_homeSections.value !is RequestState.Success) {
-                    _homeSections.value = RequestState.Error(
-                        it.localizedMessage ?: "تعذر تحميل أقسام MovieBox"
-                    )
+    /**
+     * The curated MovieBox rails live on their own screen, so they are only
+     * requested when that screen is opened (never during app startup).
+     */
+    fun ensureMovieBoxHomeLoaded() {
+        if (_homeSections.value is RequestState.Success) return
+        refreshMovieBoxHome()
+    }
+
+    fun refreshMovieBoxHome() {
+        viewModelScope.launch { loadMovieBoxHome() }
+    }
+
+    private suspend fun loadMovieBoxHome() {
+        if (_isRefreshingHome.value) return
+        _isRefreshingHome.value = true
+        // Keep already-loaded rails visible while a manual refresh runs.
+        if (_homeSections.value !is RequestState.Success) {
+            _homeSections.value = RequestState.Loading
+        }
+        try {
+            movieBoxRepository.home(page = 1, limitPerSection = 16)
+                .onSuccess { _homeSections.value = RequestState.Success(it) }
+                .onFailure {
+                    if (_homeSections.value !is RequestState.Success) {
+                        _homeSections.value = RequestState.Error(
+                            it.localizedMessage ?: "تعذر تحميل أقسام MovieBox"
+                        )
+                    }
                 }
-            }
+        } finally {
+            _isRefreshingHome.value = false
+        }
     }
 
     suspend fun searchDirect(query: String) = repository.searchMulti(query, language = currentLang)
